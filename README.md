@@ -14,8 +14,11 @@ pnpm install
 pnpm exec supabase start          # Postgres, Auth, Storage and Realtime in Docker
 cp .env.example .env.local        # then paste the publishable key from `pnpm exec supabase status`
 pnpm db:migrate                   # apply db/migrations
+pnpm db:seed                      # demo categories, cities and 30 shops
 pnpm dev                          # http://localhost:3000
 ```
+
+Public pages read the database when they build, so `pnpm build` and `pnpm dev` both need it running.
 
 ## Scripts
 
@@ -23,12 +26,14 @@ pnpm dev                          # http://localhost:3000
 | --------------------------- | -------------------------------------------------- |
 | `pnpm dev`                  | Dev server with Turbopack                          |
 | `pnpm build`                | Production build                                   |
+| `pnpm check:bundle`         | Fail if a page passes 170 kB of first-load JS      |
 | `pnpm typecheck`            | Generate route types, then `tsc`                   |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier                                  |
 | `pnpm test`                 | Unit tests and the permissions matrix (Vitest)     |
 | `pnpm test:e2e`             | Playwright and axe tests (own dev server on 3210)  |
 | `pnpm db:generate`          | Create a migration from changes in `lib/db/schema` |
 | `pnpm db:migrate`           | Apply migrations to `DIRECT_DATABASE_URL`          |
+| `pnpm db:seed`              | Demo data; local or staging only (`SEED_REMOTE`)   |
 | `pnpm db:studio`            | Browse the database                                |
 
 ## Layout

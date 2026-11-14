@@ -24,6 +24,11 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // shadcn/ui imports from the radix-ui umbrella package; without this, one
+    // Button pulls every Radix primitive into the browser bundle.
+    optimizePackageImports: ["radix-ui"],
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     // Public shop photos from Supabase Storage.

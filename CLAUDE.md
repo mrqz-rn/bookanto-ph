@@ -5,7 +5,8 @@ The blueprint is `BooKanto Web System Development Plan.md`. Read the relevant se
 ## Commands
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test`: run all four before calling a change done.
-- `pnpm build` needs the env vars in `.env.example` (placeholders are fine; see `.github/workflows/ci.yml`).
+- `pnpm build` needs the env vars in `.env.example` and a migrated database, because public pages query it at build time (see `.github/workflows/ci.yml`). Then `pnpm check:bundle` enforces the 170 kB first-load JS budget.
+- `pnpm db:seed` loads demo data (local or staging only). The e2e tests expect it.
 - `pnpm db:generate` after schema changes; review the SQL and unquote any `"geography(...)"` type.
 
 ## Rules
@@ -21,6 +22,8 @@ The blueprint is `BooKanto Web System Development Plan.md`. Read the relevant se
 - **Secrets** only through `lib/env.ts` (server) or `lib/public-env.ts` (browser-safe). Add new variables to the schema and `.env.example`.
 - **New tables** call `.enableRLS()`; new database functions `REVOKE EXECUTE ... FROM PUBLIC` unless they're meant for the Data API.
 - **Dynamic routes** (`lib/routes.ts` `DYNAMIC_ROUTES`) get a nonce-based CSP and must render per request. Everything else must be cacheable and must not read cookies.
+- **Public data** is read through `unstable_cache` with a tag from `lib/cache.ts`; actions that change it call `revalidateTag` with that tag.
+- **Client components** import only browser-safe modules: never `queries.ts`, `schema.ts` (Zod) or anything `server-only`. Shared values go in a feature's `constants.ts`.
 - **UI:** design for 360px first; touch targets at least 44px; every screen has loading (skeleton), empty, error and success states. Orange buttons take navy text; orange text uses `orange-700`.
 - No `dangerouslySetInnerHTML` except `components/shared/json-ld.tsx`.
 - Conventional commits (`feat:`, `fix:`, `chore:`).
