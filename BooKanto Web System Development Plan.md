@@ -271,8 +271,8 @@ The interface uses the BooKanto brand from the [logo canvas](https://claude.ai/a
 | `orange-700` | #C2410C | Orange text links and white-text buttons (5.2:1 on white) |
 | `navy-900` (Gabi Navy) | #14213D | Main text, headers, dark sections |
 | `yellow-400` (Araw Yellow) | #FFC233 | Badges, promos, "Open now" chips, with navy text |
-| `cream-50` | #FFF8EE | Page background |
-| `slate-600` | #3D4A63 | Secondary text (8.4:1 on cream) |
+| `background` | #FFFFFF | Page background (white theme) |
+| `slate-600` | #3D4A63 | Secondary text (8.8:1 on white) |
 | Status colors | Green #15803D, red #B91C1C, amber #B45309 | Confirmed, declined or cancelled, pending; always paired with an icon and a word |
 | Fonts | Lilita One (logo and big headlines), Plus Jakarta Sans (everything else) | Self-hosted through `next/font`; body 16 px minimum |
 | Radius and spacing | 12 px cards, 999 px pills; 4 px spacing scale | Consistent rhythm |

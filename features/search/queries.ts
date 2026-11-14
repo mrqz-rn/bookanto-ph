@@ -16,7 +16,7 @@ import {
   shops,
 } from "@/lib/db/schema";
 import { MIN_SHOPS_FOR_LISTING_PAGE } from "@/lib/seo";
-import { mediaUrl } from "@/lib/storage";
+import { mediaUrl } from "@/lib/media";
 
 import { NEARBY_RADIUS_M } from "./constants";
 

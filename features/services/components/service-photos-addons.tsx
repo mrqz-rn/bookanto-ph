@@ -6,7 +6,7 @@ import { Image as ImageIcon, Plus, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPeso, pesosToCentavos } from "@/lib/money";
-import { mediaUrl } from "@/lib/storage";
+import { mediaUrl } from "@/lib/media";
 import {
   addServicePhoto,
   createServiceAddon,

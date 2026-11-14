@@ -9,18 +9,18 @@
 /* BooKanto brand tokens, from the "Colors and type" board of the logo canvas. */
 @theme {
   /* Kanto Green: primary buttons with white text, the logo's K, one key
-     word per screen. As text, only at 24px and up (3.1:1 on cream). */
+     word per screen. As text, only at 24px and up (3.1:1 on white). */
   --color-green-600: #16a34a;
-  /* Green text and links at body size (4.7:1 on cream), white-text buttons. */
+  /* Green text and links at body size (4.8:1 on white), white-text buttons. */
   --color-green-700: #15803d;
   --color-green-800: #166534;
   /* Gabi Navy: main text, headers, dark sections. */
   --color-navy-900: #14213d;
   /* Araw Yellow: badges, promos, "Open now" chips, with navy text. */
   --color-yellow-400: #ffc233;
-  /* Page background. */
+  /* Cream token retained for compatibility. */
   --color-cream-50: #fff8ee;
-  /* Secondary text (8.4:1 on cream). */
+  /* Secondary text (8.8:1 on white). */
   --color-slate-600: #3d4a63;
 
   /* Booking status colors. Always pair with an icon and a word. */
@@ -36,7 +36,7 @@
 /* shadcn/ui semantic colors, mapped to the brand. */
 :root {
   --radius: 0.75rem; /* 12px cards */
-  --background: var(--color-cream-50);
+  --background: #ffffff;
   --foreground: var(--color-navy-900);
   --card: #ffffff;
   --card-foreground: var(--color-navy-900);
@@ -46,13 +46,13 @@
   --primary-foreground: #ffffff;
   --secondary: var(--color-navy-900);
   --secondary-foreground: #ffffff;
-  --muted: #f6ebdd;
+  --muted: #f1f5f9;
   --muted-foreground: var(--color-slate-600);
   --accent: #e3f4e8;
   --accent-foreground: var(--color-navy-900);
   --destructive: var(--color-danger);
-  --border: #e8dccb;
-  /* Form field borders need 3:1 against the page (3.6:1 on cream). */
+  --border: #e2e8f0;
+  /* Form field borders need 3:1 against the page (3.7:1 on white). */
   --input: #7a8499;
   --ring: var(--color-navy-900);
 }

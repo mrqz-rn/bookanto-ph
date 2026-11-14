@@ -4,7 +4,7 @@ import * as React from "react";
 import { ArrowLeft, ArrowRight, Image as ImageIcon, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { mediaUrl } from "@/lib/storage";
+import { mediaUrl } from "@/lib/media";
 import { addShopPhoto, removeShopMedia, reorderShopMedia } from "../actions";
 
 type MediaItem = {
