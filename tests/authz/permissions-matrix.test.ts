@@ -41,6 +41,9 @@ const row = (
 //                                guest  customer  staff       manager  owner   admin      super_admin
 const MATRIX: Record<Permission, Record<Role, Expectation>> = {
   "shop:read":                row("yes", "yes",    "yes",      "yes",   "yes",  "yes",     "yes"),
+  "user:update_own":          row("no",  "own",    "own",      "own",   "own",  "no",      "no"),
+  "user:delete_own":          row("no",  "own",    "own",      "own",   "own",  "no",      "no"),
+  "address:manage_own":       row("no",  "own",    "own",      "own",   "own",  "no",      "no"),
   "booking:create":           row("no",  "yes",    "yes",      "yes",   "yes",  "no",      "no"),
   "booking:read_own":         row("no",  "own",    "own",      "own",   "own",  "no",      "no"),
   "booking:cancel_own":       row("no",  "own",    "own",      "own",   "own",  "no",      "no"),

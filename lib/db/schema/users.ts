@@ -1,8 +1,18 @@
 import { sql } from "drizzle-orm";
-import { check, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
-import { id, oneOf, timestamps } from "./columns";
+import { geographyPoint, id, oneOf, timestamps } from "./columns";
 import { PLATFORM_ROLES, USER_STATUSES } from "./enums";
+import { barangays, cities } from "./places";
 
 export const users = pgTable(
   "users",
@@ -27,3 +37,35 @@ export const users = pgTable(
     check("users_phone_e164_check", sql`${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
   ],
 ).enableRLS();
+
+export const userAddresses = pgTable(
+  "user_addresses",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    recipientName: text("recipient_name"),
+    phone: text("phone"),
+    streetAddress: text("street_address").notNull(),
+    cityId: uuid("city_id").references(() => cities.id, { onDelete: "set null" }),
+    barangayId: uuid("barangay_id").references(() => barangays.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    location: geographyPoint("location"),
+    isDefault: boolean("is_default").notNull().default(false),
+    ...timestamps(),
+  },
+  (t) => [
+    index("user_addresses_user_id_idx").on(t.userId),
+    index("user_addresses_city_id_idx").on(t.cityId),
+    index("user_addresses_barangay_id_idx").on(t.barangayId),
+    check("user_addresses_label_len_check", sql`char_length(${t.label}) <= 50`),
+    check("user_addresses_street_len_check", sql`char_length(${t.streetAddress}) <= 300`),
+  ],
+).enableRLS();
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type UserAddress = typeof userAddresses.$inferSelect;
+export type NewUserAddress = typeof userAddresses.$inferInsert;

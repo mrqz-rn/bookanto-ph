@@ -8,7 +8,14 @@ export const SIGNED_IN_ROUTES = ["/account", "/dashboard", "/admin"];
  * Everything else may be cached at the edge. Each route here must render
  * dynamically, because a nonce on a cached page blocks its own scripts.
  */
-export const DYNAMIC_ROUTES = [...SIGNED_IN_ROUTES, "/book", "/login", "/verify", "/search"];
+export const DYNAMIC_ROUTES = [
+  ...SIGNED_IN_ROUTES,
+  "/book",
+  "/login",
+  "/verify",
+  "/search",
+  "/auth",
+];
 
 export function matchesRoute(pathname: string, routes: readonly string[]): boolean {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));

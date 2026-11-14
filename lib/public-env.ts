@@ -13,7 +13,7 @@ export function parseEnv<S extends z.ZodType>(schema: S, values: unknown): z.out
 }
 
 // On Vercel preview deploys, fall back to the deploy's own URL.
-const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_URL;
+const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_URL ?? process.env.VERCEL_URL;
 
 /**
  * Variables that are safe in the browser. Each is read by its full name so

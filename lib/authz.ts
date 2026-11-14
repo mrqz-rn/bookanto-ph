@@ -47,6 +47,8 @@ const inShop =
 const isOwnBooking: Rule = (user, resource) =>
   isCustomer(user) && !!resource.customerId && resource.customerId === user.id;
 
+const isOwnCustomer: Rule = isOwnBooking;
+
 const isAssigned: Rule = (user, resource) =>
   !!resource.assignedStaffId && resource.assignedStaffId === user.id;
 
@@ -58,6 +60,11 @@ const worksBooking: Rule = (user, resource) =>
 
 const RULES = {
   "shop:read": () => true,
+
+  // User account and profile.
+  "user:update_own": isOwnCustomer,
+  "user:delete_own": isOwnCustomer,
+  "address:manage_own": isOwnCustomer,
 
   // As a customer. Booking state rules (for example, reviews only after
   // Completed) are checked by the booking module, not here.
