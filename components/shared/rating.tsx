@@ -30,7 +30,7 @@ export function Rating({
       <span className="sr-only">
         Rated {average.toFixed(1)} out of 5 from {count} {count === 1 ? "review" : "reviews"}
       </span>
-      <Star aria-hidden className="size-4 fill-orange-500 text-orange-500" />
+      <Star aria-hidden className="size-4 fill-yellow-400 text-yellow-400" />
       <span aria-hidden className="font-semibold">
         {average.toFixed(1)}
       </span>

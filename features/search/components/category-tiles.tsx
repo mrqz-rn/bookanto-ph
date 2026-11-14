@@ -14,7 +14,7 @@ export function CategoryTiles({ categories }: { categories: HomeCategory[] }) {
           <Tile
             href={`/c/${category.slug}`}
             label={category.name}
-            icon={<CategoryIcon name={category.icon} className="size-6 text-orange-700" />}
+            icon={<CategoryIcon name={category.icon} className="size-6 text-green-700" />}
           />
         </li>
       ))}

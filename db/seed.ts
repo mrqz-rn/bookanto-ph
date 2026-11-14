@@ -14,6 +14,7 @@ import postgres from "postgres";
 
 import * as schema from "../lib/db/schema";
 import type { BookingType, PriceType } from "../lib/db/schema/enums";
+import { HOLIDAY_TEMPLATES } from "../features/availability/holidays";
 
 loadEnvConfig(process.cwd());
 
@@ -278,7 +279,7 @@ async function main() {
   const client = postgres(url, { prepare: false, max: 1 });
   const db = drizzle(client, { schema });
   const { categories, cities, barangays, users, shops, shopMembers, shopCategories } = schema;
-  const { services, businessHours, bookings, bookingEvents, reviews } = schema;
+  const { services, businessHours, bookings, bookingEvents, reviews, shopHolidayRules } = schema;
 
   await db.transaction(async (tx) => {
     const categoryRows = await tx
@@ -379,6 +380,7 @@ async function main() {
     const shopCategoryRows: (typeof shopCategories.$inferInsert)[] = [];
     const serviceRows: (typeof services.$inferInsert)[] = [];
     const hourRows: (typeof businessHours.$inferInsert)[] = [];
+    const holidayRows: (typeof shopHolidayRules.$inferInsert)[] = [];
     const bookingRows: (typeof bookings.$inferInsert)[] = [];
     const eventRows: (typeof bookingEvents.$inferInsert)[] = [];
     const reviewRows: (typeof reviews.$inferInsert)[] = [];
@@ -456,6 +458,19 @@ async function main() {
           });
         }
 
+        // No random() here, so the rest of the demo data stays the same. Every
+        // third shop closes on all regular holidays; the rest only on the big
+        // days, with short hours on Christmas Eve.
+        const template = HOLIDAY_TEMPLATES.find(
+          (entry) => entry.id === (shopNumber % 3 === 0 ? "regular" : "big_days"),
+        )!;
+        holidayRows.push(
+          ...template.closedOn.map((holidayKey) => ({ shopId, holidayKey })),
+          ...(shopNumber % 3 === 0
+            ? []
+            : [{ shopId, holidayKey: "christmas_eve", opens: "09:00", closes: "15:00" }]),
+        );
+
         if (!active) return;
         for (let r = 0, count = pick(REVIEW_COUNTS); r < count; r++) {
           const customer = pick(customerRows);
@@ -512,6 +527,7 @@ async function main() {
     await tx.insert(shopCategories).values(shopCategoryRows);
     await tx.insert(services).values(serviceRows);
     await tx.insert(businessHours).values(hourRows);
+    await tx.insert(shopHolidayRules).values(holidayRows);
     if (bookingRows.length > 0) {
       await tx.insert(bookings).values(bookingRows);
       await tx.insert(bookingEvents).values(eventRows);

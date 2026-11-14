@@ -111,7 +111,7 @@ export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpForm
   return (
     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
       <div className="mb-6 text-center">
-        <h1 className="font-display text-3xl font-normal tracking-tight text-navy-900">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-navy-900">
           Enter verification code
         </h1>
         <p className="mt-2 text-sm text-slate-600">
@@ -165,12 +165,12 @@ export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpForm
 
         <Button
           type="submit"
-          className="h-12 w-full bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+          className="h-12 w-full bg-primary font-semibold text-white hover:bg-primary/90"
           disabled={loading || code.length !== 6}
         >
           {loading ? (
             <span className="flex items-center gap-2">
-              <span className="inline-block size-4 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
+              <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               Verifying...
             </span>
           ) : (
@@ -189,7 +189,7 @@ export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpForm
             type="button"
             onClick={handleResend}
             disabled={resending}
-            className="font-medium text-orange-700 underline underline-offset-2 hover:text-orange-800 disabled:opacity-50"
+            className="font-medium text-green-700 underline underline-offset-2 hover:text-green-800 disabled:opacity-50"
           >
             {resending ? "Sending..." : "Didn't get the code? Resend"}
           </button>

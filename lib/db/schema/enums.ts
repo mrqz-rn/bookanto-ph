@@ -46,3 +46,18 @@ export type MediaOwnerType = (typeof MEDIA_OWNER_TYPES)[number];
 
 export const MEDIA_KINDS = ["photo", "document"] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+export const MEMBERSHIP_CADENCES = [
+  "weekly",
+  "monthly",
+  "quarterly",
+  "yearly",
+  "sessions_pack",
+] as const;
+export type MembershipCadence = (typeof MEMBERSHIP_CADENCES)[number];
+
+export const INQUIRY_KINDS = ["shop", "business", "investor", "other"] as const;
+export type InquiryKind = (typeof INQUIRY_KINDS)[number];
+
+export const INQUIRY_STATUSES = ["new", "contacted", "closed"] as const;
+export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];

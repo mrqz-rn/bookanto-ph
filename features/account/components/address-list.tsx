@@ -64,7 +64,7 @@ export function AddressList({ addresses, cities }: AddressListProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-2xl font-normal text-navy-900">Saved Addresses</h2>
+          <h2 className="font-display text-2xl font-bold text-navy-900">Saved Addresses</h2>
           <p className="mt-1 text-sm text-slate-600">
             Save addresses for faster booking of home services like aircon cleaning.
           </p>
@@ -72,7 +72,7 @@ export function AddressList({ addresses, cities }: AddressListProps) {
         <Button
           type="button"
           onClick={openAdd}
-          className="h-11 bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+          className="h-11 bg-primary font-semibold text-white hover:bg-primary/90"
         >
           + Add new address
         </Button>
@@ -100,7 +100,7 @@ export function AddressList({ addresses, cities }: AddressListProps) {
           <Button
             type="button"
             onClick={openAdd}
-            className="mt-5 h-11 bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+            className="mt-5 h-11 bg-primary font-semibold text-white hover:bg-primary/90"
           >
             Add your first address
           </Button>
@@ -113,14 +113,14 @@ export function AddressList({ addresses, cities }: AddressListProps) {
               <div
                 key={address.id}
                 className={`relative flex flex-col justify-between rounded-xl border bg-card p-5 shadow-2xs transition-all ${
-                  address.isDefault
-                    ? "border-orange-500/50 ring-1 ring-orange-500/30"
-                    : "border-border"
+                  address.isDefault ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-display text-lg text-navy-900">{address.label}</span>
+                    <span className="font-display text-lg font-semibold text-navy-900">
+                      {address.label}
+                    </span>
                     {address.isDefault && (
                       <span className="rounded-full bg-yellow-400 px-2.5 py-0.5 text-xs font-bold text-navy-900">
                         Default
@@ -156,7 +156,7 @@ export function AddressList({ addresses, cities }: AddressListProps) {
                         type="button"
                         onClick={() => handleSetDefault(address.id)}
                         disabled={isLoading}
-                        className="text-xs font-medium text-orange-700 underline underline-offset-2 hover:text-orange-800 disabled:opacity-50"
+                        className="text-xs font-medium text-green-700 underline underline-offset-2 hover:text-green-800 disabled:opacity-50"
                       >
                         Set as default
                       </button>

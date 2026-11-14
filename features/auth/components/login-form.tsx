@@ -66,7 +66,7 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
   return (
     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
       <div className="mb-6 text-center">
-        <h1 className="font-display text-3xl font-normal tracking-tight text-navy-900">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-navy-900">
           Welcome to BooKanto
         </h1>
         <p className="mt-2 text-sm text-slate-600">
@@ -147,12 +147,12 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
 
           <Button
             type="submit"
-            className="h-12 w-full bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+            className="h-12 w-full bg-primary font-semibold text-white hover:bg-primary/90"
             disabled={loading || !phone.trim()}
           >
             {loading ? (
               <span className="flex items-center gap-2">
-                <span className="inline-block size-4 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
+                <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 Sending code...
               </span>
             ) : (
@@ -184,12 +184,12 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
 
           <Button
             type="submit"
-            className="h-12 w-full bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+            className="h-12 w-full bg-primary font-semibold text-white hover:bg-primary/90"
             disabled={loading || !email.trim()}
           >
             {loading ? (
               <span className="flex items-center gap-2">
-                <span className="inline-block size-4 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
+                <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 Sending link...
               </span>
             ) : (
@@ -214,11 +214,11 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
 
       <p className="mt-6 text-center text-xs text-slate-500">
         By continuing, you agree to BooKanto&apos;s{" "}
-        <a href="/terms" className="text-orange-700 underline underline-offset-2">
+        <a href="/terms" className="text-green-700 underline underline-offset-2">
           Terms of Service
         </a>{" "}
         and{" "}
-        <a href="/privacy" className="text-orange-700 underline underline-offset-2">
+        <a href="/privacy" className="text-green-700 underline underline-offset-2">
           Privacy Policy
         </a>
         .

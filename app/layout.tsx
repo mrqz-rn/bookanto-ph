@@ -1,18 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Lilita_One, Plus_Jakarta_Sans } from "next/font/google";
+import { Fredoka, Plus_Jakarta_Sans } from "next/font/google";
 
 import { publicEnv } from "@/lib/public-env";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 
 import "./globals.css";
 
-// Lilita One is for the logo and big headlines only.
-const display = Lilita_One({
-  weight: "400",
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-lilita",
-});
+// Fredoka is for the logo and headlines only.
+const display = Fredoka({ subsets: ["latin"], display: "swap", variable: "--font-fredoka" });
 const sans = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap", variable: "--font-jakarta" });
 
 export const metadata: Metadata = {
@@ -24,6 +19,7 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   openGraph: { type: "website", siteName: SITE_NAME, locale: "en_PH" },
+  twitter: { card: "summary_large_image" },
   formatDetection: { telephone: false },
 };
 

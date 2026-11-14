@@ -22,7 +22,7 @@ export function AccountNav({ userName, userPhone, userEmail }: AccountNavProps) 
     <div className="space-y-6">
       {/* User greeting card */}
       <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-5">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent font-display text-xl text-orange-700">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent font-display text-xl font-bold text-green-700">
           {displayName.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">

@@ -15,8 +15,8 @@ const buttonVariants = cva(
           "border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        // Orange-500 text fails contrast on light backgrounds; links use orange-700.
-        link: "text-orange-700 underline-offset-4 hover:underline",
+        // Green-600 text fails contrast at body size; links use green-700.
+        link: "text-green-700 underline-offset-4 hover:underline",
       },
       // Touch targets are at least 44px. sm and icon-sm are for dense
       // desktop screens (admin tables) only.

@@ -118,7 +118,7 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
     >
       <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl sm:p-8">
         <div className="flex items-center justify-between border-b border-border pb-4">
-          <h2 id="address-modal-title" className="font-display text-2xl font-normal text-navy-900">
+          <h2 id="address-modal-title" className="font-display text-2xl font-bold text-navy-900">
             {isEditing ? "Edit saved address" : "Add new address"}
           </h2>
           <button
@@ -288,7 +288,7 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
               checked={isDefault}
               onChange={(e) => setIsDefault(e.target.checked)}
               disabled={loading}
-              className="size-5 rounded border-slate-300 text-orange-500 focus:ring-navy-900"
+              className="size-5 rounded border-slate-300 accent-primary focus:ring-navy-900"
             />
             <label
               htmlFor="addr-default"
@@ -305,12 +305,12 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
             </Button>
             <Button
               type="submit"
-              className="bg-orange-500 font-semibold text-navy-900 hover:bg-orange-600"
+              className="bg-primary font-semibold text-white hover:bg-primary/90"
               disabled={loading || !streetAddress.trim()}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <span className="inline-block size-4 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
+                  <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Saving...
                 </span>
               ) : isEditing ? (

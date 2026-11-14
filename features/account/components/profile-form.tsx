@@ -62,7 +62,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
     <div className="space-y-8">
       <div className="rounded-2xl border border-border bg-card p-6 shadow-2xs sm:p-8">
         <div className="border-b border-border pb-5">
-          <h2 className="font-display text-2xl font-normal text-navy-900">Personal Information</h2>
+          <h2 className="font-display text-2xl font-bold text-navy-900">Personal Information</h2>
           <p className="mt-1 text-sm text-slate-600">
             Keep your contact details up to date for bookings and notifications.
           </p>
@@ -183,12 +183,12 @@ export function ProfileForm({ user }: ProfileFormProps) {
           <div className="pt-2">
             <Button
               type="submit"
-              className="h-11 bg-orange-500 px-6 font-semibold text-navy-900 hover:bg-orange-600"
+              className="h-11 bg-primary px-6 font-semibold text-white hover:bg-primary/90"
               disabled={loading || !name.trim()}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <span className="inline-block size-4 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
+                  <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Saving...
                 </span>
               ) : (

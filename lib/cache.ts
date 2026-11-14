@@ -7,5 +7,11 @@ export const CACHE_TAGS = {
   cities: "cities",
 } as const;
 
+/**
+ * One shop's schedule (hours, closures, holiday rules, staff schedules), read
+ * by the slot engine. Availability actions revalidate it for that shop only.
+ */
+export const availabilityTag = (shopId: string) => `availability:${shopId}`;
+
 /** How long cached public data may live (plan: rebuilt every 10 minutes). */
 export const PUBLIC_REVALIDATE_SECONDS = 600;

@@ -41,7 +41,7 @@ export function ShopCard({ shop }: { shop: ShopCardData }) {
           />
         ) : (
           <div className="flex size-full items-center justify-center">
-            <CategoryIcon name={shop.categoryIcon} className="size-12 text-orange-700" />
+            <CategoryIcon name={shop.categoryIcon} className="size-12 text-green-700" />
           </div>
         )}
         {shop.verified && (

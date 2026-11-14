@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 
 // Expects the demo data from `pnpm db:seed`.
 
-test("home page has one heading and no accessibility violations", async ({ page }) => {
-  await page.goto("/");
+test("explore page has one heading and no accessibility violations", async ({ page }) => {
+  await page.goto("/explore");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   const results = await new AxeBuilder({ page })
@@ -14,14 +14,14 @@ test("home page has one heading and no accessibility violations", async ({ page 
 });
 
 test("search goes to the results page", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/explore");
   await page.getByRole("searchbox", { name: "What service do you need?" }).fill("haircut");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page).toHaveURL(/\/search\?q=haircut$/);
 });
 
 test("choosing a city shows popular shops near it, and is remembered", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/explore");
   const nearby = page.getByRole("region", { name: "Popular near you" });
   await nearby.getByLabel("Or choose your city").selectOption({ label: "Marikina" });
 
@@ -34,7 +34,7 @@ test("choosing a city shows popular shops near it, and is remembered", async ({ 
 });
 
 test("pages are served with security headers", async ({ request }) => {
-  const response = await request.get("/");
+  const response = await request.get("/explore");
   const headers = response.headers();
   expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(headers["x-content-type-options"]).toBe("nosniff");

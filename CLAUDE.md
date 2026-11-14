@@ -24,6 +24,7 @@ The blueprint is `BooKanto Web System Development Plan.md`. Read the relevant se
 - **Dynamic routes** (`lib/routes.ts` `DYNAMIC_ROUTES`) get a nonce-based CSP and must render per request. Everything else must be cacheable and must not read cookies.
 - **Public data** is read through `unstable_cache` with a tag from `lib/cache.ts`; actions that change it call `revalidateTag` with that tag.
 - **Client components** import only browser-safe modules: never `queries.ts`, `schema.ts` (Zod) or anything `server-only`. Shared values go in a feature's `constants.ts`.
-- **UI:** design for 360px first; touch targets at least 44px; every screen has loading (skeleton), empty, error and success states. Orange buttons take navy text; orange text uses `orange-700`.
+- **UI:** design for 360px first; touch targets at least 44px; every screen has loading (skeleton), empty, error and success states.
+- **Brand** (logo canvas "Colors and type", which supersedes the plan's orange and Lilita One): Kanto Green `green-600` for primary buttons with white text; green text at body size uses `green-700`; Fredoka (`font-display`, bold) for the logo and headlines, Plus Jakarta Sans for everything else. Prefer the semantic `primary` / `accent` classes over raw color names.
 - No `dangerouslySetInnerHTML` except `components/shared/json-ld.tsx`.
 - Conventional commits (`feat:`, `fix:`, `chore:`).

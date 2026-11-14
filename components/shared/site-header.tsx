@@ -13,13 +13,18 @@ export function SiteHeader() {
         Skip to content
       </a>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex items-center gap-2 rounded-md">
-          <LogoMark className="h-8" />
+        <Link href="/explore" className="flex shrink-0 items-center gap-2 rounded-md">
+          <LogoMark className="h-10" />
           <Wordmark className="text-2xl" />
         </Link>
-        <Button asChild variant="outline">
-          <Link href="/login">Log in</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" className="hidden sm:inline-flex">
+            <Link href="/">For shops</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/login">Log in</Link>
+          </Button>
+        </div>
       </div>
     </header>
   );

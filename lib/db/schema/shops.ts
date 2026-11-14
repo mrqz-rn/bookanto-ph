@@ -231,3 +231,12 @@ export const slugRedirects = pgTable(
   },
   (t) => [uniqueIndex("slug_redirects_from_slug_key").on(t.fromSlug)],
 ).enableRLS();
+
+export type Shop = typeof shops.$inferSelect;
+export type NewShop = typeof shops.$inferInsert;
+export type Service = typeof services.$inferSelect;
+export type NewService = typeof services.$inferInsert;
+export type BusinessHour = typeof businessHours.$inferSelect;
+export type NewBusinessHour = typeof businessHours.$inferInsert;
+export type Media = typeof media.$inferSelect;
+export type NewMedia = typeof media.$inferInsert;

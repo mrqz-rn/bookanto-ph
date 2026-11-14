@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <header className="border-b bg-card/60 px-4 py-4 backdrop-blur-xs">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/" className="flex items-center gap-2 rounded-md">
-            <LogoMark className="h-8" />
+            <LogoMark className="h-10" />
             <Wordmark className="text-2xl" />
           </Link>
           <Link

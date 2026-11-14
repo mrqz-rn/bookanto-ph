@@ -10,7 +10,7 @@ export function ListYourShop() {
       className="rounded-xl bg-navy-900 px-5 py-8 text-white sm:px-10 sm:py-10"
     >
       <p className="text-sm font-semibold text-yellow-400">May shop ka?</p>
-      <h2 id="list-your-shop-heading" className="mt-1 font-display text-3xl sm:text-4xl">
+      <h2 id="list-your-shop-heading" className="mt-1 font-display text-3xl font-bold sm:text-4xl">
         List your shop on BooKanto
       </h2>
       <p className="mt-3 max-w-prose text-white/85">

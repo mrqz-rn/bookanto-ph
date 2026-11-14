@@ -2,7 +2,7 @@
 
 Book services sa kanto mo. A marketplace for booking local services in the Philippines: barbershops, salons, aircon cleaning, auto repair and more.
 
-This is the web system for the 6-month pilot: one Next.js 15 app on Vercel with Supabase behind it, built to move to AWS after the pilot without a rewrite. The full blueprint is in [BooKanto Web System Development Plan.md](./BooKanto%20Web%20System%20Development%20Plan.md).
+This is the web system for the 8-month pilot: one Next.js 15 app on Vercel with Supabase behind it, built to move to AWS after the pilot without a rewrite. The full blueprint is in [BooKanto Web System Development Plan.md](./BooKanto%20Web%20System%20Development%20Plan.md).
 
 ## Getting started
 
