@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+db/migrations/
+supabase/
+.next/
+coverage/
+playwright-report/
+test-results/
+BooKanto Web System Development Plan.md

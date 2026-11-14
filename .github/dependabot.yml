@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Stay on Next.js 15 for the pilot: AWS Amplify, the migration target,
+      # documents support up to version 15.
+      - dependency-name: next
+        update-types: [version-update:semver-major]
+      - dependency-name: "@next/env"
+        update-types: [version-update:semver-major]
+      - dependency-name: eslint-config-next
+        update-types: [version-update:semver-major]
+      # Next.js 15 type-checks with TypeScript 5 and lints with ESLint 9.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
