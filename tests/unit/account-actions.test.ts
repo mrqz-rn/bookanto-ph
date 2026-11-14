@@ -13,10 +13,6 @@ import * as authModule from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 
-type MockTx = Record<string, unknown>;
-const mockTransaction = (fn: (tx: MockTx) => Promise<unknown>) =>
-  vi.spyOn(db, "transaction").mockImplementation(fn as never);
-
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn().mockResolvedValue(undefined),
 }));
@@ -25,6 +21,14 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
 }));
+
+const mockTx = (tx: unknown) => {
+  vi.spyOn(db, "transaction").mockImplementation((async (
+    callback: (t: unknown) => Promise<unknown>,
+  ) => {
+    return callback(tx);
+  }) as never);
+};
 
 describe("account server actions", () => {
   const userId = randomUUID();
@@ -67,17 +71,14 @@ describe("account server actions", () => {
 
     it("detects phone conflict with another account", async () => {
       const otherUserId = randomUUID();
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([{ id: otherUserId }]),
-              }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: otherUserId }]),
             }),
           }),
-        };
-        return callback(tx as never);
+        }),
       });
 
       const result = await updateProfile({
@@ -93,22 +94,19 @@ describe("account server actions", () => {
     });
 
     it("successfully updates profile", async () => {
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([]),
             }),
           }),
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue([]),
-            }),
+        }),
+        update: vi.fn().mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
           }),
-        };
-        return callback(tx as never);
+        }),
       });
 
       const result = await updateProfile({
@@ -147,12 +145,9 @@ describe("account server actions", () => {
         where: vi.fn().mockResolvedValue([]),
       });
 
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          update: updateMock,
-          delete: deleteMock,
-        };
-        return callback(tx as never);
+      mockTx({
+        update: updateMock,
+        delete: deleteMock,
       });
 
       const result = await deleteAccount({ confirmation: "DELETE" });
@@ -178,25 +173,22 @@ describe("account server actions", () => {
         updatedAt: new Date(),
       };
 
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue([{ count: 0 }]),
-            }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([{ count: 0 }]),
           }),
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue([]),
-            }),
+        }),
+        update: vi.fn().mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
           }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([createdAddress]),
-            }),
+        }),
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([createdAddress]),
           }),
-        };
-        return callback(tx as never);
+        }),
       });
 
       const result = await createSavedAddress({
@@ -210,17 +202,14 @@ describe("account server actions", () => {
 
   describe("updateSavedAddress", () => {
     it("returns NOT_FOUND when address does not belong to user", async () => {
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([]),
             }),
           }),
-        };
-        return callback(tx as never);
+        }),
       });
 
       const result = await updateSavedAddress({
@@ -244,24 +233,21 @@ describe("account server actions", () => {
         }),
       });
 
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([{ id: addressId, isDefault: true }]),
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([{ id: nextId }]),
-                }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: addressId, isDefault: true }]),
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([{ id: nextId }]),
               }),
             }),
           }),
-          delete: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
-          }),
-          update: updateMock,
-        };
-        return callback(tx as never);
+        }),
+        delete: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+        update: updateMock,
       });
 
       const result = await deleteSavedAddress({ id: addressId });
@@ -279,18 +265,15 @@ describe("account server actions", () => {
         }),
       });
 
-      vi.spyOn(db, "transaction").mockImplementation(async (callback: TxCallback) => {
-        const tx = {
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([{ id: addressId }]),
-              }),
+      mockTx({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: addressId }]),
             }),
           }),
-          update: updateMock,
-        };
-        return callback(tx as never);
+        }),
+        update: updateMock,
       });
 
       const result = await setDefaultAddress({ id: addressId });
