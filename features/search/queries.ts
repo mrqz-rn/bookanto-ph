@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 
 import type { ShopCardData } from "@/components/shared/shop-card";
@@ -8,17 +8,21 @@ import { CACHE_TAGS, PUBLIC_REVALIDATE_SECONDS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import {
   barangays,
+  businessHours,
   categories,
   cities,
+  closures,
   media,
   services,
   shopCategories,
   shops,
 } from "@/lib/db/schema";
-import { MIN_SHOPS_FOR_LISTING_PAGE } from "@/lib/seo";
 import { mediaUrl } from "@/lib/media";
+import { MIN_SHOPS_FOR_LISTING_PAGE } from "@/lib/seo";
+import { formatManila, manilaWeekday } from "@/lib/time";
 
 import { NEARBY_RADIUS_M } from "./constants";
+import type { SearchShopsInput } from "./schema";
 
 /** The launch plan's home page shows 7 category tiles. */
 export const HOME_CATEGORY_COUNT = 7;
@@ -60,6 +64,8 @@ function selectShopCards(distanceFrom?: SQL) {
       distanceM: distanceFrom
         ? sql<number | null>`ST_Distance(${shops.location}, ${distanceFrom})`
         : sql<number | null>`null`,
+      lat: sql<number | null>`ST_Y(${shops.location}::geometry)`,
+      lng: sql<number | null>`ST_X(${shops.location}::geometry)`,
     })
     .from(shops)
     .leftJoin(cities, eq(cities.id, shops.cityId))
@@ -69,12 +75,21 @@ function selectShopCards(distanceFrom?: SQL) {
 
 type ShopCardRow = Awaited<ReturnType<typeof selectShopCards>>[number];
 
-function toShopCard({ barangayName, cityName, photoPath, ...row }: ShopCardRow): ShopCardData {
+function toShopCard({
+  barangayName,
+  cityName,
+  photoPath,
+  lat,
+  lng,
+  ...row
+}: ShopCardRow): ShopCardData {
   return {
     ...row,
     ratingAvg: Number(row.ratingAvg),
     place: [barangayName, cityName].filter(Boolean).join(", ") || null,
     photoUrl: photoPath ? mediaUrl(photoPath) : null,
+    lat: lat ? Number(lat) : null,
+    lng: lng ? Number(lng) : null,
   };
 }
 
@@ -188,4 +203,367 @@ export const getPopularListingLinks = unstable_cache(
   },
   ["popular-listing-links"],
   cacheOptions(CACHE_TAGS.shops),
+);
+
+export type SearchShopsResult = {
+  items: ShopCardData[];
+  totalCount: number;
+};
+
+/**
+ * Searches shops with keyword matching (typo-tolerant across name, description,
+ * categories, services, and locations), category/city filters, booking types,
+ * price ranges, "open now" calculation in Manila time, distance, and sorting.
+ */
+export async function searchShops(input: SearchShopsInput): Promise<SearchShopsResult> {
+  const conditions: SQL[] = [eq(shops.status, "active")];
+
+  const here =
+    input.lat !== undefined && input.lng !== undefined
+      ? sql`ST_SetSRID(ST_MakePoint(${input.lng}::double precision, ${input.lat}::double precision), 4326)::geography`
+      : undefined;
+
+  const queryText = (input.q ?? "").trim();
+  if (queryText.length > 0) {
+    const words = queryText.split(/\s+/).filter(Boolean).slice(0, 5);
+    for (const w of words) {
+      const term = `%${w}%`;
+      conditions.push(
+        sql`(
+          ${shops.name} ILIKE ${term}
+          OR ${shops.description} ILIKE ${term}
+          OR ${cities.name} ILIKE ${term}
+          OR ${barangays.name} ILIKE ${term}
+          OR EXISTS (
+            SELECT 1 FROM ${shopCategories} sc
+            JOIN ${categories} c ON c.id = sc.categoryId
+            WHERE sc.shopId = ${shops.id} AND c.name ILIKE ${term}
+          )
+          OR EXISTS (
+            SELECT 1 FROM ${services} s
+            WHERE s.shopId = ${shops.id} AND s.name ILIKE ${term}
+          )
+        )`,
+      );
+    }
+  }
+
+  if (input.category) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM ${shopCategories} sc
+        JOIN ${categories} c ON c.id = sc.categoryId
+        WHERE sc.shopId = ${shops.id} AND c.slug = ${input.category}
+      )`,
+    );
+  }
+
+  if (input.city) {
+    conditions.push(eq(cities.slug, input.city));
+  }
+
+  if (input.bookingType) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM ${services} s
+        WHERE s.shopId = ${shops.id} AND s.active = true AND s.bookingType = ${input.bookingType}
+      )`,
+    );
+  }
+
+  if (input.priceMin !== undefined) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM ${services} s
+        WHERE s.shopId = ${shops.id} AND s.active = true AND s.priceCentavos IS NOT NULL AND s.priceCentavos >= ${input.priceMin}
+      )`,
+    );
+  }
+
+  if (input.priceMax !== undefined) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM ${services} s
+        WHERE s.shopId = ${shops.id} AND s.active = true AND s.priceCentavos IS NOT NULL AND s.priceCentavos <= ${input.priceMax}
+      )`,
+    );
+  }
+
+  if (input.openNow) {
+    const now = new Date();
+    const currentWeekday = manilaWeekday(now);
+    const currentTime = formatManila(now, "HH:mm:ss");
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM ${businessHours} bh
+        WHERE bh.shopId = ${shops.id}
+          AND bh.weekday = ${currentWeekday}
+          AND bh.opens <= ${currentTime}::time
+          AND bh.closes > ${currentTime}::time
+          AND (bh.breakStart IS NULL OR NOT (bh.breakStart <= ${currentTime}::time AND bh.breakEnd > ${currentTime}::time))
+      )`,
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${closures} cl
+        WHERE cl.shopId = ${shops.id}
+          AND cl.startsAt <= ${now}
+          AND cl.endsAt > ${now}
+      )`,
+    );
+  }
+
+  let orderByClause: SQL[];
+  switch (input.sort) {
+    case "distance":
+      orderByClause = here
+        ? [sql`ST_Distance(${shops.location}, ${here})`]
+        : [desc(shops.ratingAvg), desc(shops.ratingCount)];
+      break;
+    case "rating":
+      orderByClause = [desc(shops.ratingAvg), desc(shops.ratingCount)];
+      break;
+    case "price_asc":
+      orderByClause = [
+        sql`(SELECT min(${services.priceCentavos}) FROM ${services} WHERE ${services.shopId} = ${shops.id} AND ${services.active} = true) ASC NULLS LAST`,
+      ];
+      break;
+    case "newest":
+      orderByClause = [desc(shops.createdAt)];
+      break;
+    case "recommended":
+    default:
+      orderByClause = [
+        sql`CASE WHEN ${shops.verifiedAt} IS NOT NULL THEN 1 ELSE 0 END DESC`,
+        desc(shops.ratingAvg),
+        desc(shops.ratingCount),
+      ];
+      break;
+  }
+
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(shops)
+    .leftJoin(cities, eq(cities.id, shops.cityId))
+    .leftJoin(barangays, eq(barangays.id, shops.barangayId))
+    .where(and(...conditions));
+
+  const totalCount = countResult?.count ?? 0;
+
+  const rows = await selectShopCards(here)
+    .where(and(...conditions))
+    .orderBy(...orderByClause)
+    .limit(input.limit)
+    .offset(input.offset);
+
+  return {
+    items: rows.map(toShopCard),
+    totalCount,
+  };
+}
+
+/**
+ * Recommendations for discovery: top-rated and verified shops, optionally
+ * scoped to a category or excluding a specific shop.
+ */
+export const getRecommendedShops = unstable_cache(
+  async (options?: {
+    excludeShopId?: string;
+    categorySlug?: string;
+    limit?: number;
+  }): Promise<ShopCardData[]> => {
+    const limit = options?.limit ?? 8;
+    const conditions: SQL[] = [eq(shops.status, "active")];
+    if (options?.excludeShopId) {
+      conditions.push(ne(shops.id, options.excludeShopId));
+    }
+    if (options?.categorySlug) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${shopCategories} sc
+          JOIN ${categories} c ON c.id = sc.categoryId
+          WHERE sc.shopId = ${shops.id} AND c.slug = ${options.categorySlug}
+        )`,
+      );
+    }
+    const rows = await selectShopCards()
+      .where(and(...conditions))
+      .orderBy(
+        sql`CASE WHEN ${shops.verifiedAt} IS NOT NULL THEN 1 ELSE 0 END DESC`,
+        desc(shops.ratingAvg),
+        desc(shops.ratingCount),
+      )
+      .limit(limit);
+    return rows.map(toShopCard);
+  },
+  ["recommended-shops"],
+  cacheOptions(CACHE_TAGS.shops),
+);
+
+export type CategoryDetail = {
+  id: string;
+  slug: string;
+  name: string;
+  icon: string | null;
+  shopCount: number;
+  shops: ShopCardData[];
+};
+
+/** Category nationwide listing page data. */
+export const getCategoryListing = unstable_cache(
+  async (categorySlug: string): Promise<CategoryDetail | null> => {
+    const [category] = await db
+      .select({
+        id: categories.id,
+        slug: categories.slug,
+        name: categories.name,
+        icon: categories.icon,
+      })
+      .from(categories)
+      .where(and(eq(categories.slug, categorySlug), eq(categories.active, true)))
+      .limit(1);
+
+    if (!category) return null;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shops)
+      .innerJoin(shopCategories, eq(shopCategories.shopId, shops.id))
+      .where(and(eq(shops.status, "active"), eq(shopCategories.categoryId, category.id)));
+
+    const shopRows = await selectShopCards()
+      .innerJoin(shopCategories, eq(shopCategories.shopId, shops.id))
+      .where(and(eq(shops.status, "active"), eq(shopCategories.categoryId, category.id)))
+      .orderBy(desc(shops.ratingAvg), desc(shops.ratingCount))
+      .limit(24);
+
+    return {
+      ...category,
+      shopCount: countResult?.count ?? 0,
+      shops: shopRows.map(toShopCard),
+    };
+  },
+  ["category-listing"],
+  cacheOptions(CACHE_TAGS.categories),
+);
+
+export type CityCategoryDetail = {
+  city: { id: string; slug: string; name: string };
+  category: { id: string; slug: string; name: string; icon: string | null };
+  shopCount: number;
+  fromPriceCentavos: number | null;
+  shops: ShopCardData[];
+};
+
+/** City and category landing page data (e.g. /marikina/barbershop). */
+export const getCityCategoryListing = unstable_cache(
+  async (citySlug: string, categorySlug: string): Promise<CityCategoryDetail | null> => {
+    const [city] = await db
+      .select({ id: cities.id, slug: cities.slug, name: cities.name })
+      .from(cities)
+      .where(and(eq(cities.slug, citySlug), eq(cities.isActive, true)))
+      .limit(1);
+
+    const [category] = await db
+      .select({
+        id: categories.id,
+        slug: categories.slug,
+        name: categories.name,
+        icon: categories.icon,
+      })
+      .from(categories)
+      .where(and(eq(categories.slug, categorySlug), eq(categories.active, true)))
+      .limit(1);
+
+    if (!city || !category) return null;
+
+    const [countResult] = await db
+      .select({
+        count: sql<number>`count(distinct ${shops.id})::int`,
+        minPrice: sql<number | null>`min(${services.priceCentavos})`,
+      })
+      .from(shops)
+      .innerJoin(shopCategories, eq(shopCategories.shopId, shops.id))
+      .leftJoin(services, and(eq(services.shopId, shops.id), eq(services.active, true)))
+      .where(
+        and(
+          eq(shops.status, "active"),
+          eq(shops.cityId, city.id),
+          eq(shopCategories.categoryId, category.id),
+        ),
+      );
+
+    const shopRows = await selectShopCards()
+      .innerJoin(shopCategories, eq(shopCategories.shopId, shops.id))
+      .where(
+        and(
+          eq(shops.status, "active"),
+          eq(shops.cityId, city.id),
+          eq(shopCategories.categoryId, category.id),
+        ),
+      )
+      .orderBy(desc(shops.ratingAvg), desc(shops.ratingCount))
+      .limit(24);
+
+    return {
+      city,
+      category,
+      shopCount: countResult?.count ?? 0,
+      fromPriceCentavos: countResult?.minPrice ?? null,
+      shops: shopRows.map(toShopCard),
+    };
+  },
+  ["city-category-listing"],
+  cacheOptions(CACHE_TAGS.shops),
+);
+
+export type CityDetail = {
+  city: { id: string; slug: string; name: string };
+  shopCount: number;
+  categories: Array<{ slug: string; name: string; count: number }>;
+  shops: ShopCardData[];
+};
+
+/** City nationwide listing page data (e.g. /marikina). */
+export const getCityListing = unstable_cache(
+  async (citySlug: string): Promise<CityDetail | null> => {
+    const [city] = await db
+      .select({ id: cities.id, slug: cities.slug, name: cities.name })
+      .from(cities)
+      .where(and(eq(cities.slug, citySlug), eq(cities.isActive, true)))
+      .limit(1);
+
+    if (!city) return null;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shops)
+      .where(and(eq(shops.status, "active"), eq(shops.cityId, city.id)));
+
+    const popularCategories = await db
+      .select({
+        slug: categories.slug,
+        name: categories.name,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(shops)
+      .innerJoin(shopCategories, eq(shopCategories.shopId, shops.id))
+      .innerJoin(categories, eq(categories.id, shopCategories.categoryId))
+      .where(and(eq(shops.status, "active"), eq(shops.cityId, city.id)))
+      .groupBy(categories.slug, categories.name)
+      .orderBy(desc(sql`count(*)`))
+      .limit(10);
+
+    const shopRows = await selectShopCards()
+      .where(and(eq(shops.status, "active"), eq(shops.cityId, city.id)))
+      .orderBy(desc(shops.ratingAvg), desc(shops.ratingCount))
+      .limit(24);
+
+    return {
+      city,
+      shopCount: countResult?.count ?? 0,
+      categories: popularCategories,
+      shops: shopRows.map(toShopCard),
+    };
+  },
+  ["city-listing"],
+  cacheOptions(CACHE_TAGS.cities),
 );

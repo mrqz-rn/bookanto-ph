@@ -77,6 +77,7 @@ const RULES = {
   "booking:accept_quote": isOwnBooking,
   "booking:pay": isOwnBooking,
   "review:create": isOwnBooking,
+  "review:report": isCustomer,
   "shop:create": isCustomer,
 
   // As a shop.
@@ -99,6 +100,7 @@ const RULES = {
     isOwnBooking(user, resource) ||
     worksBooking(user, resource) ||
     (isAdmin(user) && resource.disputed === true),
+  "quick_reply:manage": inShop("owner", "manager"),
   "review:reply": inShop("owner", "manager"),
   "shop_member:manage": (user, resource) =>
     inShop("owner")(user, resource) ||
@@ -117,6 +119,7 @@ const RULES = {
   "admin:category.manage": isAdmin,
   "admin:city.manage": isAdmin,
   "admin:announcement.manage": isAdmin,
+  "admin:fraud.manage": isAdmin,
   "admin:admin.manage": isSuperAdmin,
   "admin:settings.manage": isSuperAdmin,
   "admin:audit.read": isSuperAdmin,

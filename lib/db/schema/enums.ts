@@ -83,3 +83,29 @@ export type DepositType = (typeof DEPOSIT_TYPES)[number];
 
 export const PAYMENT_STATUSES = ["pending", "paid", "expired", "failed", "refunded"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const ANNOUNCEMENT_KINDS = ["info", "warning", "critical", "maintenance"] as const;
+export type AnnouncementKind = (typeof ANNOUNCEMENT_KINDS)[number];
+
+export const ANNOUNCEMENT_AUDIENCES = ["all", "customers", "shops"] as const;
+export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number];
+
+export const FRAUD_TARGET_TYPES = ["user", "shop", "booking"] as const;
+export type FraudTargetType = (typeof FRAUD_TARGET_TYPES)[number];
+
+export const FRAUD_SIGNAL_TYPES = [
+  "excessive_cancellations",
+  "excessive_no_shows",
+  "burst_bookings",
+  "dispute_rate_high",
+  "review_abuse",
+  "suspicious_velocity",
+  "custom",
+] as const;
+export type FraudSignalType = (typeof FRAUD_SIGNAL_TYPES)[number];
+
+export const FRAUD_SEVERITIES = ["low", "medium", "high", "critical"] as const;
+export type FraudSeverity = (typeof FRAUD_SEVERITIES)[number];
+
+export const FRAUD_STATUSES = ["active", "investigating", "resolved", "dismissed"] as const;
+export type FraudStatus = (typeof FRAUD_STATUSES)[number];

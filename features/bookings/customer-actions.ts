@@ -633,6 +633,18 @@ export async function acceptQuote(
     });
 
     revalidateBooking(bookingId);
+    await notifyQuietly({
+      userId: user.id,
+      template: "booking_confirmed",
+      payload: {
+        bookingId,
+        refCode: booking.refCode,
+        shopName: booking.shopName,
+        serviceName: booking.serviceName,
+        startAt: booking.startAt,
+        totalCentavos: booking.quotedPriceCentavos ?? undefined,
+      },
+    });
     return { depositCentavos };
   });
 }

@@ -177,6 +177,7 @@ export type MyBooking = {
   serviceName: string;
   shopId: string;
   shopName: string;
+  shopSlug: string;
   shopAddress: string | null;
   staffName: string | null;
   address: string | null;
@@ -207,6 +208,7 @@ function selectMyBookings(executor: DbExecutor) {
       serviceName: services.name,
       shopId: bookings.shopId,
       shopName: shops.name,
+      shopSlug: shops.slug,
       shopAddress: shops.address,
       staffName: sql<
         string | null
@@ -232,6 +234,7 @@ type MyBookingRow = Awaited<ReturnType<typeof selectMyBookings>>[number];
 
 const toMyBooking = (row: MyBookingRow): MyBooking => ({
   ...row,
+  shopSlug: (row as unknown as { shopSlug: string }).shopSlug,
   staffName: row.staffName?.trim().split(/\s+/)[0] ?? null,
   startAt: row.startAt.toISOString(),
   endAt: row.endAt?.toISOString() ?? null,

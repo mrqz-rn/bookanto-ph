@@ -13,6 +13,7 @@ import {
 import * as authModule from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import * as notifyModule from "@/lib/notify";
 
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn().mockResolvedValue(undefined),
@@ -416,6 +417,281 @@ describe("bookings actions", () => {
 
       const res = await assignStaff({ bookingId, staffId });
       expect(res.ok).toBe(true);
+    });
+  });
+
+  describe("booking lifecycle notifications", () => {
+    const customerId = randomUUID();
+
+    it("dispatches booking_confirmed notification when shop accepts booking", async () => {
+      const sendNotifSpy = vi.spyOn(notifyModule, "sendNotification").mockResolvedValue({
+        success: true,
+        channel: "sms",
+      });
+
+      let callCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                // Booking query
+                return Promise.resolve([
+                  {
+                    id: bookingId,
+                    refCode: "BK-CONF100",
+                    shopId,
+                    serviceId,
+                    customerId,
+                    status: "requested",
+                    startAt: new Date("2026-12-01T02:00:00Z"),
+                    totalCentavos: 45000,
+                    address: "Barangay San Antonio",
+                    staffId: null,
+                  },
+                ]);
+              }
+              if (callCount === 2) {
+                // Shop name query
+                return Promise.resolve([{ name: "Classic Fades Barber" }]);
+              }
+              // Service name query
+              return Promise.resolve([{ name: "Signature Haircut" }]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      vi.spyOn(db, "transaction").mockImplementation((async (
+        callback: (t: unknown) => Promise<unknown>,
+      ) => {
+        const mockTx = {
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue(undefined),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockResolvedValue(undefined),
+          }),
+        };
+        return callback(mockTx);
+      }) as never);
+
+      const res = await acceptBooking({ bookingId });
+      expect(res.ok).toBe(true);
+
+      expect(sendNotifSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: customerId,
+          template: "booking_confirmed",
+          payload: expect.objectContaining({
+            bookingId,
+            refCode: "BK-CONF100",
+            shopName: "Classic Fades Barber",
+            serviceName: "Signature Haircut",
+            totalCentavos: 45000,
+          }),
+        }),
+      );
+    });
+
+    it("dispatches booking_cancelled notification when shop declines booking", async () => {
+      const sendNotifSpy = vi.spyOn(notifyModule, "sendNotification").mockResolvedValue({
+        success: true,
+        channel: "sms",
+      });
+
+      let callCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve([
+                  {
+                    id: bookingId,
+                    refCode: "BK-DECL200",
+                    shopId,
+                    serviceId,
+                    customerId,
+                    status: "requested",
+                    staffId: null,
+                  },
+                ]);
+              }
+              if (callCount === 2) {
+                return Promise.resolve([{ name: "Classic Fades Barber" }]);
+              }
+              return Promise.resolve([{ name: "Signature Haircut" }]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      vi.spyOn(db, "transaction").mockImplementation((async (
+        callback: (t: unknown) => Promise<unknown>,
+      ) => {
+        const mockTx = {
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue(undefined),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockResolvedValue(undefined),
+          }),
+        };
+        return callback(mockTx);
+      }) as never);
+
+      const res = await declineBooking({ bookingId, reason: "Barbers unavailable at that time" });
+      expect(res.ok).toBe(true);
+
+      expect(sendNotifSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: customerId,
+          template: "booking_cancelled",
+          payload: expect.objectContaining({
+            bookingId,
+            refCode: "BK-DECL200",
+            reason: expect.stringContaining("Barbers unavailable"),
+          }),
+        }),
+      );
+    });
+
+    it("dispatches booking_completed notification when shop completes booking", async () => {
+      const sendNotifSpy = vi.spyOn(notifyModule, "sendNotification").mockResolvedValue({
+        success: true,
+        channel: "sms",
+      });
+
+      let callCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve([
+                  {
+                    id: bookingId,
+                    refCode: "BK-COMP300",
+                    shopId,
+                    serviceId,
+                    customerId,
+                    status: "confirmed",
+                    staffId: null,
+                  },
+                ]);
+              }
+              if (callCount === 2) {
+                return Promise.resolve([{ name: "Classic Fades Barber" }]);
+              }
+              return Promise.resolve([{ name: "Signature Haircut" }]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      vi.spyOn(db, "transaction").mockImplementation((async (
+        callback: (t: unknown) => Promise<unknown>,
+      ) => {
+        const mockTx = {
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue(undefined),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockResolvedValue(undefined),
+          }),
+        };
+        return callback(mockTx);
+      }) as never);
+
+      const res = await completeBooking({ bookingId });
+      expect(res.ok).toBe(true);
+
+      expect(sendNotifSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: customerId,
+          template: "booking_completed",
+          payload: expect.objectContaining({
+            bookingId,
+            refCode: "BK-COMP300",
+          }),
+        }),
+      );
+    });
+
+    it("dispatches booking_cancelled notification when shop cancels booking", async () => {
+      const sendNotifSpy = vi.spyOn(notifyModule, "sendNotification").mockResolvedValue({
+        success: true,
+        channel: "sms",
+      });
+
+      let callCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve([
+                  {
+                    id: bookingId,
+                    refCode: "BK-CANC400",
+                    shopId,
+                    serviceId,
+                    customerId,
+                    status: "confirmed",
+                    staffId: null,
+                  },
+                ]);
+              }
+              if (callCount === 2) {
+                return Promise.resolve([{ name: "Classic Fades Barber" }]);
+              }
+              return Promise.resolve([{ name: "Signature Haircut" }]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      vi.spyOn(db, "transaction").mockImplementation((async (
+        callback: (t: unknown) => Promise<unknown>,
+      ) => {
+        const mockTx = {
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue(undefined),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockResolvedValue(undefined),
+          }),
+        };
+        return callback(mockTx);
+      }) as never);
+
+      const res = await cancelBooking({ bookingId, reason: "Power outage in the area" });
+      expect(res.ok).toBe(true);
+
+      expect(sendNotifSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: customerId,
+          template: "booking_cancelled",
+          payload: expect.objectContaining({
+            bookingId,
+            refCode: "BK-CANC400",
+            reason: expect.stringContaining("Power outage"),
+          }),
+        }),
+      );
     });
   });
 });

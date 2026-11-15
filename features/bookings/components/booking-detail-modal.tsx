@@ -1,7 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Clock, Loader2, MapPin, Phone, X, XCircle } from "lucide-react";
+import Link from "next/link";
+import {
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MapPin,
+  MessageSquare,
+  Phone,
+  X,
+  XCircle,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/money";
@@ -190,6 +200,26 @@ export function BookingDetailModal({
                   <span className="font-semibold text-neutral-900">Notes:</span> {booking.notes}
                 </div>
               )}
+
+              {/* Chat action */}
+              <div className="mt-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
+                <div className="min-w-0 pr-2">
+                  <p className="text-xs font-bold text-emerald-950">Chat & Quick Replies</p>
+                  <p className="truncate text-[11px] text-emerald-700">
+                    Photos, updates, and read receipts
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-8 shrink-0 bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700"
+                >
+                  <Link href={`/dashboard/bookings/${booking.id}`}>
+                    <MessageSquare className="mr-1.5 size-3.5" />
+                    Open Chat
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             {/* Assigned Staff */}

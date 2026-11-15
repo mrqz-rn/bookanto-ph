@@ -122,6 +122,7 @@ export const messages = pgTable(
   },
   (t) => [
     index("messages_booking_id_created_at_idx").on(t.bookingId, t.createdAt),
+    index("messages_sender_id_created_at_idx").on(t.senderId, t.createdAt),
     check("messages_content_check", sql`${t.body} is not null or ${t.imagePath} is not null`),
     check("messages_body_length_check", sql`char_length(${t.body}) <= 2000`),
   ],
@@ -154,6 +155,26 @@ export const reviews = pgTable(
   ],
 ).enableRLS();
 
+// Predefined or custom canned messages for shops to reply quickly to bookings.
+export const quickReplies = pgTable(
+  "quick_replies",
+  {
+    id: id(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    index("quick_replies_shop_id_idx").on(t.shopId),
+    check("quick_replies_title_check", sql`char_length(${t.title}) <= 100`),
+    check("quick_replies_body_check", sql`char_length(${t.body}) <= 1000`),
+  ],
+).enableRLS();
+
 // Disputes on bookings and reports on reviews.
 export const reports = pgTable(
   "reports",
@@ -181,5 +202,8 @@ export type NewBooking = typeof bookings.$inferInsert;
 export type BookingEvent = typeof bookingEvents.$inferSelect;
 export type NewBookingEvent = typeof bookingEvents.$inferInsert;
 export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
+export type QuickReply = typeof quickReplies.$inferSelect;
+export type NewQuickReply = typeof quickReplies.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
 export type Report = typeof reports.$inferSelect;

@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Inbox, Loader2, Search, UserCheck } from "lucide-react";
+import { CheckCircle2, Inbox, Loader2, MessageSquare, Search, UserCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -349,6 +350,7 @@ export function BookingInbox({ initialBookings, shopStaff }: BookingInboxProps) 
                           onClick={() => handleQuickNoShow(b.id)}
                           disabled={actionLoadingId === b.id}
                           className="h-8 text-xs text-neutral-500 hover:text-amber-800"
+                          title="Mark customer as No-show"
                         >
                           No-show
                         </Button>
@@ -370,6 +372,19 @@ export function BookingInbox({ initialBookings, shopStaff }: BookingInboxProps) 
                         </Button>
                       </>
                     )}
+
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1 border-emerald-200 text-xs text-emerald-700 hover:bg-emerald-50"
+                      title="Chat with customer"
+                    >
+                      <Link href={`/dashboard/bookings/${b.id}`}>
+                        <MessageSquare className="size-3.5" />
+                        <span className="hidden sm:inline">Chat</span>
+                      </Link>
+                    </Button>
 
                     <Button
                       type="button"

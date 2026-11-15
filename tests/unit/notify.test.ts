@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
 
+import { db } from "@/lib/db";
 import {
   CloudWhatsAppProvider,
   renderNotificationTemplate,
   ResendEmailProvider,
   SemaphoreSmsProvider,
+  sendNotification,
   sendOtpSms,
   ViberBotProvider,
   WebPushProvider,
@@ -209,6 +212,180 @@ describe("Notifications", () => {
     it("sendOtpSms dispatches verification code cleanly", async () => {
       const sent = await sendOtpSms("09189876543", "654321");
       expect(sent).toBe(true);
+    });
+  });
+
+  describe("sendNotification dispatcher", () => {
+    const userId = randomUUID();
+    const mockUser = {
+      id: userId,
+      phone: "+639171234567",
+      email: "testuser@example.com",
+    };
+
+    it("respects bookingConfirmations preference toggle", async () => {
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              // First call: user
+              return Promise.resolve([mockUser]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      // Preferences with bookingConfirmations disabled
+      vi.spyOn(db, "insert").mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([
+              {
+                id: randomUUID(),
+                userId,
+                preferredChannel: "sms",
+                smsEnabled: true,
+                emailEnabled: true,
+                pushEnabled: true,
+                whatsappEnabled: false,
+                viberEnabled: false,
+                bookingConfirmations: false, // disabled
+                bookingReminders: true,
+                bookingAutoExpiry: true,
+                marketingPromos: false,
+              },
+            ]),
+          }),
+        }),
+      } as never);
+
+      const result = await sendNotification({
+        userId,
+        template: "booking_confirmed",
+        payload: {
+          refCode: "BK-CONF01",
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Confirmations disabled");
+    });
+
+    it("dispatches via WhatsApp when enabled and preferred", async () => {
+      let selectCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              selectCount++;
+              if (selectCount === 1) {
+                return Promise.resolve([mockUser]);
+              }
+              return Promise.resolve([
+                {
+                  id: randomUUID(),
+                  userId,
+                  preferredChannel: "whatsapp",
+                  smsEnabled: true,
+                  emailEnabled: true,
+                  pushEnabled: true,
+                  whatsappEnabled: true,
+                  viberEnabled: false,
+                  bookingConfirmations: true,
+                  bookingReminders: true,
+                  bookingAutoExpiry: true,
+                  marketingPromos: false,
+                  whatsappPhone: "+639171234567",
+                },
+              ]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      const insertValuesSpy = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: randomUUID() }]),
+      });
+      vi.spyOn(db, "insert").mockReturnValue({
+        values: insertValuesSpy,
+      } as never);
+
+      const result = await sendNotification({
+        userId,
+        template: "booking_reminder",
+        payload: {
+          refCode: "BK-REM02",
+          shopName: "Salon De Manila",
+          serviceName: "Hair Treatment",
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.channel).toBe("whatsapp");
+      expect(result.messageId).toMatch(/^sim_wa_/);
+
+      expect(insertValuesSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId,
+          channel: "whatsapp",
+          template: "booking_reminder",
+          status: "sent",
+        }),
+      );
+    });
+
+    it("dispatches via Viber when enabled and preferred", async () => {
+      let selectCount = 0;
+      vi.spyOn(db, "select").mockImplementation((() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              selectCount++;
+              if (selectCount === 1) {
+                return Promise.resolve([mockUser]);
+              }
+              return Promise.resolve([
+                {
+                  id: randomUUID(),
+                  userId,
+                  preferredChannel: "viber",
+                  smsEnabled: true,
+                  emailEnabled: true,
+                  pushEnabled: true,
+                  whatsappEnabled: false,
+                  viberEnabled: true,
+                  bookingConfirmations: true,
+                  bookingReminders: true,
+                  bookingAutoExpiry: true,
+                  marketingPromos: false,
+                  viberPhone: "+639171234567",
+                },
+              ]);
+            }),
+          }),
+        }),
+      })) as never);
+
+      const insertValuesSpy = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: randomUUID() }]),
+      });
+      vi.spyOn(db, "insert").mockReturnValue({
+        values: insertValuesSpy,
+      } as never);
+
+      const result = await sendNotification({
+        userId,
+        template: "booking_confirmed",
+        payload: {
+          refCode: "BK-VIB03",
+          shopName: "Barbershop Central",
+          serviceName: "Cut & Shave",
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.channel).toBe("viber");
+      expect(result.messageId).toMatch(/^sim_viber_/);
     });
   });
 });

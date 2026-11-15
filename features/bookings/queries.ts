@@ -451,40 +451,53 @@ export async function getShopRevenueStats(
 ): Promise<ShopRevenueStats> {
   const now = new Date();
   let startDate: Date;
+  let endDate: Date = now;
   let periodLabel = "Last 30 Days";
 
   switch (period) {
     case "today": {
       startDate = startOfManilaDay(now);
+      const todayStr = manilaDate(now);
+      endDate = manilaToUtc(todayStr, "23:59:59.999");
       periodLabel = "Today";
       break;
     }
     case "7d": {
       startDate = new Date(now.getTime() - 7 * 86_400_000);
+      endDate = now;
       periodLabel = "Last 7 Days";
       break;
     }
     case "30d": {
       startDate = new Date(now.getTime() - 30 * 86_400_000);
+      endDate = now;
       periodLabel = "Last 30 Days";
       break;
     }
     case "month": {
       const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      startDate = manilaToUtc(`${year}-${month}-01`, "00:00");
+      const month = now.getMonth();
+      const monthStr = String(month + 1).padStart(2, "0");
+      startDate = manilaToUtc(`${year}-${monthStr}-01`, "00:00");
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      endDate = manilaToUtc(
+        `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`,
+        "23:59:59.999",
+      );
       periodLabel = "This Month";
       break;
     }
     case "year": {
       const year = now.getFullYear();
       startDate = manilaToUtc(`${year}-01-01`, "00:00");
+      endDate = manilaToUtc(`${year}-12-31`, "23:59:59.999");
       periodLabel = "This Year";
       break;
     }
     case "all":
     default: {
       startDate = new Date(0); // All time
+      endDate = new Date(now.getTime() + 86_400_000);
       periodLabel = "All Time";
       break;
     }
@@ -511,7 +524,13 @@ export async function getShopRevenueStats(
     .from(bookings)
     .innerJoin(services, eq(services.id, bookings.serviceId))
     .leftJoin(staffUsers, eq(staffUsers.id, bookings.staffId))
-    .where(and(eq(bookings.shopId, shopId), gte(bookings.startAt, startDate)))
+    .where(
+      and(
+        eq(bookings.shopId, shopId),
+        gte(bookings.startAt, startDate),
+        lte(bookings.startAt, endDate),
+      ),
+    )
     .orderBy(asc(bookings.startAt));
 
   let grossCentavos = 0;

@@ -11,12 +11,14 @@ import {
   categories,
   cities,
   media,
+  services,
   shopCategories,
   shopMembers,
   shops,
   staffSchedules,
   users,
 } from "@/lib/db/schema";
+import { mediaUrl } from "@/lib/media";
 
 /**
  * Returns all shops the current user owns or is a member of.
@@ -233,4 +235,68 @@ export async function getShopTeamMembers(shopId: string): Promise<ShopTeamMember
       joinedAt: m.createdAt.toISOString(),
     };
   });
+}
+
+/**
+ * Loads public shop profile data, categories, hours, photos, and active services by slug.
+ */
+export async function getPublicShopBySlug(slug: string) {
+  const [shop] = await db
+    .select({
+      id: shops.id,
+      slug: shops.slug,
+      name: shops.name,
+      description: shops.description,
+      address: shops.address,
+      phone: shops.phone,
+      status: shops.status,
+      verifiedAt: shops.verifiedAt,
+      ratingAvg: shops.ratingAvg,
+      ratingCount: shops.ratingCount,
+      cityName: cities.name,
+      barangayName: barangays.name,
+    })
+    .from(shops)
+    .leftJoin(cities, eq(cities.id, shops.cityId))
+    .leftJoin(barangays, eq(barangays.id, shops.barangayId))
+    .where(eq(shops.slug, slug))
+    .limit(1);
+
+  if (!shop) return null;
+
+  const [shopCats, hours, photos, activeServices] = await Promise.all([
+    db
+      .select({
+        categoryId: shopCategories.categoryId,
+        name: categories.name,
+        slug: categories.slug,
+        icon: categories.icon,
+      })
+      .from(shopCategories)
+      .innerJoin(categories, eq(shopCategories.categoryId, categories.id))
+      .where(eq(shopCategories.shopId, shop.id)),
+    db
+      .select()
+      .from(businessHours)
+      .where(eq(businessHours.shopId, shop.id))
+      .orderBy(asc(businessHours.weekday)),
+    db
+      .select()
+      .from(media)
+      .where(and(eq(media.ownerType, "shop"), eq(media.ownerId, shop.id), eq(media.kind, "photo")))
+      .orderBy(asc(media.sortOrder)),
+    db
+      .select()
+      .from(services)
+      .where(and(eq(services.shopId, shop.id), eq(services.active, true)))
+      .orderBy(asc(services.sortOrder), asc(services.name)),
+  ]);
+
+  return {
+    shop,
+    categories: shopCats,
+    hours,
+    photos: photos.map((p) => ({ ...p, url: mediaUrl(p.path) })),
+    services: activeServices,
+  };
 }

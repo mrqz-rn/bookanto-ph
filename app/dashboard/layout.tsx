@@ -1,22 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  BarChart3,
-  Calendar,
-  CalendarClock,
-  Clock,
-  ExternalLink,
-  Inbox,
-  Scissors,
-  Settings,
-  Store,
-  User,
-  Users,
-} from "lucide-react";
+import { ExternalLink, Store, User } from "lucide-react";
 
 import { LogoMark, Wordmark } from "@/components/shared/logo";
 import { Button } from "@/components/ui/button";
+import { DashboardMobileNav, DashboardSubNav } from "@/features/shops/components/dashboard-nav";
 import { getUserShops } from "@/features/shops/queries";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -82,74 +71,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
 
-        {/* Secondary Sub-nav for Dashboard links (Desktop & Tablets) */}
-        <div className="border-t border-neutral-100 bg-neutral-50/90 px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-7xl space-x-5 overflow-x-auto py-1 text-xs font-semibold">
-            <Link
-              href="/dashboard"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Clock className="size-4 text-orange-600" />
-              Today
-            </Link>
-            <Link
-              href="/dashboard/inbox"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Inbox className="size-4" />
-              Inbox
-            </Link>
-            <Link
-              href="/dashboard/calendar"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Calendar className="size-4" />
-              Calendar
-            </Link>
-            <Link
-              href="/dashboard/walk-ins"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Scissors className="size-4" />
-              Walk-ins
-            </Link>
-            <Link
-              href="/dashboard/staff"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Users className="size-4" />
-              Staff Accounts
-            </Link>
-            <Link
-              href="/dashboard/reports"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <BarChart3 className="size-4" />
-              Revenue & Stats
-            </Link>
-            <Link
-              href="/dashboard/services"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Scissors className="size-4" />
-              Services & Pricing
-            </Link>
-            <Link
-              href="/dashboard/availability"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <CalendarClock className="size-4" />
-              Availability
-            </Link>
-            <Link
-              href="/dashboard/setup"
-              className="flex shrink-0 items-center gap-1.5 px-1 py-2.5 text-neutral-600 hover:text-navy-900"
-            >
-              <Settings className="size-4" />
-              Shop Details
-            </Link>
-          </div>
-        </div>
+        {/* Desktop / Tablet Sub-navigation */}
+        <DashboardSubNav />
       </header>
 
       {/* Main Container */}
@@ -157,47 +80,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>
 
-      {/* Mobile Bottom Tab Bar (Plan: bottom tab bar on phones: Today, Bookings, Services, Shop, More) */}
-      <nav
-        aria-label="Mobile Navigation"
-        className="fixed right-0 bottom-0 left-0 z-40 flex h-16 items-center justify-around border-t border-neutral-200 bg-white/95 px-2 shadow-lg backdrop-blur-md sm:hidden"
-      >
-        <Link
-          href="/dashboard"
-          className="flex min-h-[44px] min-w-[44px] flex-col items-center justify-center text-[10px] font-semibold text-neutral-600 hover:text-navy-900"
-        >
-          <Clock className="size-5" />
-          <span>Today</span>
-        </Link>
-        <Link
-          href="/dashboard/inbox"
-          className="flex min-h-[44px] min-w-[44px] flex-col items-center justify-center text-[10px] font-semibold text-neutral-600 hover:text-navy-900"
-        >
-          <Inbox className="size-5" />
-          <span>Inbox</span>
-        </Link>
-        <Link
-          href="/dashboard/calendar"
-          className="flex min-h-[44px] min-w-[44px] flex-col items-center justify-center text-[10px] font-semibold text-neutral-600 hover:text-navy-900"
-        >
-          <Calendar className="size-5" />
-          <span>Calendar</span>
-        </Link>
-        <Link
-          href="/dashboard/walk-ins"
-          className="flex min-h-[44px] min-w-[44px] flex-col items-center justify-center text-[10px] font-semibold text-neutral-600 hover:text-navy-900"
-        >
-          <Scissors className="size-5" />
-          <span>Walk-ins</span>
-        </Link>
-        <Link
-          href="/dashboard/reports"
-          className="flex min-h-[44px] min-w-[44px] flex-col items-center justify-center text-[10px] font-semibold text-neutral-600 hover:text-navy-900"
-        >
-          <BarChart3 className="size-5" />
-          <span>Reports</span>
-        </Link>
-      </nav>
+      {/* Mobile Bottom Tab Bar */}
+      <DashboardMobileNav />
 
       {/* Footer */}
       <footer className="border-t border-neutral-200 bg-white py-6 text-center text-xs text-neutral-500">

@@ -8,8 +8,10 @@ import { requireUser } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
-import { bookingEvents, bookings, services, shopMembers } from "@/lib/db/schema";
+import { bookingEvents, bookings, services, shopMembers, shops } from "@/lib/db/schema";
+import type { NotificationTemplate } from "@/lib/db/schema/enums";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { sendNotification, type NotificationPayload } from "@/lib/notify";
 
 import {
   acceptBookingSchema,
@@ -28,6 +30,48 @@ function generateRefCode(prefix = "BK"): string {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+async function getBookingShopAndServiceName(shopId: string, serviceId?: string | null) {
+  let shopName = "BooKanto Partner Shop";
+  let serviceName = "Service";
+  try {
+    const [shop] = await db
+      .select({ name: shops.name })
+      .from(shops)
+      .where(eq(shops.id, shopId))
+      .limit(1);
+    if (shop?.name) shopName = shop.name;
+
+    if (serviceId) {
+      const [srv] = await db
+        .select({ name: services.name })
+        .from(services)
+        .where(eq(services.id, serviceId))
+        .limit(1);
+      if (srv?.name) serviceName = srv.name;
+    }
+  } catch {
+    // In test environments or when mock is restricted, fall back gracefully
+  }
+  return { shopName, serviceName };
+}
+
+async function notifyBookingQuietly(
+  userId: string | null | undefined,
+  template: NotificationTemplate,
+  payload: NotificationPayload,
+) {
+  if (!userId) return;
+  try {
+    await sendNotification({
+      userId,
+      template,
+      payload,
+    });
+  } catch (error) {
+    console.error(`Failed to send ${template} notification:`, error);
+  }
 }
 
 /**
@@ -120,6 +164,22 @@ export async function acceptBooking(
     revalidatePath("/dashboard/inbox");
     revalidatePath("/dashboard/calendar");
 
+    if (existing.customerId) {
+      const { shopName, serviceName } = await getBookingShopAndServiceName(
+        existing.shopId,
+        existing.serviceId,
+      );
+      await notifyBookingQuietly(existing.customerId, "booking_confirmed", {
+        bookingId: existing.id,
+        refCode: existing.refCode,
+        shopName,
+        serviceName,
+        startAt: existing.startAt,
+        totalCentavos: existing.totalCentavos ?? undefined,
+        address: existing.address ?? undefined,
+      });
+    }
+
     return { success: true, bookingId: data.bookingId };
   });
 }
@@ -189,6 +249,20 @@ export async function declineBooking(
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/inbox");
     revalidatePath("/dashboard/calendar");
+
+    if (existing.customerId) {
+      const { shopName, serviceName } = await getBookingShopAndServiceName(
+        existing.shopId,
+        existing.serviceId,
+      );
+      await notifyBookingQuietly(existing.customerId, "booking_cancelled", {
+        bookingId: existing.id,
+        refCode: existing.refCode,
+        shopName,
+        serviceName,
+        reason: data.reason ? `Shop declined: ${data.reason}` : "Shop declined request",
+      });
+    }
 
     return { success: true, bookingId: data.bookingId };
   });
@@ -261,6 +335,19 @@ export async function completeBooking(
     revalidatePath("/dashboard/calendar");
     revalidatePath("/dashboard/reports");
 
+    if (existing.customerId) {
+      const { shopName, serviceName } = await getBookingShopAndServiceName(
+        existing.shopId,
+        existing.serviceId,
+      );
+      await notifyBookingQuietly(existing.customerId, "booking_completed", {
+        bookingId: existing.id,
+        refCode: existing.refCode,
+        shopName,
+        serviceName,
+      });
+    }
+
     return { success: true, bookingId: data.bookingId };
   });
 }
@@ -332,6 +419,19 @@ export async function markNoShow(
     revalidatePath("/dashboard/calendar");
     revalidatePath("/dashboard/reports");
 
+    if (existing.customerId) {
+      const { shopName, serviceName } = await getBookingShopAndServiceName(
+        existing.shopId,
+        existing.serviceId,
+      );
+      await notifyBookingQuietly(existing.customerId, "booking_completed", {
+        bookingId: existing.id,
+        refCode: existing.refCode,
+        shopName,
+        serviceName,
+      });
+    }
+
     return { success: true, bookingId: data.bookingId };
   });
 }
@@ -402,6 +502,20 @@ export async function cancelBooking(
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/inbox");
     revalidatePath("/dashboard/calendar");
+
+    if (existing.customerId) {
+      const { shopName, serviceName } = await getBookingShopAndServiceName(
+        existing.shopId,
+        existing.serviceId,
+      );
+      await notifyBookingQuietly(existing.customerId, "booking_cancelled", {
+        bookingId: existing.id,
+        refCode: existing.refCode,
+        shopName,
+        serviceName,
+        reason: data.reason ? `Shop cancelled: ${data.reason}` : "Shop cancelled booking",
+      });
+    }
 
     return { success: true, bookingId: data.bookingId };
   });

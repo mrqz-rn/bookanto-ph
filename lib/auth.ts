@@ -22,6 +22,7 @@ import {
   type User,
 } from "@/lib/db/schema";
 import { AppError } from "@/lib/errors";
+import { normalizePhone } from "@/lib/phone";
 import { publicEnv } from "@/lib/public-env";
 import { getRequestOrigin } from "@/lib/request";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -101,25 +102,34 @@ export async function syncAuthUser(hints?: {
   email?: string | null;
   name?: string | null;
 }): Promise<User | null> {
-  let authId = hints?.authId;
-  let email = hints?.email;
-  let phone = hints?.phone;
-  let name = hints?.name;
+  let authId = hints?.authId?.trim() || undefined;
+  let email = hints?.email?.trim() || null;
+  let phone = hints?.phone?.trim() || null;
+  let name = hints?.name?.trim() || null;
+
+  if (phone) {
+    const normalized = normalizePhone(phone);
+    phone = /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
+  }
 
   const hasProfileHints =
-    hints !== undefined && ("email" in hints || "phone" in hints || "name" in hints);
+    hints !== undefined && (Boolean(email) || Boolean(phone) || Boolean(name));
 
   if (!authId || !hasProfileHints) {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
     if (data.user) {
-      authId = authId ?? data.user.id;
-      email = email ?? data.user.email ?? null;
-      phone = phone ?? data.user.phone ?? null;
+      authId = authId ?? (data.user.id?.trim() || undefined);
+      email = email ?? (data.user.email?.trim() || null);
+      const rawUserPhone = data.user.phone?.trim() || null;
+      if (!phone && rawUserPhone) {
+        const normalized = normalizePhone(rawUserPhone);
+        phone = /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
+      }
       const metadata = data.user.user_metadata as Record<string, unknown> | undefined;
       const metaName = (metadata?.full_name ?? metadata?.name ?? metadata?.user_name) as
         string | undefined;
-      name = name ?? metaName ?? null;
+      name = name ?? (metaName?.trim() || null);
     }
   }
 
@@ -196,9 +206,9 @@ export async function syncAuthUser(hints?: {
     .insert(users)
     .values({
       authId,
-      phone: phone ?? null,
-      email: email ?? null,
-      name: name ?? null,
+      phone: phone || null,
+      email: email || null,
+      name: name || null,
       platformRole: "customer",
       status: "active",
     })

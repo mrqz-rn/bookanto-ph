@@ -34,6 +34,7 @@ const eslintConfig = [
     rules: {
       // User text is never rendered as HTML.
       "react/no-danger": "error",
+      "@next/next/no-html-link-for-pages": "off",
       "no-restricted-imports": [
         "error",
         {

@@ -23,6 +23,8 @@ export type ShopCardData = {
   verified: boolean;
   /** Set when the list is sorted by distance from the customer. */
   distanceM: number | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export function ShopCard({ shop }: { shop: ShopCardData }) {

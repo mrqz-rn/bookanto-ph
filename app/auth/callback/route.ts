@@ -9,6 +9,11 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get("next") ?? "/account";
 
   if (oauthError) {
+    console.error(
+      "OAuth callback error from provider:",
+      oauthError,
+      searchParams.get("error_description"),
+    );
     return NextResponse.redirect(new URL("/login?error=auth_failed", origin));
   }
 

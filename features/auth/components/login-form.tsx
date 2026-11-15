@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Store, User } from "lucide-react";
 
@@ -337,13 +338,13 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
 
       <p className="mt-6 text-center text-xs text-slate-500">
         By continuing, you agree to BooKanto&apos;s{" "}
-        <a href="/terms" className="text-green-700 underline underline-offset-2">
+        <Link href="/terms" className="text-green-700 underline underline-offset-2">
           Terms of Service
-        </a>{" "}
+        </Link>{" "}
         and{" "}
-        <a href="/privacy" className="text-green-700 underline underline-offset-2">
+        <Link href="/privacy" className="text-green-700 underline underline-offset-2">
           Privacy Policy
-        </a>
+        </Link>
         .
       </p>
     </div>
