@@ -17,7 +17,8 @@ export function SocialAuthButtons({ next = "/account", onError }: SocialAuthButt
   const handleOAuth = async (provider: OAuthProvider) => {
     try {
       setLoadingProvider(provider);
-      const result = await getOAuthUrl({ provider, next });
+      const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+      const result = await getOAuthUrl({ provider, next, origin });
       if (result.ok) {
         window.location.assign(result.data.url);
       } else {

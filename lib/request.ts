@@ -11,3 +11,21 @@ export async function getClientIp(): Promise<string | null> {
   const ip = forwarded || requestHeaders.get("x-real-ip");
   return ip && isIP(ip) ? ip : null;
 }
+
+/**
+ * Resolves the origin URL (protocol + host:port) of the incoming request,
+ * or null if called outside an active HTTP request context (e.g. tests or jobs).
+ */
+export async function getRequestOrigin(): Promise<string | null> {
+  try {
+    const requestHeaders = await headers();
+    const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+    if (!host) return null;
+    const proto =
+      requestHeaders.get("x-forwarded-proto") ??
+      (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+    return `${proto}://${host}`;
+  } catch {
+    return null;
+  }
+}

@@ -4,9 +4,12 @@ import {
   getOAuthUrl,
   requestEmailOtp,
   requestPhoneOtp,
+  signInDemoAccountAction,
+  signInWithPasswordAction,
   verifyEmailOtpAction,
   verifyPhoneOtpAction,
 } from "@/features/auth/actions";
+import { AppError } from "@/lib/errors";
 import * as authAdapter from "@/lib/auth";
 
 vi.mock("@/lib/auth", () => ({
@@ -15,6 +18,8 @@ vi.mock("@/lib/auth", () => ({
   sendEmailOtp: vi.fn().mockResolvedValue(undefined),
   verifyEmailOtp: vi.fn().mockResolvedValue({ authId: "user-456" }),
   getOAuthSignInUrl: vi.fn().mockResolvedValue("https://accounts.google.com/o/oauth2/v2/auth?..."),
+  signInWithPassword: vi.fn().mockResolvedValue({ authId: "user-789" }),
+  signInDemoAccount: vi.fn().mockResolvedValue({ authId: "demo-store", defaultNext: "/dashboard" }),
   signOut: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -86,10 +91,66 @@ describe("auth server actions", () => {
       expect(authAdapter.getOAuthSignInUrl).toHaveBeenCalledWith("google", "/account");
     });
 
+    it("passes origin to getOAuthSignInUrl when provided", async () => {
+      const result = await getOAuthUrl({
+        provider: "google",
+        next: "/account",
+        origin: "http://localhost:3002",
+      });
+      expect(result.ok).toBe(true);
+      expect(authAdapter.getOAuthSignInUrl).toHaveBeenCalledWith(
+        "google",
+        "/account",
+        "http://localhost:3002",
+      );
+    });
+
     it("returns OAuth URL for Facebook", async () => {
       const result = await getOAuthUrl({ provider: "facebook", next: "/account" });
       expect(result.ok).toBe(true);
       expect(authAdapter.getOAuthSignInUrl).toHaveBeenCalledWith("facebook", "/account");
+    });
+
+    it("returns validation error when OAuth provider is not enabled", async () => {
+      vi.mocked(authAdapter.getOAuthSignInUrl).mockRejectedValueOnce(
+        new AppError("VALIDATION", "Google sign-in is not enabled in Supabase Auth yet."),
+      );
+      const result = await getOAuthUrl({ provider: "google", next: "/account" });
+      expect(result).toEqual({
+        ok: false,
+        code: "VALIDATION",
+        message: "Google sign-in is not enabled in Supabase Auth yet.",
+        fieldErrors: undefined,
+      });
+    });
+  });
+
+  describe("signInWithPasswordAction", () => {
+    it("signs in with email and password", async () => {
+      const result = await signInWithPasswordAction({
+        email: "store@bookanto.ph",
+        password: "DemoStore123!",
+        next: "/dashboard",
+      });
+      expect(result).toEqual({
+        ok: true,
+        data: { authId: "user-789", next: "/dashboard" },
+      });
+      expect(authAdapter.signInWithPassword).toHaveBeenCalledWith(
+        "store@bookanto.ph",
+        "DemoStore123!",
+      );
+    });
+  });
+
+  describe("signInDemoAccountAction", () => {
+    it("signs in with sample store account and uses defaultNext", async () => {
+      const result = await signInDemoAccountAction({ role: "store", next: "/account" });
+      expect(result).toEqual({
+        ok: true,
+        data: { authId: "demo-store", next: "/dashboard" },
+      });
+      expect(authAdapter.signInDemoAccount).toHaveBeenCalledWith("store");
     });
   });
 });

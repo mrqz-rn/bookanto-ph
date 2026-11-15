@@ -1,15 +1,29 @@
 import "server-only";
 
 import type { AuthError } from "@supabase/supabase-js";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { cache } from "react";
 
+import { SAMPLE_ACCOUNTS, type SampleAccountRole } from "@/features/auth/constants";
 import { writeAudit } from "@/lib/audit";
 import type { AuthzUser } from "@/lib/authz";
 import { db } from "@/lib/db";
-import { shopMembers, users, type User } from "@/lib/db/schema";
+import {
+  barangays,
+  businessHours,
+  categories,
+  cities,
+  services,
+  shopCategories,
+  shopMembers,
+  shops,
+  userAddresses,
+  users,
+  type User,
+} from "@/lib/db/schema";
 import { AppError } from "@/lib/errors";
 import { publicEnv } from "@/lib/public-env";
+import { getRequestOrigin } from "@/lib/request";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Auth adapter. Supabase Auth today; only this file changes for Cognito.
@@ -87,13 +101,16 @@ export async function syncAuthUser(hints?: {
   email?: string | null;
   name?: string | null;
 }): Promise<User | null> {
-  const supabase = await createSupabaseServerClient();
   let authId = hints?.authId;
   let email = hints?.email;
   let phone = hints?.phone;
   let name = hints?.name;
 
-  if (!authId || !email || !name || !phone) {
+  const hasProfileHints =
+    hints !== undefined && ("email" in hints || "phone" in hints || "name" in hints);
+
+  if (!authId || !hasProfileHints) {
+    const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
     if (data.user) {
       authId = authId ?? data.user.id;
@@ -221,12 +238,36 @@ export async function verifyOtp(phone: string, code: string): Promise<{ authId: 
   return { authId: data.user.id };
 }
 
+function isAllowedRedirectOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    const siteUrl = new URL(publicEnv.NEXT_PUBLIC_SITE_URL);
+    if (parsed.origin === siteUrl.origin) return true;
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveAuthBaseUrl(requestedOrigin?: string): Promise<string> {
+  if (requestedOrigin && isAllowedRedirectOrigin(requestedOrigin)) {
+    return requestedOrigin.replace(/\/$/, "");
+  }
+  const requestOrigin = await getRequestOrigin();
+  if (requestOrigin && isAllowedRedirectOrigin(requestOrigin)) {
+    return requestOrigin.replace(/\/$/, "");
+  }
+  return publicEnv.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+}
+
 /** Sends a one-time verification code or magic link to an email address. */
 export async function sendEmailOtp(email: string, captchaToken?: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
+  const baseUrl = await resolveAuthBaseUrl();
   const options = {
     ...(captchaToken ? { captchaToken } : {}),
-    emailRedirectTo: `${publicEnv.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+    emailRedirectTo: `${baseUrl}/auth/callback`,
   };
   const { error } = await supabase.auth.signInWithOtp({ email, options });
   if (error) throw toAppError(error);
@@ -242,23 +283,63 @@ export async function verifyEmailOtp(email: string, code: string): Promise<{ aut
   return { authId: data.user.id };
 }
 
+/** Checks Supabase Auth settings to verify the OAuth provider is enabled before redirecting. */
+async function assertOAuthProviderEnabled(provider: OAuthProvider): Promise<void> {
+  const providerLabel = provider === "google" ? "Google" : "Facebook";
+  let isEnabled: boolean | undefined;
+
+  try {
+    const response = await fetch(`${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+      headers: {
+        apikey: publicEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      },
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const settings = (await response.json()) as {
+        external?: Record<string, boolean>;
+      };
+      isEnabled = settings.external?.[provider];
+    }
+  } catch {
+    // Network unreachable or mocked environment; let signInWithOAuth proceed.
+    return;
+  }
+
+  if (isEnabled === false) {
+    throw new AppError(
+      "VALIDATION",
+      `${providerLabel} sign-in is not enabled in Supabase Auth yet. Enable the ${providerLabel} provider in your Supabase Dashboard (Authentication → Sign In / Providers) or sign in with Phone or Email.`,
+    );
+  }
+}
+
 /** Generates the OAuth authorization URL for Google or Facebook sign-in. */
 export async function getOAuthSignInUrl(
   provider: OAuthProvider,
   next = "/account",
+  origin?: string,
 ): Promise<string> {
+  await assertOAuthProviderEnabled(provider);
+
   const supabase = await createSupabaseServerClient();
-  const safeNext = next.startsWith("/") ? next : "/account";
-  const redirectTo = `${publicEnv.NEXT_PUBLIC_SITE_URL}/auth/callback?next=${encodeURIComponent(safeNext)}`;
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  const baseUrl = await resolveAuthBaseUrl(origin);
+  const redirectTo = `${baseUrl}/auth/callback?next=${encodeURIComponent(safeNext)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
       redirectTo,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
+      ...(provider === "google"
+        ? {
+            queryParams: {
+              access_type: "offline",
+              prompt: "consent",
+            },
+          }
+        : {}),
     },
   });
 
@@ -273,10 +354,14 @@ export async function exchangeAuthCode(code: string): Promise<{ authId: string }
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) throw toAppError(error);
   if (!data.user) throw new AppError("INTERNAL");
+  const metadata = data.user.user_metadata as Record<string, unknown> | undefined;
+  const metaName = (metadata?.full_name ?? metadata?.name ?? metadata?.user_name) as
+    string | undefined;
   await syncAuthUser({
     authId: data.user.id,
-    email: data.user.email,
-    phone: data.user.phone,
+    email: data.user.email ?? null,
+    phone: data.user.phone ?? null,
+    name: metaName ?? null,
   });
   return { authId: data.user.id };
 }
@@ -288,9 +373,404 @@ export async function signOut(scope: "local" | "global" = "local"): Promise<void
   if (error) throw toAppError(error);
 }
 
+/** Signs in with an email and password and syncs the local user record. */
+export async function signInWithPassword(
+  email: string,
+  password: string,
+): Promise<{ authId: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw toAppError(error);
+  if (!data.user) throw new AppError("INTERNAL");
+  const metadata = data.user.user_metadata as Record<string, unknown> | undefined;
+  const metaName = (metadata?.full_name ?? metadata?.name ?? metadata?.user_name) as
+    string | undefined;
+  await syncAuthUser({
+    authId: data.user.id,
+    email: data.user.email ?? email,
+    phone: data.user.phone ?? null,
+    name: metaName ?? null,
+  });
+  return { authId: data.user.id };
+}
+
+/**
+ * Ensures the sample store owner and sample customer accounts exist in both
+ * Supabase Auth (auth.users / auth.identities) and the public schema.
+ */
+export async function ensureSampleAccountsProvisioned(): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (const account of [SAMPLE_ACCOUNTS.store, SAMPLE_ACCOUNTS.customer]) {
+      await tx.execute(sql`
+        INSERT INTO auth.users (
+          instance_id,
+          id,
+          aud,
+          role,
+          email,
+          encrypted_password,
+          email_confirmed_at,
+          raw_app_meta_data,
+          raw_user_meta_data,
+          is_super_admin,
+          created_at,
+          updated_at,
+          confirmation_token,
+          email_change,
+          email_change_token_new,
+          email_change_token_current,
+          recovery_token,
+          reauthentication_token,
+          phone_change,
+          phone_change_token
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000',
+          ${account.authId}::uuid,
+          'authenticated',
+          'authenticated',
+          ${account.email},
+          extensions.crypt(${account.password}, extensions.gen_salt('bf')),
+          now(),
+          '{"provider":"email","providers":["email"]}'::jsonb,
+          jsonb_build_object(
+            'sub', ${account.authId}::text,
+            'email', ${account.email}::text,
+            'full_name', ${account.name}::text,
+            'email_verified', true,
+            'phone_verified', false
+          ),
+          false,
+          now(),
+          now(),
+          '', '', '', '', '', '', '', ''
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          encrypted_password = EXCLUDED.encrypted_password,
+          email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
+          raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+          updated_at = now()
+      `);
+
+      await tx.execute(sql`
+        INSERT INTO auth.identities (
+          id,
+          user_id,
+          provider_id,
+          identity_data,
+          provider,
+          last_sign_in_at,
+          created_at,
+          updated_at
+        ) VALUES (
+          gen_random_uuid(),
+          ${account.authId}::uuid,
+          ${account.authId}::text,
+          jsonb_build_object(
+            'sub', ${account.authId}::text,
+            'email', ${account.email}::text,
+            'full_name', ${account.name}::text,
+            'email_verified', true,
+            'phone_verified', false
+          ),
+          'email',
+          now(),
+          now(),
+          now()
+        )
+        ON CONFLICT (provider_id, provider) DO UPDATE SET
+          identity_data = EXCLUDED.identity_data,
+          updated_at = now()
+      `);
+    }
+
+    // 1. Upsert Sample Store Owner in public.users
+    const storeAcc = SAMPLE_ACCOUNTS.store;
+    const [existingStoreUser] = await tx
+      .select()
+      .from(users)
+      .where(
+        or(
+          eq(users.authId, storeAcc.authId),
+          eq(users.authId, "seed:owner-1"),
+          eq(users.phone, storeAcc.phone),
+          eq(users.email, storeAcc.email),
+        ),
+      )
+      .limit(1);
+
+    let storeUserId: string;
+    if (existingStoreUser) {
+      await tx
+        .update(users)
+        .set({
+          authId: storeAcc.authId,
+          email: storeAcc.email,
+          name: storeAcc.name,
+          phone: storeAcc.phone,
+          status: "active",
+          deletedAt: null,
+        })
+        .where(eq(users.id, existingStoreUser.id));
+      storeUserId = existingStoreUser.id;
+    } else {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          authId: storeAcc.authId,
+          email: storeAcc.email,
+          name: storeAcc.name,
+          phone: storeAcc.phone,
+          platformRole: "customer",
+          status: "active",
+        })
+        .returning({ id: users.id });
+      storeUserId = created!.id;
+    }
+
+    // Ensure sample shop exists and is owned by storeUserId
+    const [existingShop] = await tx
+      .select()
+      .from(shops)
+      .where(or(eq(shops.slug, "kuya-juns-barbershop-marikina"), eq(shops.ownerId, storeUserId)))
+      .limit(1);
+
+    let shopId: string;
+    if (existingShop) {
+      await tx
+        .update(shops)
+        .set({ ownerId: storeUserId, status: "active" })
+        .where(eq(shops.id, existingShop.id));
+      shopId = existingShop.id;
+    } else {
+      const [marikina] = await tx
+        .insert(cities)
+        .values({
+          slug: "marikina",
+          name: "Marikina",
+          province: "Metro Manila",
+          center: { lat: 14.6507, lng: 121.1029 },
+          isActive: true,
+        })
+        .onConflictDoUpdate({
+          target: cities.slug,
+          set: { isActive: true },
+        })
+        .returning({ id: cities.id });
+
+      const [concepcion] = await tx
+        .insert(barangays)
+        .values({
+          cityId: marikina!.id,
+          slug: "concepcion-uno",
+          name: "Concepcion Uno",
+          center: { lat: 14.6498, lng: 121.1112 },
+          isActive: true,
+        })
+        .onConflictDoUpdate({
+          target: [barangays.cityId, barangays.slug],
+          set: { isActive: true },
+        })
+        .returning({ id: barangays.id });
+
+      const [barbershopCategory] = await tx
+        .insert(categories)
+        .values({
+          slug: "barbershop",
+          name: "Barbershop",
+          icon: "scissors",
+          defaultBookingType: "slot",
+          sortOrder: 0,
+          active: true,
+        })
+        .onConflictDoUpdate({
+          target: categories.slug,
+          set: { active: true },
+        })
+        .returning({ id: categories.id });
+
+      const [createdShop] = await tx
+        .insert(shops)
+        .values({
+          ownerId: storeUserId,
+          slug: "kuya-juns-barbershop-marikina",
+          name: storeAcc.shopName,
+          description: "Trusted neighborhood barbershop in Concepcion Uno, Marikina.",
+          address: "88 Bayan-Bayanan Ave., Concepcion Uno, Marikina",
+          cityId: marikina!.id,
+          barangayId: concepcion!.id,
+          location: { lat: 14.6498, lng: 121.1112 },
+          phone: "+639190000001",
+          status: "active",
+          verifiedAt: new Date(),
+        })
+        .returning({ id: shops.id });
+      shopId = createdShop!.id;
+
+      await tx
+        .insert(shopCategories)
+        .values({ shopId, categoryId: barbershopCategory!.id })
+        .onConflictDoNothing();
+
+      await tx.insert(services).values([
+        {
+          shopId,
+          categoryId: barbershopCategory!.id,
+          name: "Haircut",
+          priceType: "fixed",
+          priceCentavos: 15000,
+          durationMin: 30,
+          bookingType: "slot",
+          sortOrder: 0,
+        },
+        {
+          shopId,
+          categoryId: barbershopCategory!.id,
+          name: "Haircut and shave",
+          priceType: "fixed",
+          priceCentavos: 22000,
+          durationMin: 45,
+          bookingType: "slot",
+          sortOrder: 1,
+        },
+        {
+          shopId,
+          categoryId: barbershopCategory!.id,
+          name: "Kids haircut",
+          priceType: "fixed",
+          priceCentavos: 12000,
+          durationMin: 30,
+          bookingType: "slot",
+          sortOrder: 2,
+        },
+      ]);
+
+      for (let weekday = 0; weekday <= 6; weekday++) {
+        await tx
+          .insert(businessHours)
+          .values({
+            shopId,
+            weekday,
+            opens: weekday === 0 ? "10:00" : "09:00",
+            closes: weekday === 0 ? "17:00" : "19:00",
+          })
+          .onConflictDoNothing();
+      }
+    }
+
+    await tx
+      .insert(shopMembers)
+      .values({
+        shopId,
+        userId: storeUserId,
+        role: "owner",
+        active: true,
+      })
+      .onConflictDoUpdate({
+        target: [shopMembers.shopId, shopMembers.userId],
+        set: { role: "owner", active: true },
+      });
+
+    // 2. Upsert Sample Customer in public.users
+    const customerAcc = SAMPLE_ACCOUNTS.customer;
+    const [existingCustomer] = await tx
+      .select()
+      .from(users)
+      .where(
+        or(
+          eq(users.authId, customerAcc.authId),
+          eq(users.authId, "seed:customer-1"),
+          eq(users.phone, customerAcc.phone),
+          eq(users.email, customerAcc.email),
+        ),
+      )
+      .limit(1);
+
+    let customerUserId: string;
+    if (existingCustomer) {
+      await tx
+        .update(users)
+        .set({
+          authId: customerAcc.authId,
+          email: customerAcc.email,
+          name: customerAcc.name,
+          phone: customerAcc.phone,
+          status: "active",
+          deletedAt: null,
+        })
+        .where(eq(users.id, existingCustomer.id));
+      customerUserId = existingCustomer.id;
+    } else {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          authId: customerAcc.authId,
+          email: customerAcc.email,
+          name: customerAcc.name,
+          phone: customerAcc.phone,
+          platformRole: "customer",
+          status: "active",
+        })
+        .returning({ id: users.id });
+      customerUserId = created!.id;
+    }
+
+    // Ensure sample customer has a default saved address
+    const [existingAddr] = await tx
+      .select({ id: userAddresses.id })
+      .from(userAddresses)
+      .where(eq(userAddresses.userId, customerUserId))
+      .limit(1);
+
+    if (!existingAddr) {
+      const [marikinaCity] = await tx
+        .select({ id: cities.id })
+        .from(cities)
+        .where(eq(cities.slug, "marikina"))
+        .limit(1);
+      const [concepcionBrgy] = marikinaCity
+        ? await tx
+            .select({ id: barangays.id })
+            .from(barangays)
+            .where(and(eq(barangays.cityId, marikinaCity.id), eq(barangays.slug, "concepcion-uno")))
+            .limit(1)
+        : [undefined];
+
+      await tx.insert(userAddresses).values({
+        userId: customerUserId,
+        label: "Home",
+        recipientName: customerAcc.name,
+        phone: customerAcc.phone,
+        streetAddress: "42 Rizal St., Concepcion Uno, Marikina",
+        cityId: marikinaCity?.id ?? null,
+        barangayId: concepcionBrgy?.id ?? null,
+        notes: "Green gate near the bakery",
+        location: { lat: 14.6498, lng: 121.1112 },
+        isDefault: true,
+      });
+    }
+  });
+}
+
+/** Signs in using one of the pre-configured sample accounts (store or customer). */
+export async function signInDemoAccount(
+  role: SampleAccountRole,
+): Promise<{ authId: string; defaultNext: string }> {
+  const account = SAMPLE_ACCOUNTS[role];
+  await ensureSampleAccountsProvisioned();
+  const { authId } = await signInWithPassword(account.email, account.password);
+  return { authId, defaultNext: account.defaultNext };
+}
+
 function toAppError(error: AuthError): AppError {
   if (error.status === 429) return new AppError("RATE_LIMITED");
   const msg = error.message.toLowerCase();
+  if (error.code === "invalid_credentials" || msg.includes("invalid login credentials")) {
+    return new AppError(
+      "VALIDATION",
+      "Invalid email or password. Please check your credentials and try again.",
+    );
+  }
   if (error.code === "otp_expired" || msg.includes("expired")) {
     return new AppError(
       "VALIDATION",

@@ -6,6 +6,8 @@ import {
   getOAuthSignInUrl,
   sendEmailOtp,
   sendOtp,
+  signInDemoAccount,
+  signInWithPassword,
   signOut,
   verifyEmailOtp,
   verifyOtp,
@@ -13,8 +15,10 @@ import {
 import { parseInput, runAction, type ActionResult } from "@/lib/errors";
 
 import {
+  demoSignInSchema,
   emailOtpRequestSchema,
   emailOtpVerifySchema,
+  emailPasswordSignInSchema,
   oauthSignInSchema,
   phoneOtpRequestSchema,
   phoneOtpVerifySchema,
@@ -63,9 +67,37 @@ export async function verifyEmailOtpAction(
 /** Retrieves the OAuth redirect URL for Google or Facebook sign-in. */
 export async function getOAuthUrl(input: unknown): Promise<ActionResult<{ url: string }>> {
   return runAction(async () => {
-    const { provider, next } = parseInput(oauthSignInSchema, input);
-    const url = await getOAuthSignInUrl(provider, next);
+    const { provider, next, origin } = parseInput(oauthSignInSchema, input);
+    const url = origin
+      ? await getOAuthSignInUrl(provider, next, origin)
+      : await getOAuthSignInUrl(provider, next);
     return { url };
+  });
+}
+
+/** Signs the user in with an email and password. */
+export async function signInWithPasswordAction(
+  input: unknown,
+): Promise<ActionResult<{ authId: string; next: string }>> {
+  return runAction(async () => {
+    const { email, password, next } = parseInput(emailPasswordSignInSchema, input);
+    const { authId } = await signInWithPassword(email, password);
+    return { authId, next };
+  });
+}
+
+/** Signs in using one of the pre-configured sample accounts (store or customer). */
+export async function signInDemoAccountAction(
+  input: unknown,
+): Promise<ActionResult<{ authId: string; next: string }>> {
+  return runAction(async () => {
+    const { role, next } = parseInput(demoSignInSchema, input);
+    const { authId, defaultNext } = await signInDemoAccount(role);
+    const destination =
+      next && next !== "/account" && next.startsWith("/") && !next.startsWith("//")
+        ? next
+        : defaultNext;
+    return { authId, next: destination };
   });
 }
 

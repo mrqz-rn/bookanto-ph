@@ -10,7 +10,14 @@ const supabaseUrl = publicEnv.NEXT_PUBLIC_SUPABASE_URL;
 const cacheablePageCsp = buildCsp({ supabaseUrl, dev });
 
 export async function middleware(request: NextRequest) {
-  const { pathname, search } = request.nextUrl;
+  const { pathname, search, searchParams } = request.nextUrl;
+
+  // If Supabase Auth falls back to the root Site URL (/?code=...) when
+  // /auth/callback isn't in the project's Redirect URLs allow-list yet,
+  // forward the OAuth/magic-link callback parameters to /auth/callback.
+  if (pathname === "/" && (searchParams.has("code") || searchParams.has("error_code"))) {
+    return NextResponse.redirect(new URL(`/auth/callback${search}`, request.url));
+  }
 
   // Pages that may be served from the edge cache skip the session lookup, so
   // they never carry Set-Cookie, and use the nonce-free policy.

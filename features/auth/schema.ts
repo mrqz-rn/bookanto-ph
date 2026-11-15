@@ -49,4 +49,16 @@ export const emailOtpVerifySchema = z.strictObject({
 export const oauthSignInSchema = z.strictObject({
   provider: z.enum(["google", "facebook"]),
   next: z.string().optional().default("/account"),
+  origin: z.string().url().optional(),
+});
+
+export const emailPasswordSignInSchema = z.strictObject({
+  email: z.string().trim().email("Please enter a valid email address."),
+  password: z.string().min(1, "Password is required."),
+  next: z.string().optional().default("/account"),
+});
+
+export const demoSignInSchema = z.strictObject({
+  role: z.enum(["store", "customer"]),
+  next: z.string().optional(),
 });

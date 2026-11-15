@@ -2,10 +2,17 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { Store, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { requestEmailOtp, requestPhoneOtp } from "@/features/auth/actions";
+import {
+  requestEmailOtp,
+  requestPhoneOtp,
+  signInDemoAccountAction,
+  signInWithPasswordAction,
+} from "@/features/auth/actions";
+import { SAMPLE_ACCOUNTS, type SampleAccountRole } from "@/features/auth/constants";
 import { SocialAuthButtons } from "./social-auth-buttons";
 
 type LoginFormProps = {
@@ -16,10 +23,15 @@ type LoginFormProps = {
 export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
   const router = useRouter();
   const [tab, setTab] = React.useState<"phone" | "email">("phone");
+  const [emailMode, setEmailMode] = React.useState<"password" | "otp">("password");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [demoLoading, setDemoLoading] = React.useState<SampleAccountRole | null>(null);
   const [error, setError] = React.useState<string | null>(initialError ?? null);
+
+  const isBusy = loading || demoLoading !== null;
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +60,18 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
     setLoading(true);
 
     try {
+      if (emailMode === "password") {
+        const result = await signInWithPasswordAction({ email, password, next });
+        if (result.ok) {
+          router.push(result.data.next);
+          router.refresh();
+        } else {
+          setError(result.message);
+          setLoading(false);
+        }
+        return;
+      }
+
       const result = await requestEmailOtp({ email });
       if (result.ok) {
         router.push(
@@ -58,8 +82,26 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
         setLoading(false);
       }
     } catch {
-      setError("Failed to send verification email. Please check your connection.");
+      setError("Failed to sign in with email. Please check your connection.");
       setLoading(false);
+    }
+  };
+
+  const handleDemoSignIn = async (role: SampleAccountRole) => {
+    setError(null);
+    setDemoLoading(role);
+    try {
+      const result = await signInDemoAccountAction({ role, next });
+      if (result.ok) {
+        router.push(result.data.next);
+        router.refresh();
+      } else {
+        setError(result.message);
+        setDemoLoading(null);
+      }
+    } catch {
+      setError("Failed to sign in to sample account. Please try again.");
+      setDemoLoading(null);
     }
   };
 
@@ -175,25 +217,70 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={loading}
+              disabled={isBusy}
             />
-            <p className="mt-1.5 text-xs text-slate-500">
-              We&apos;ll send a 6-digit login code and magic link to your email.
-            </p>
           </div>
+
+          {emailMode === "password" ? (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="password-input" className="block text-sm font-medium text-navy-900">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailMode("otp");
+                    setError(null);
+                  }}
+                  className="text-xs font-medium text-green-700 hover:underline"
+                >
+                  Use 6-digit code instead
+                </button>
+              </div>
+              <Input
+                id="password-input"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isBusy}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                We&apos;ll send a 6-digit login code and magic link to your email.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailMode("password");
+                  setError(null);
+                }}
+                className="shrink-0 text-xs font-medium text-green-700 hover:underline"
+              >
+                Use password
+              </button>
+            </div>
+          )}
 
           <Button
             type="submit"
             className="h-12 w-full bg-primary font-semibold text-white hover:bg-primary/90"
-            disabled={loading || !email.trim()}
+            disabled={isBusy || !email.trim() || (emailMode === "password" && !password)}
           >
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Sending link...
+                {emailMode === "password" ? "Signing in..." : "Sending link..."}
               </span>
+            ) : emailMode === "password" ? (
+              "Sign in with Email"
             ) : (
-              "Continue with Email"
+              "Send Login Code"
             )}
           </Button>
         </form>
@@ -211,6 +298,42 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
 
       {/* Social login buttons: Google and Facebook */}
       <SocialAuthButtons next={next} onError={setError} />
+
+      {/* Sample Accounts Quick Sign-In */}
+      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+        <p className="mb-2.5 text-xs font-semibold tracking-wider text-slate-600 uppercase">
+          Sample Accounts (1-Click Demo)
+        </p>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => handleDemoSignIn("store")}
+            className="h-auto flex-col items-start gap-0.5 border-orange-200 bg-white px-3 py-2.5 text-left hover:bg-orange-50/60"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
+              <Store className="size-3.5 text-orange-600" />
+              {demoLoading === "store" ? "Signing in..." : "Store Owner"}
+            </span>
+            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.store.email}</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => handleDemoSignIn("customer")}
+            className="h-auto flex-col items-start gap-0.5 border-emerald-200 bg-white px-3 py-2.5 text-left hover:bg-emerald-50/60"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
+              <User className="size-3.5 text-emerald-700" />
+              {demoLoading === "customer" ? "Signing in..." : "Customer User"}
+            </span>
+            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.customer.email}</span>
+          </Button>
+        </div>
+      </div>
 
       <p className="mt-6 text-center text-xs text-slate-500">
         By continuing, you agree to BooKanto&apos;s{" "}
