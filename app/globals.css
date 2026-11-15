@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@source "../app";
+@source "../components";
+@source "../features";
+@source "../lib";
+
 /* There is no dark theme yet. Without this, shadcn's dark: classes would
    follow the OS setting while the brand colors stay light. */
 @custom-variant dark (&:is(.dark *));

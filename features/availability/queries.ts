@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 
 import { availabilityTag, PUBLIC_REVALIDATE_SECONDS } from "@/lib/cache";
@@ -27,6 +27,7 @@ import { SLOT_HOLDING_STATUSES, type DayHours } from "./constants";
 import {
   addDays,
   findOpenSlot,
+  isOpenAt,
   openSlotsOnDate,
   type BusyBooking,
   type OpenSlot,
@@ -160,6 +161,8 @@ export async function loadBusyBookings(
   executor: DbExecutor,
   shopId: string,
   range: Range,
+  /** A booking being moved doesn't block its own new time. */
+  ignoreBookingId?: string,
 ): Promise<BusyBooking[]> {
   const rows = await executor
     .select({
@@ -176,6 +179,9 @@ export async function loadBusyBookings(
       and(
         eq(bookings.shopId, shopId),
         inArray(bookings.status, [...SLOT_HOLDING_STATUSES]),
+        // Queue numbers are served in turn; they don't hold a time.
+        ne(bookings.bookingType, "queue"),
+        ignoreBookingId ? ne(bookings.id, ignoreBookingId) : undefined,
         lt(bookings.startAt, range.end),
         // Booked services last at most a day, so this catches every overlap.
         gt(bookings.startAt, new Date(range.start.getTime() - 86_400_000)),
@@ -229,12 +235,14 @@ export async function computeOpenSlots(params: {
   days: number;
   staffId?: string | null;
   now: Date;
+  /** For rescheduling: the booking being moved doesn't block its new time. */
+  ignoreBookingId?: string;
 }): Promise<SlotDay[]> {
-  const { service, fromDate, days, staffId, now } = params;
+  const { service, fromDate, days, staffId, now, ignoreBookingId } = params;
   const toDate = addDays(fromDate, days - 1);
   const [schedule, busy] = await Promise.all([
     getCachedShopSchedule(service.shopId, fromDate, toDate),
-    loadBusyBookings(db, service.shopId, manilaDateRange(fromDate, toDate)),
+    loadBusyBookings(db, service.shopId, manilaDateRange(fromDate, toDate), ignoreBookingId),
   ]);
 
   return Array.from({ length: days }, (_, offset) => {
@@ -255,7 +263,13 @@ export async function computeOpenSlots(params: {
  */
 export async function findBookableSlot(
   tx: DbExecutor,
-  params: { serviceId: string; startAt: string; staffId?: string | null; now: Date },
+  params: {
+    serviceId: string;
+    startAt: string;
+    staffId?: string | null;
+    now: Date;
+    ignoreBookingId?: string;
+  },
 ): Promise<OpenSlot | null> {
   const service = await getSlotService(params.serviceId, tx);
   if (!service) return null;
@@ -263,7 +277,7 @@ export async function findBookableSlot(
   const range = manilaDateRange(date, date);
   const [schedule, busy] = await Promise.all([
     loadShopSchedule(tx, service.shopId, range),
-    loadBusyBookings(tx, service.shopId, range),
+    loadBusyBookings(tx, service.shopId, range, params.ignoreBookingId),
   ]);
   return findOpenSlot(params.startAt, date, schedule, service, busy, {
     now: params.now,
@@ -467,4 +481,15 @@ export async function getAvailabilityDashboard(
     }),
     services: serviceRows,
   };
+}
+
+/** Whether the shop is open right now (hours, breaks, holidays and closures). */
+export async function isShopOpenNow(
+  executor: DbExecutor,
+  shopId: string,
+  now: Date,
+): Promise<boolean> {
+  const date = manilaDate(now);
+  const schedule = await loadShopSchedule(executor, shopId, manilaDateRange(date, date));
+  return isOpenAt(date, schedule, now);
 }

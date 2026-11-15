@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { geographyPoint, id, oneOf, timestamps } from "./columns";
-import { BOOKING_STATUSES, REPORT_STATUSES } from "./enums";
+import { BOOKING_STATUSES, BOOKING_TYPES, REPORT_STATUSES } from "./enums";
 import { services, shops } from "./shops";
 import { users } from "./users";
 
@@ -46,6 +46,16 @@ export const bookings = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     // Client-generated, so a double tap on a slow connection makes one booking.
     idempotencyKey: text("idempotency_key"),
+    // The service's booking type when booked; services can change type later.
+    bookingType: text("booking_type", { enum: BOOKING_TYPES }).notNull().default("slot"),
+    // Queue bookings only: the number called out at the shop, per shop per Manila day.
+    queueNumber: integer("queue_number"),
+    // The customer cancelled inside the shop's cancellation window.
+    lateCancel: boolean("late_cancel").notNull().default(false),
+    rescheduleCount: integer("reschedule_count").notNull().default(0),
+    // What the shop asks the customer to pay online, and what has been paid.
+    depositCentavos: integer("deposit_centavos").notNull().default(0),
+    paidCentavos: integer("paid_centavos").notNull().default(0),
     ...timestamps(),
   },
   (t) => [
@@ -55,6 +65,11 @@ export const bookings = pgTable(
     index("bookings_customer_id_start_at_idx").on(t.customerId, t.startAt),
     index("bookings_status_expires_at_idx").on(t.status, t.expiresAt),
     check("bookings_status_check", oneOf(t.status, BOOKING_STATUSES)),
+    check("bookings_booking_type_check", oneOf(t.bookingType, BOOKING_TYPES)),
+    check(
+      "bookings_payment_check",
+      sql`${t.depositCentavos} >= 0 and ${t.paidCentavos} >= 0 and ${t.rescheduleCount} >= 0`,
+    ),
     check("bookings_range_check", sql`${t.endAt} is null or ${t.endAt} > ${t.startAt}`),
     check(
       "bookings_money_check",
@@ -160,3 +175,11 @@ export const reports = pgTable(
     check("reports_status_check", oneOf(t.status, REPORT_STATUSES)),
   ],
 ).enableRLS();
+
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;
+export type BookingEvent = typeof bookingEvents.$inferSelect;
+export type NewBookingEvent = typeof bookingEvents.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type Review = typeof reviews.$inferSelect;
+export type Report = typeof reports.$inferSelect;

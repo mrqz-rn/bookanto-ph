@@ -32,11 +32,23 @@ export const BOOKING_STATUSES = [
 ] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
-export const NOTIFICATION_CHANNELS = ["sms", "push", "email"] as const;
+export const NOTIFICATION_CHANNELS = ["sms", "push", "email", "whatsapp", "viber"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 export const NOTIFICATION_STATUSES = ["queued", "sent", "failed"] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
+
+export const NOTIFICATION_TEMPLATES = [
+  "otp",
+  "booking_confirmed",
+  "booking_requested",
+  "booking_reminder",
+  "booking_auto_expired",
+  "booking_cancelled",
+  "booking_completed",
+  "test_alert",
+] as const;
+export type NotificationTemplate = (typeof NOTIFICATION_TEMPLATES)[number];
 
 export const REPORT_STATUSES = ["open", "resolved", "dismissed"] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
@@ -61,3 +73,13 @@ export type InquiryKind = (typeof INQUIRY_KINDS)[number];
 
 export const INQUIRY_STATUSES = ["new", "contacted", "closed"] as const;
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
+
+// How a shop takes money online for a booking.
+export const PAYMENT_MODES = ["none", "deposit", "full"] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
+
+export const DEPOSIT_TYPES = ["fixed", "percent"] as const;
+export type DepositType = (typeof DEPOSIT_TYPES)[number];
+
+export const PAYMENT_STATUSES = ["pending", "paid", "expired", "failed", "refunded"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];

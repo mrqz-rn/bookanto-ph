@@ -9,7 +9,7 @@ export function MobilePreview() {
   return (
     <div aria-hidden className="relative mx-auto w-full max-w-sm py-4 select-none">
       {/* Phone container */}
-      <div className="relative mx-auto w-[280px] overflow-hidden rounded-[2.5rem] border-[10px] border-navy-900 bg-white shadow-2xl">
+      <div className="relative mx-auto w-[280px] overflow-hidden rounded-[2.5rem] border-[10px] border-solid border-navy-900 bg-white shadow-2xl">
         {/* Top speaker notch */}
         <div className="flex justify-center pt-2">
           <div className="h-4 w-28 rounded-full bg-navy-900" />

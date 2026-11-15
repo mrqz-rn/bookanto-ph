@@ -147,3 +147,32 @@ export const setAcceptingTodaySchema = z.strictObject({
   shopId: z.string().uuid("Invalid shop ID."),
   accepting: z.boolean(),
 });
+
+export const addStaffMemberSchema = z.strictObject({
+  shopId: z.string().uuid("Invalid shop ID."),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters.")
+    .max(100, "Name is too long (max 100 characters)."),
+  phone: phoneSchema,
+  email: z.string().trim().email("Please provide a valid email address.").optional().nullable(),
+  role: z.enum(["manager", "staff"]).default("staff"),
+});
+
+export const updateStaffRoleSchema = z.strictObject({
+  shopId: z.string().uuid("Invalid shop ID."),
+  userId: z.string().uuid("Invalid user ID."),
+  role: z.enum(["manager", "staff"]),
+});
+
+export const removeStaffMemberSchema = z.strictObject({
+  shopId: z.string().uuid("Invalid shop ID."),
+  userId: z.string().uuid("Invalid user ID."),
+});
+
+export const toggleStaffActiveSchema = z.strictObject({
+  shopId: z.string().uuid("Invalid shop ID."),
+  userId: z.string().uuid("Invalid user ID."),
+  active: z.boolean(),
+});

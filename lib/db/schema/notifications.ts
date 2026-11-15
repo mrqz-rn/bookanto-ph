@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   index,
   jsonb,
@@ -49,3 +50,42 @@ export const pushSubscriptions = pgTable(
   },
   (t) => [uniqueIndex("push_subscriptions_endpoint_key").on(t.endpoint)],
 ).enableRLS();
+
+export const notificationPreferences = pgTable(
+  "notification_preferences",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    preferredChannel: text("preferred_channel", { enum: NOTIFICATION_CHANNELS })
+      .notNull()
+      .default("sms"),
+    smsEnabled: boolean("sms_enabled").notNull().default(true),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    pushEnabled: boolean("push_enabled").notNull().default(true),
+    whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),
+    viberEnabled: boolean("viber_enabled").notNull().default(false),
+    bookingConfirmations: boolean("booking_confirmations").notNull().default(true),
+    bookingReminders: boolean("booking_reminders").notNull().default(true),
+    bookingAutoExpiry: boolean("booking_auto_expiry").notNull().default(true),
+    marketingPromos: boolean("marketing_promos").notNull().default(false),
+    whatsappPhone: text("whatsapp_phone"),
+    viberPhone: text("viber_phone"),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("notification_preferences_user_id_key").on(t.userId),
+    check(
+      "notification_preferences_channel_check",
+      oneOf(t.preferredChannel, NOTIFICATION_CHANNELS),
+    ),
+  ],
+).enableRLS();
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type NewNotificationPreference = typeof notificationPreferences.$inferInsert;

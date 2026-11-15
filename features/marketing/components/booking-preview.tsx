@@ -13,7 +13,7 @@ const SLOTS = [
 export function BookingPreview() {
   return (
     <div aria-hidden className="relative mx-auto mb-7 w-full max-w-[17rem] select-none">
-      <div className="overflow-hidden rounded-[2.25rem] border-[10px] border-navy-900 bg-white shadow-2xl">
+      <div className="overflow-hidden rounded-[2.25rem] border-[10px] border-solid border-navy-900 bg-white shadow-2xl">
         <div className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-full bg-accent">

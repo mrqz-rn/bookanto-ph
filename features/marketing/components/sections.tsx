@@ -108,7 +108,9 @@ export function Hero() {
           ].map(([value, label]) => (
             <div key={label} className="flex flex-col">
               <dt className="order-last text-sm text-slate-600">{label}</dt>
-              <dd className="font-display text-2xl font-bold">{value}</dd>
+              <dd className="font-display text-xl font-bold whitespace-nowrap sm:text-2xl">
+                {value}
+              </dd>
             </div>
           ))}
         </dl>

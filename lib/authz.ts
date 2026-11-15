@@ -65,6 +65,8 @@ const RULES = {
   "user:update_own": isOwnCustomer,
   "user:delete_own": isOwnCustomer,
   "address:manage_own": isOwnCustomer,
+  "notification:read_own": isOwnCustomer,
+  "notification:manage_own": isOwnCustomer,
 
   // As a customer. Booking state rules (for example, reviews only after
   // Completed) are checked by the booking module, not here.
@@ -72,6 +74,8 @@ const RULES = {
   "booking:read_own": isOwnBooking,
   "booking:cancel_own": isOwnBooking,
   "booking:reschedule_own": isOwnBooking,
+  "booking:accept_quote": isOwnBooking,
+  "booking:pay": isOwnBooking,
   "review:create": isOwnBooking,
   "shop:create": isCustomer,
 

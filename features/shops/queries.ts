@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   barangays,
+  bookings,
   businessHours,
   categories,
   cities,
@@ -13,6 +14,8 @@ import {
   shopCategories,
   shopMembers,
   shops,
+  staffSchedules,
+  users,
 } from "@/lib/db/schema";
 
 /**
@@ -135,4 +138,99 @@ export async function isSlugAvailable(slug: string, excludeShopId?: string): Pro
 
   const [existing] = await query;
   return !existing;
+}
+
+export type ShopTeamMember = {
+  id: string;
+  userId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: "owner" | "manager" | "staff";
+  active: boolean;
+  usesShopHours: boolean;
+  assignedCount: number;
+  completedCount: number;
+  grossCentavos: number;
+  joinedAt: string;
+};
+
+/**
+ * Returns all team members of a shop with profile info, scheduling status, and performance stats.
+ */
+export async function getShopTeamMembers(shopId: string): Promise<ShopTeamMember[]> {
+  const members = await db
+    .select({
+      id: shopMembers.id,
+      userId: shopMembers.userId,
+      role: shopMembers.role,
+      active: shopMembers.active,
+      createdAt: shopMembers.createdAt,
+      name: users.name,
+      phone: users.phone,
+      email: users.email,
+      usesShopHours: staffSchedules.usesShopHours,
+    })
+    .from(shopMembers)
+    .innerJoin(users, eq(users.id, shopMembers.userId))
+    .leftJoin(
+      staffSchedules,
+      and(
+        eq(staffSchedules.shopId, shopMembers.shopId),
+        eq(staffSchedules.userId, shopMembers.userId),
+      ),
+    )
+    .where(eq(shopMembers.shopId, shopId))
+    .orderBy(
+      sql`case ${shopMembers.role} when 'owner' then 0 when 'manager' then 1 else 2 end`,
+      asc(users.name),
+    );
+
+  // Load bookings stats for these members
+  const memberStats = await db
+    .select({
+      staffId: bookings.staffId,
+      assignedCount: sql<number>`count(*)::int`,
+      completedCount: sql<number>`count(case when ${bookings.status} = 'completed' then 1 end)::int`,
+      grossCentavos: sql<number>`coalesce(sum(case when ${bookings.status} = 'completed' then ${bookings.totalCentavos} else 0 end), 0)::int`,
+    })
+    .from(bookings)
+    .where(and(eq(bookings.shopId, shopId), sql`${bookings.staffId} is not null`))
+    .groupBy(bookings.staffId);
+
+  const statsMap = new Map<
+    string,
+    { assignedCount: number; completedCount: number; grossCentavos: number }
+  >();
+  for (const s of memberStats) {
+    if (s.staffId) {
+      statsMap.set(s.staffId, {
+        assignedCount: s.assignedCount,
+        completedCount: s.completedCount,
+        grossCentavos: s.grossCentavos,
+      });
+    }
+  }
+
+  return members.map((m) => {
+    const stats = statsMap.get(m.userId) || {
+      assignedCount: 0,
+      completedCount: 0,
+      grossCentavos: 0,
+    };
+    return {
+      id: m.id,
+      userId: m.userId,
+      name: m.name || "Team Member",
+      phone: m.phone,
+      email: m.email,
+      role: m.role as "owner" | "manager" | "staff",
+      active: m.active,
+      usesShopHours: m.usesShopHours ?? true,
+      assignedCount: stats.assignedCount,
+      completedCount: stats.completedCount,
+      grossCentavos: stats.grossCentavos,
+      joinedAt: m.createdAt.toISOString(),
+    };
+  });
 }

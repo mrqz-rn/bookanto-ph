@@ -11,4 +11,9 @@ export const ACCOUNT_NAV_ITEMS = [
     label: "Saved Addresses",
     description: "Manage delivery and service locations",
   },
+  {
+    href: "/account/notifications",
+    label: "Notifications",
+    description: "Channels, alerts, receipts and reminders",
+  },
 ] as const;

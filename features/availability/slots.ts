@@ -251,6 +251,16 @@ export function openSlotsOnDate(
   return slots;
 }
 
+/** Whether the shop is open at an instant on that Manila date: inside hours, outside breaks and closures. */
+export function isOpenAt(date: string, schedule: ShopSchedule, instant: Date): boolean {
+  const open = subtract(
+    toIntervals(date, shopPeriods(date, schedule)),
+    schedule.closures.map(fromRange),
+  );
+  const at = instant.getTime();
+  return open.some((interval) => interval.start <= at && at < interval.end);
+}
+
 /** The open slot that starts at `startAt`, or null when that time can't be booked. */
 export function findOpenSlot(
   startAt: string,

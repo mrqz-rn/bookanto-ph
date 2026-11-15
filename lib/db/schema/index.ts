@@ -4,6 +4,7 @@ export * from "./bookings";
 export * from "./enums";
 export * from "./notifications";
 export * from "./inquiries";
+export * from "./payments";
 export * from "./places";
 export * from "./pricing";
 export * from "./shops";

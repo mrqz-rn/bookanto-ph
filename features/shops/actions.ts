@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { and, eq, ne, sql } from "drizzle-orm";
 
@@ -15,19 +16,25 @@ import {
   shopMembers,
   shops,
   slugRedirects,
+  staffSchedules,
+  users,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
 
 import {
   addShopPhotoSchema,
+  addStaffMemberSchema,
   createShopSchema,
   removeShopMediaSchema,
+  removeStaffMemberSchema,
   reorderShopMediaSchema,
   setAcceptingTodaySchema,
   submitForVerificationSchema,
+  toggleStaffActiveSchema,
   updateShopDetailsSchema,
   updateShopHoursSchema,
   updateShopLocationSchema,
+  updateStaffRoleSchema,
   uploadShopDocumentSchema,
 } from "./schema";
 
@@ -525,5 +532,262 @@ export async function setAcceptingToday(
 
     revalidateTag(CACHE_TAGS.shops);
     return { success: true, accepting: data.accepting };
+  });
+}
+
+/**
+ * Invites or registers a team member (staff or manager) for the shop.
+ */
+export async function addStaffMember(
+  input: unknown,
+): Promise<ActionResult<{ success: true; memberId: string }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const data = parseInput(addStaffMemberSchema, input);
+
+    assertCan(user, "shop_member:manage", { shopId: data.shopId, memberRole: data.role });
+
+    const newMember = await db.transaction(async (tx) => {
+      // Find or create user by phone
+      let [existingUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.phone, data.phone))
+        .limit(1);
+
+      if (!existingUser) {
+        const [createdUser] = await tx
+          .insert(users)
+          .values({
+            authId: `staff_${randomUUID()}`,
+            phone: data.phone,
+            name: data.name,
+            email: data.email ?? null,
+            platformRole: "customer",
+            status: "active",
+          })
+          .returning();
+
+        if (!createdUser) {
+          throw new AppError("INTERNAL", "Failed to create user account for staff member.");
+        }
+        existingUser = createdUser;
+      }
+
+      // Check if already a member of this shop
+      const [existingMembership] = await tx
+        .select()
+        .from(shopMembers)
+        .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, existingUser.id)))
+        .limit(1);
+
+      if (existingMembership) {
+        throw new AppError("CONFLICT", "This person is already a team member of this shop.");
+      }
+
+      // Add to shop members
+      const [createdMember] = await tx
+        .insert(shopMembers)
+        .values({
+          shopId: data.shopId,
+          userId: existingUser.id,
+          role: data.role,
+          active: true,
+        })
+        .returning();
+
+      if (!createdMember) {
+        throw new AppError("INTERNAL", "Failed to create shop membership.");
+      }
+
+      // Add default schedule setting
+      await tx
+        .insert(staffSchedules)
+        .values({
+          shopId: data.shopId,
+          userId: existingUser.id,
+          usesShopHours: true,
+        })
+        .onConflictDoNothing();
+
+      await writeAudit(
+        {
+          actorId: user.id,
+          action: "shop_member.added",
+          targetType: "shop_member",
+          targetId: createdMember.id,
+          data: { shopId: data.shopId, role: data.role, userId: existingUser.id },
+        },
+        tx,
+      );
+
+      return createdMember;
+    });
+
+    revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/staff");
+    revalidatePath("/dashboard/availability");
+
+    return { success: true, memberId: newMember.id };
+  });
+}
+
+/**
+ * Updates a staff member's role (manager or staff).
+ */
+export async function updateStaffRole(input: unknown): Promise<ActionResult<{ success: true }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const data = parseInput(updateStaffRoleSchema, input);
+
+    const [existingMember] = await db
+      .select()
+      .from(shopMembers)
+      .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)))
+      .limit(1);
+
+    if (!existingMember) {
+      throw new AppError("NOT_FOUND", "Team member not found.");
+    }
+
+    if (existingMember.role === "owner") {
+      throw new AppError("FORBIDDEN", "Cannot alter the shop owner's role.");
+    }
+
+    assertCan(user, "shop_member:manage", { shopId: data.shopId, memberRole: data.role });
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(shopMembers)
+        .set({
+          role: data.role,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)));
+
+      await writeAudit(
+        {
+          actorId: user.id,
+          action: "shop_member.role_updated",
+          targetType: "shop_member",
+          targetId: existingMember.id,
+          data: { shopId: data.shopId, newRole: data.role },
+        },
+        tx,
+      );
+    });
+
+    revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/staff");
+
+    return { success: true };
+  });
+}
+
+/**
+ * Removes a staff member or manager from the shop.
+ */
+export async function removeStaffMember(input: unknown): Promise<ActionResult<{ success: true }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const data = parseInput(removeStaffMemberSchema, input);
+
+    const [existingMember] = await db
+      .select()
+      .from(shopMembers)
+      .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)))
+      .limit(1);
+
+    if (!existingMember) {
+      throw new AppError("NOT_FOUND", "Team member not found.");
+    }
+
+    if (existingMember.role === "owner") {
+      throw new AppError("FORBIDDEN", "Cannot remove the shop owner.");
+    }
+
+    assertCan(user, "shop_member:manage", { shopId: data.shopId, memberRole: existingMember.role });
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(staffSchedules)
+        .where(and(eq(staffSchedules.shopId, data.shopId), eq(staffSchedules.userId, data.userId)));
+
+      await tx
+        .delete(shopMembers)
+        .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)));
+
+      await writeAudit(
+        {
+          actorId: user.id,
+          action: "shop_member.removed",
+          targetType: "shop_member",
+          targetId: existingMember.id,
+          data: { shopId: data.shopId, userId: data.userId },
+        },
+        tx,
+      );
+    });
+
+    revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/staff");
+    revalidatePath("/dashboard/availability");
+
+    return { success: true };
+  });
+}
+
+/**
+ * Toggles whether a team member is active.
+ */
+export async function toggleStaffActive(
+  input: unknown,
+): Promise<ActionResult<{ success: true; active: boolean }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const data = parseInput(toggleStaffActiveSchema, input);
+
+    const [existingMember] = await db
+      .select()
+      .from(shopMembers)
+      .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)))
+      .limit(1);
+
+    if (!existingMember) {
+      throw new AppError("NOT_FOUND", "Team member not found.");
+    }
+
+    if (existingMember.role === "owner" && !data.active) {
+      throw new AppError("FORBIDDEN", "Cannot deactivate the shop owner.");
+    }
+
+    assertCan(user, "shop_member:manage", { shopId: data.shopId, memberRole: existingMember.role });
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(shopMembers)
+        .set({
+          active: data.active,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(shopMembers.shopId, data.shopId), eq(shopMembers.userId, data.userId)));
+
+      await writeAudit(
+        {
+          actorId: user.id,
+          action: "shop_member.active_toggled",
+          targetType: "shop_member",
+          targetId: existingMember.id,
+          data: { shopId: data.shopId, active: data.active },
+        },
+        tx,
+      );
+    });
+
+    revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/staff");
+    revalidatePath("/dashboard/availability");
+
+    return { success: true, active: data.active };
   });
 }
