@@ -48,7 +48,16 @@ const ICONS: Record<string, LucideIcon> = {
 
 export const CATEGORY_ICON_NAMES = Object.keys(ICONS);
 
-export function CategoryIcon({ name, className }: { name: string | null; className?: string }) {
-  const Icon = (name && ICONS[name]) || Store;
+export function CategoryIcon({
+  name,
+  icon,
+  className,
+}: {
+  name?: string | null;
+  icon?: string | null;
+  className?: string;
+}) {
+  const iconKey = icon ?? name;
+  const Icon = (iconKey && ICONS[iconKey]) || Store;
   return <Icon aria-hidden className={className} />;
 }

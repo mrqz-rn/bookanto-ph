@@ -410,7 +410,11 @@ export async function signInWithPassword(
  */
 export async function ensureSampleAccountsProvisioned(): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const account of [SAMPLE_ACCOUNTS.store, SAMPLE_ACCOUNTS.customer]) {
+    for (const account of [
+      SAMPLE_ACCOUNTS.store,
+      SAMPLE_ACCOUNTS.customer,
+      SAMPLE_ACCOUNTS.admin,
+    ]) {
       await tx.execute(sql`
         INSERT INTO auth.users (
           instance_id,
@@ -757,6 +761,44 @@ export async function ensureSampleAccountsProvisioned(): Promise<void> {
         notes: "Green gate near the bakery",
         location: { lat: 14.6498, lng: 121.1112 },
         isDefault: true,
+      });
+    }
+
+    // 3. Upsert Sample Super Admin in public.users
+    const adminAcc = SAMPLE_ACCOUNTS.admin;
+    const [existingAdmin] = await tx
+      .select()
+      .from(users)
+      .where(
+        or(
+          eq(users.authId, adminAcc.authId),
+          eq(users.email, adminAcc.email),
+          eq(users.phone, adminAcc.phone),
+        ),
+      )
+      .limit(1);
+
+    if (existingAdmin) {
+      await tx
+        .update(users)
+        .set({
+          authId: adminAcc.authId,
+          email: adminAcc.email,
+          name: adminAcc.name,
+          phone: adminAcc.phone,
+          platformRole: "super_admin",
+          status: "active",
+          deletedAt: null,
+        })
+        .where(eq(users.id, existingAdmin.id));
+    } else {
+      await tx.insert(users).values({
+        authId: adminAcc.authId,
+        email: adminAcc.email,
+        name: adminAcc.name,
+        phone: adminAcc.phone,
+        platformRole: "super_admin",
+        status: "active",
       });
     }
   });

@@ -6,6 +6,7 @@ import { formatManila } from "@/lib/time";
 
 const LINKS = [
   { href: "/", label: "For shops" },
+  { href: "/app", label: "Mobile App" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms of Service" },
 ];

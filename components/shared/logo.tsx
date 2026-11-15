@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
@@ -49,5 +50,15 @@ export function Wordmark({ className }: { className?: string }) {
     <span className={cn("font-display font-bold tracking-[-0.015em] text-navy-900", className)}>
       Boo<span className="text-green-600">K</span>anto
     </span>
+  );
+}
+
+/** Complete brand lockup (LogoMark + Wordmark) wrapped in a link to homepage. */
+export function Logo({ className }: { className?: string }) {
+  return (
+    <Link href="/" className={cn("flex items-center gap-2", className)}>
+      <LogoMark className="h-9" />
+      <Wordmark className="text-xl" />
+    </Link>
   );
 }

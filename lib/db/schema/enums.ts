@@ -109,3 +109,29 @@ export type FraudSeverity = (typeof FRAUD_SEVERITIES)[number];
 
 export const FRAUD_STATUSES = ["active", "investigating", "resolved", "dismissed"] as const;
 export type FraudStatus = (typeof FRAUD_STATUSES)[number];
+
+export const ANALYTICS_EVENT_NAMES = [
+  "shop_view",
+  "service_view",
+  "funnel_start",
+  "funnel_step",
+  "slot_selected",
+  "details_entered",
+  "booking_submitted",
+  "booking_confirmed",
+  "booking_completed",
+  "booking_cancelled",
+  "booking_no_show",
+] as const;
+export type AnalyticsEventName = (typeof ANALYTICS_EVENT_NAMES)[number];
+
+export const FUNNEL_STEPS = [
+  "view_shop",
+  "select_service",
+  "select_slot",
+  "enter_details",
+  "submit_booking",
+  "confirmed",
+  "completed",
+] as const;
+export type FunnelStep = (typeof FUNNEL_STEPS)[number];

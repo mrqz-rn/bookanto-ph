@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Store, User } from "lucide-react";
+import { Shield, Store, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -332,6 +332,20 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
               {demoLoading === "customer" ? "Signing in..." : "Customer User"}
             </span>
             <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.customer.email}</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => handleDemoSignIn("admin")}
+            className="col-span-1 h-auto flex-col items-start gap-0.5 border-purple-200 bg-white px-3 py-2.5 text-left hover:bg-purple-50/60 sm:col-span-2"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
+              <Shield className="size-3.5 text-purple-700" />
+              {demoLoading === "admin" ? "Signing in..." : "Super Admin"}
+            </span>
+            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.admin.email}</span>
           </Button>
         </div>
       </div>

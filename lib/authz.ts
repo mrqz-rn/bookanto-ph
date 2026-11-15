@@ -123,6 +123,9 @@ const RULES = {
   "admin:admin.manage": isSuperAdmin,
   "admin:settings.manage": isSuperAdmin,
   "admin:audit.read": isSuperAdmin,
+  "admin:analytics.read": isAdmin,
+  "analytics:read_shop": (user, resource) =>
+    isAdmin(user) || inShop("owner", "manager")(user, resource),
 } satisfies Record<string, Rule>;
 
 export type Permission = keyof typeof RULES;

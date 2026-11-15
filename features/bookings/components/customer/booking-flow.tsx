@@ -6,6 +6,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useBookingFunnelTracker } from "@/features/analytics/hooks";
 import { getOpenSlots } from "@/features/availability/actions";
 import type { BookingType } from "@/lib/db/schema/enums";
 
@@ -57,6 +58,12 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
   const [pending, startTransition] = React.useTransition();
   const key = React.useRef(newKey());
 
+  const { trackStep } = useBookingFunnelTracker({
+    serviceId: service.id,
+    serviceName: service.name,
+    initialStep: "select_service",
+  });
+
   const loginHref = `/login?next=${encodeURIComponent(`/book/${service.id}`)}`;
   const isQueue = service.bookingType === "queue";
   const isHome = service.bookingType === "home";
@@ -77,6 +84,12 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
     event.preventDefault();
     setError(null);
     setFieldErrors({});
+    trackStep("submit_booking", "booking_submitted", {
+      bookingType: service.bookingType,
+      isHome,
+      isQuote,
+      isQueue,
+    });
     startTransition(async () => {
       if (isQueue) {
         const result = await joinQueue({
@@ -167,6 +180,9 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
               setSlot(startAt && label ? { startAt, label } : null);
               key.current = newKey();
               setError(null);
+              if (startAt) {
+                trackStep("select_slot", "slot_selected", { startAt, label });
+              }
             }}
           />
         </section>

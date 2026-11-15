@@ -37,6 +37,16 @@ export const SAMPLE_ACCOUNTS = {
     phone: "+639180000001",
     defaultNext: "/account",
   },
+  admin: {
+    role: "admin" as const,
+    authId: "00000000-0000-4000-a000-000000000003",
+    label: "Sample Admin Account",
+    name: "BooKanto SuperAdmin",
+    email: "admin@bookanto.ph",
+    password: "DemoAdmin123!",
+    phone: "+639190000001",
+    defaultNext: "/admin",
+  },
 } as const;
 
 export type SampleAccountRole = keyof typeof SAMPLE_ACCOUNTS;

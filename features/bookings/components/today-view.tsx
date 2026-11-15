@@ -14,9 +14,12 @@ import {
   Scissors,
   User,
   UserCheck,
+  WifiOff,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PwaInstallButton } from "@/features/pwa/components/pwa-install-button";
+import { saveTodayBookingsCache } from "@/features/pwa/offline-bookings-cache";
 import { setAcceptingToday } from "@/features/shops/actions";
 import { formatPeso } from "@/lib/money";
 import { formatManila } from "@/lib/time";
@@ -47,8 +50,36 @@ export function TodayView({ shopId, data }: { shopId: string; data: TodayDashboa
   const [acceptingToday, setAcceptingTodayState] = React.useState(data.isAcceptingToday);
   const [togglingAccepting, setTogglingAccepting] = React.useState(false);
   const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
+  const [isOnline, setIsOnline] = React.useState(true);
+
+  // Automatically cache today's dashboard bookings for offline use
+  React.useEffect(() => {
+    if (shopId && data) {
+      saveTodayBookingsCache(shopId, data);
+    }
+  }, [shopId, data]);
+
+  // Track connectivity for real-time offline schedule indicator
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(window.navigator.onLine);
+    const handleOnline = () => {
+      setIsOnline(true);
+      router.refresh();
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [router]);
 
   const handleToggleAccepting = async () => {
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      return;
+    }
     setTogglingAccepting(true);
     const nextState = !acceptingToday;
     const res = await setAcceptingToday({ shopId, accepting: nextState });
@@ -60,6 +91,9 @@ export function TodayView({ shopId, data }: { shopId: string; data: TodayDashboa
   };
 
   const handleQuickAccept = async (bookingId: string) => {
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      return;
+    }
     setActionLoadingId(bookingId);
     const res = await acceptBooking({ bookingId });
     setActionLoadingId(null);
@@ -69,6 +103,9 @@ export function TodayView({ shopId, data }: { shopId: string; data: TodayDashboa
   };
 
   const handleQuickComplete = async (bookingId: string) => {
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      return;
+    }
     setActionLoadingId(bookingId);
     const res = await completeBooking({ bookingId });
     setActionLoadingId(null);
@@ -78,6 +115,9 @@ export function TodayView({ shopId, data }: { shopId: string; data: TodayDashboa
   };
 
   const handleQuickNoShow = async (bookingId: string) => {
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      return;
+    }
     setActionLoadingId(bookingId);
     const res = await markNoShow({ bookingId });
     setActionLoadingId(null);
@@ -142,8 +182,26 @@ export function TodayView({ shopId, data }: { shopId: string; data: TodayDashboa
           >
             <Plus className="mr-1.5 size-4" />+ Record Walk-in
           </Button>
+
+          {/* Quick PWA App Install Button */}
+          <PwaInstallButton size="sm" variant="outline" />
         </div>
       </div>
+
+      {/* Offline Schedule Alert */}
+      {!isOnline && (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs font-semibold text-amber-900 shadow-2xs"
+        >
+          <WifiOff className="size-5 shrink-0 text-amber-700" />
+          <div>
+            <span className="font-bold">Offline Schedule Mode:</span> You are currently viewing
+            cached bookings saved on this device. You can view client appointments, service details,
+            and call clients directly via regular cellular calls.
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">

@@ -1,10 +1,7 @@
 import type {
-  AnnouncementAudience,
   AnnouncementKind,
   FraudSeverity,
-  FraudSignalType,
   FraudStatus,
-  FraudTargetType,
   PlatformRole,
   ReportStatus,
   ShopStatus,
@@ -16,6 +13,12 @@ export const ADMIN_NAV_LINKS = [
     label: "Overview",
     icon: "LayoutDashboard",
     description: "System stats, urgent tasks, and operational pulse",
+  },
+  {
+    href: "/admin/analytics",
+    label: "Pilot Metrics",
+    icon: "BarChart3",
+    description: "Booking funnel events, conversion rates, and pilot KPIs",
   },
   {
     href: "/admin/shops",

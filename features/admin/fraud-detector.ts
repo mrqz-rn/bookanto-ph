@@ -1,7 +1,7 @@
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "@/lib/db";
-import { bookings, fraudSignals, reports, reviews, shops, users } from "@/lib/db/schema";
+import { bookings, fraudSignals, reports, reviews } from "@/lib/db/schema";
 import type { FraudSeverity, FraudSignalType } from "@/lib/db/schema/enums";
 
 export type DetectedSignal = {

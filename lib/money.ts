@@ -34,3 +34,5 @@ export function formatPeso(centavos: Centavos): string {
   const formatter = centavos % 100 === 0 ? wholePesos : pesosWithCentavos;
   return formatter.format(centavos / 100);
 }
+
+export const formatCentavos = formatPeso;

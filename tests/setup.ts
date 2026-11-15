@@ -9,3 +9,18 @@ process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "test-anon-key";
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
 vi.mock("server-only", () => ({}));
+
+if (typeof window !== "undefined") {
+  window.matchMedia =
+    window.matchMedia ||
+    (() => ({
+      matches: false,
+      media: "",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+}

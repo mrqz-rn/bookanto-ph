@@ -13,6 +13,11 @@ describe("Manila time helpers", () => {
 
   it("convert Manila wall-clock time to UTC", () => {
     expect(manilaToUtc("2026-12-06", "14:30").toISOString()).toBe("2026-12-06T06:30:00.000Z");
+    expect(manilaToUtc("2026-12-06", "00:00").toISOString()).toBe("2026-12-05T16:00:00.000Z");
+    expect(manilaToUtc("2026-12-06", "23:59:59.999").toISOString()).toBe(
+      "2026-12-06T15:59:59.999Z",
+    );
+    expect(manilaToUtc("2026-12-06", "23:59:59").toISOString()).toBe("2026-12-06T15:59:59.000Z");
   });
 
   it("format instants in Manila time", () => {

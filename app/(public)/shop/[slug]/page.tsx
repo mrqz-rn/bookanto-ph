@@ -8,6 +8,7 @@ import { BadgeCheck, Clock, MapPin, Phone, Star } from "lucide-react";
 import { CategoryIcon } from "@/components/shared/category-icon";
 import { PriceTag } from "@/components/shared/price-tag";
 import { Button } from "@/components/ui/button";
+import { ShopViewTracker } from "@/features/analytics/components/shop-view-tracker";
 import { ReviewList } from "@/features/reviews/components/review-list";
 import { getShopReviews, getShopReviewStats } from "@/features/reviews/queries";
 import { getPublicShopBySlug } from "@/features/shops/queries";
@@ -103,6 +104,7 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
 
   return (
     <main id="main" className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-8 sm:py-12">
+      <ShopViewTracker shopId={shop.id} shopSlug={shop.slug} shopName={shop.name} />
       {/* Shop Hero Card */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xs">
         {/* Cover / Gallery row */}

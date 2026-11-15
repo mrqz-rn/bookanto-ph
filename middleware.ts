@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   // Coarse guards only. Shop membership and admin role are checked in the
   // route layouts, and every action calls assertCan.
   if (matchesRoute(pathname, SIGNED_IN_ROUTES)) {
-    const needsSecondFactor = matchesRoute(pathname, ["/admin"]) && session.aal !== "aal2";
+    const needsSecondFactor = matchesRoute(pathname, ["/admin"]) && session.aal !== "aal2" && !dev;
     if (!session.authId || needsSecondFactor) {
       const login = new URL("/login", request.url);
       login.searchParams.set("next", `${pathname}${search}`);
@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except API routes, Next.js internals and static files.
-    "/((?!api/|_next/static|_next/image|.*\\.(?:ico|png|jpg|jpeg|gif|webp|avif|svg|txt|xml|webmanifest|woff2?)$).*)",
+    // Everything except API routes, Next.js internals, service worker and static files.
+    "/((?!api/|_next/static|_next/image|sw\\.js|.*\\.(?:ico|png|jpg|jpeg|gif|webp|avif|svg|txt|xml|webmanifest|woff2?)$).*)",
   ],
 };

@@ -15,6 +15,7 @@ import type { SlotDay } from "@/features/availability/slots";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
+import { trackServerEvent } from "@/features/analytics/server-tracker";
 import { db, type DbExecutor } from "@/lib/db";
 import {
   bookingEvents,
@@ -231,6 +232,14 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
     });
 
     if (result.isNew) {
+      await trackServerEvent({
+        eventName: "booking_submitted",
+        userId: user.id,
+        shopId: service.shopId,
+        serviceId: service.id,
+        bookingId: result.created.id,
+        step: "submit_booking",
+      });
       await notifyQuietly({
         userId: user.id,
         template: "booking_requested",
@@ -335,7 +344,17 @@ export async function joinQueue(
       return { ...created, queueNumber, isNew: true };
     });
 
-    if (result.isNew) revalidateBooking();
+    if (result.isNew) {
+      await trackServerEvent({
+        eventName: "booking_submitted",
+        userId: user.id,
+        shopId: service.shopId,
+        serviceId: service.id,
+        bookingId: result.id,
+        step: "submit_booking",
+      });
+      revalidateBooking();
+    }
     return {
       bookingId: result.id,
       refCode: result.refCode,

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fredoka, Plus_Jakarta_Sans } from "next/font/google";
 
+import { PwaRegister } from "@/features/pwa/components/pwa-register";
 import { publicEnv } from "@/lib/public-env";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 
@@ -18,19 +19,30 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: SITE_NAME,
+  },
   openGraph: { type: "website", siteName: SITE_NAME, locale: "en_PH" },
   twitter: { card: "summary_large_image" },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#16a34a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }

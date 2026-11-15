@@ -1,4 +1,5 @@
 export * from "./admin";
+export * from "./analytics";
 export * from "./audit";
 export * from "./availability";
 export * from "./bookings";

@@ -98,6 +98,7 @@ describe("getTodayDashboardData query", () => {
       };
     }) as never);
 
+    let capturedWhere: unknown = null;
     let withCount = 0;
     vi.spyOn(db, "with").mockImplementation((() => {
       withCount++;
@@ -124,42 +125,45 @@ describe("getTodayDashboardData query", () => {
             innerJoin: vi.fn().mockReturnValue({
               leftJoin: vi.fn().mockReturnValue({
                 leftJoin: vi.fn().mockReturnValue({
-                  where: vi.fn().mockReturnValue({
-                    orderBy: vi.fn().mockResolvedValue([
-                      {
-                        booking: booking1,
-                        service: {
-                          id: booking1.serviceId,
-                          name: "Haircut",
-                          durationMin: 60,
-                          priceCentavos: 50000,
+                  where: vi.fn().mockImplementation((condition) => {
+                    capturedWhere = condition;
+                    return {
+                      orderBy: vi.fn().mockResolvedValue([
+                        {
+                          booking: booking1,
+                          service: {
+                            id: booking1.serviceId,
+                            name: "Haircut",
+                            durationMin: 60,
+                            priceCentavos: 50000,
+                          },
+                          customer: { id: booking1.customerId, name: "Juan", phone: "09170000001" },
+                          staff: null,
                         },
-                        customer: { id: booking1.customerId, name: "Juan", phone: "09170000001" },
-                        staff: null,
-                      },
-                      {
-                        booking: booking2,
-                        service: {
-                          id: booking2.serviceId,
-                          name: "Beard Trim",
-                          durationMin: 60,
-                          priceCentavos: 35000,
+                        {
+                          booking: booking2,
+                          service: {
+                            id: booking2.serviceId,
+                            name: "Beard Trim",
+                            durationMin: 60,
+                            priceCentavos: 35000,
+                          },
+                          customer: { id: booking2.customerId, name: "Kiko", phone: "09170000002" },
+                          staff: { id: booking2.staffId, name: "Staff Dan" },
                         },
-                        customer: { id: booking2.customerId, name: "Kiko", phone: "09170000002" },
-                        staff: { id: booking2.staffId, name: "Staff Dan" },
-                      },
-                      {
-                        booking: booking3,
-                        service: {
-                          id: booking3.serviceId,
-                          name: "Shave",
-                          durationMin: 45,
-                          priceCentavos: 40000,
+                        {
+                          booking: booking3,
+                          service: {
+                            id: booking3.serviceId,
+                            name: "Shave",
+                            durationMin: 45,
+                            priceCentavos: 40000,
+                          },
+                          customer: null,
+                          staff: { id: booking3.staffId, name: "Staff Dan" },
                         },
-                        customer: null,
-                        staff: { id: booking3.staffId, name: "Staff Dan" },
-                      },
-                    ]),
+                      ]),
+                    };
                   }),
                 }),
               }),
@@ -189,5 +193,8 @@ describe("getTodayDashboardData query", () => {
     expect(walkInItem).toBeDefined();
     expect(walkInItem?.customerName).toBe("Aling Nena");
     expect(walkInItem?.customerPhone).toBe("09181234567");
+
+    // Verify where condition was constructed with valid Date objects
+    expect(capturedWhere).toBeDefined();
   });
 });

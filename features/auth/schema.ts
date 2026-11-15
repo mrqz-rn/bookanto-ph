@@ -59,6 +59,6 @@ export const emailPasswordSignInSchema = z.strictObject({
 });
 
 export const demoSignInSchema = z.strictObject({
-  role: z.enum(["store", "customer"]),
+  role: z.enum(["store", "customer", "admin"]),
   next: z.string().optional(),
 });

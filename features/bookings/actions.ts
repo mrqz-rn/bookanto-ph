@@ -6,6 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
+import { trackServerEvent } from "@/features/analytics/server-tracker";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { bookingEvents, bookings, services, shopMembers, shops } from "@/lib/db/schema";
@@ -180,6 +181,14 @@ export async function acceptBooking(
       });
     }
 
+    await trackServerEvent({
+      eventName: "booking_confirmed",
+      shopId: existing.shopId,
+      serviceId: existing.serviceId,
+      bookingId: existing.id,
+      step: "confirmed",
+    });
+
     return { success: true, bookingId: data.bookingId };
   });
 }
@@ -348,6 +357,14 @@ export async function completeBooking(
       });
     }
 
+    await trackServerEvent({
+      eventName: "booking_completed",
+      shopId: existing.shopId,
+      serviceId: existing.serviceId,
+      bookingId: existing.id,
+      step: "completed",
+    });
+
     return { success: true, bookingId: data.bookingId };
   });
 }
@@ -431,6 +448,13 @@ export async function markNoShow(
         serviceName,
       });
     }
+
+    await trackServerEvent({
+      eventName: "booking_no_show",
+      shopId: existing.shopId,
+      serviceId: existing.serviceId,
+      bookingId: existing.id,
+    });
 
     return { success: true, bookingId: data.bookingId };
   });
@@ -516,6 +540,13 @@ export async function cancelBooking(
         reason: data.reason ? `Shop cancelled: ${data.reason}` : "Shop cancelled booking",
       });
     }
+
+    await trackServerEvent({
+      eventName: "booking_cancelled",
+      shopId: existing.shopId,
+      serviceId: existing.serviceId,
+      bookingId: existing.id,
+    });
 
     return { success: true, bookingId: data.bookingId };
   });

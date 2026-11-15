@@ -87,6 +87,8 @@ const MATRIX: Record<Permission, Record<Role, Expectation>> = {
   "admin:admin.manage":       row("no",  "no",     "no",       "no",    "no",   "no",      "yes"),
   "admin:settings.manage":    row("no",  "no",     "no",       "no",    "no",   "no",      "yes"),
   "admin:audit.read":         row("no",  "no",     "no",       "no",    "no",   "no",      "yes"),
+  "admin:analytics.read":     row("no",  "no",     "no",       "no",    "no",   "yes",     "yes"),
+  "analytics:read_shop":      row("no",  "no",     "no",       "shop",  "shop", "yes",     "yes"),
 };
 
 const ME = "user-me";
