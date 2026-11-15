@@ -145,7 +145,7 @@ describe("auth server actions", () => {
 
   describe("signInDemoAccountAction", () => {
     it("signs in with sample store account and uses defaultNext", async () => {
-      const result = await signInDemoAccountAction({ role: "store", next: "/account" });
+      const result = await signInDemoAccountAction({ role: "store" });
       expect(result).toEqual({
         ok: true,
         data: { authId: "demo-store", next: "/dashboard" },

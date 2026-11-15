@@ -3,17 +3,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Shield, Store, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   requestEmailOtp,
   requestPhoneOtp,
-  signInDemoAccountAction,
   signInWithPasswordAction,
 } from "@/features/auth/actions";
-import { SAMPLE_ACCOUNTS, type SampleAccountRole } from "@/features/auth/constants";
+import { DEFAULT_AUTH_REDIRECT, PHONE_AUTH_ENABLED } from "@/features/auth/constants";
+
 import { SocialAuthButtons } from "./social-auth-buttons";
 
 type LoginFormProps = {
@@ -21,18 +20,17 @@ type LoginFormProps = {
   initialError?: string;
 };
 
-export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
+export function LoginForm({ next = DEFAULT_AUTH_REDIRECT, initialError }: LoginFormProps) {
   const router = useRouter();
-  const [tab, setTab] = React.useState<"phone" | "email">("phone");
+  const [tab, setTab] = React.useState<"phone" | "email">(PHONE_AUTH_ENABLED ? "phone" : "email");
   const [emailMode, setEmailMode] = React.useState<"password" | "otp">("password");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [demoLoading, setDemoLoading] = React.useState<SampleAccountRole | null>(null);
   const [error, setError] = React.useState<string | null>(initialError ?? null);
 
-  const isBusy = loading || demoLoading !== null;
+  const isBusy = loading;
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,24 +86,6 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
     }
   };
 
-  const handleDemoSignIn = async (role: SampleAccountRole) => {
-    setError(null);
-    setDemoLoading(role);
-    try {
-      const result = await signInDemoAccountAction({ role, next });
-      if (result.ok) {
-        router.push(result.data.next);
-        router.refresh();
-      } else {
-        setError(result.message);
-        setDemoLoading(null);
-      }
-    } catch {
-      setError("Failed to sign in to sample account. Please try again.");
-      setDemoLoading(null);
-    }
-  };
-
   return (
     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
       <div className="mb-6 text-center">
@@ -126,40 +106,42 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="mb-6 flex rounded-lg bg-muted p-1">
-        <button
-          type="button"
-          onClick={() => {
-            setTab("phone");
-            setError(null);
-          }}
-          className={`flex-1 rounded-md py-2.5 text-center text-sm font-semibold transition-all ${
-            tab === "phone"
-              ? "bg-white text-navy-900 shadow-xs"
-              : "text-slate-600 hover:text-navy-900"
-          }`}
-        >
-          Phone Number
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTab("email");
-            setError(null);
-          }}
-          className={`flex-1 rounded-md py-2.5 text-center text-sm font-semibold transition-all ${
-            tab === "email"
-              ? "bg-white text-navy-900 shadow-xs"
-              : "text-slate-600 hover:text-navy-900"
-          }`}
-        >
-          Email
-        </button>
-      </div>
+      {/* Tabs (hidden while phone auth is disabled) */}
+      {PHONE_AUTH_ENABLED && (
+        <div className="mb-6 flex rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setTab("phone");
+              setError(null);
+            }}
+            className={`flex-1 rounded-md py-2.5 text-center text-sm font-semibold transition-all ${
+              tab === "phone"
+                ? "bg-white text-navy-900 shadow-xs"
+                : "text-slate-600 hover:text-navy-900"
+            }`}
+          >
+            Phone Number
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab("email");
+              setError(null);
+            }}
+            className={`flex-1 rounded-md py-2.5 text-center text-sm font-semibold transition-all ${
+              tab === "email"
+                ? "bg-white text-navy-900 shadow-xs"
+                : "text-slate-600 hover:text-navy-900"
+            }`}
+          >
+            Email
+          </button>
+        </div>
+      )}
 
       {/* Phone form */}
-      {tab === "phone" ? (
+      {PHONE_AUTH_ENABLED && tab === "phone" ? (
         <form onSubmit={handlePhoneSubmit} className="space-y-4">
           <div>
             <label htmlFor="phone-input" className="mb-1.5 block text-sm font-medium text-navy-900">
@@ -297,58 +279,8 @@ export function LoginForm({ next = "/account", initialError }: LoginFormProps) {
         </span>
       </div>
 
-      {/* Social login buttons: Google and Facebook */}
+      {/* Social login buttons: Google (Facebook temporarily hidden) */}
       <SocialAuthButtons next={next} onError={setError} />
-
-      {/* Sample Accounts Quick Sign-In */}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-        <p className="mb-2.5 text-xs font-semibold tracking-wider text-slate-600 uppercase">
-          Sample Accounts (1-Click Demo)
-        </p>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isBusy}
-            onClick={() => handleDemoSignIn("store")}
-            className="h-auto flex-col items-start gap-0.5 border-orange-200 bg-white px-3 py-2.5 text-left hover:bg-orange-50/60"
-          >
-            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
-              <Store className="size-3.5 text-orange-600" />
-              {demoLoading === "store" ? "Signing in..." : "Store Owner"}
-            </span>
-            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.store.email}</span>
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isBusy}
-            onClick={() => handleDemoSignIn("customer")}
-            className="h-auto flex-col items-start gap-0.5 border-emerald-200 bg-white px-3 py-2.5 text-left hover:bg-emerald-50/60"
-          >
-            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
-              <User className="size-3.5 text-emerald-700" />
-              {demoLoading === "customer" ? "Signing in..." : "Customer User"}
-            </span>
-            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.customer.email}</span>
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isBusy}
-            onClick={() => handleDemoSignIn("admin")}
-            className="col-span-1 h-auto flex-col items-start gap-0.5 border-purple-200 bg-white px-3 py-2.5 text-left hover:bg-purple-50/60 sm:col-span-2"
-          >
-            <span className="flex items-center gap-1.5 text-xs font-bold text-navy-900">
-              <Shield className="size-3.5 text-purple-700" />
-              {demoLoading === "admin" ? "Signing in..." : "Super Admin"}
-            </span>
-            <span className="text-[11px] text-slate-500">{SAMPLE_ACCOUNTS.admin.email}</span>
-          </Button>
-        </div>
-      </div>
 
       <p className="mt-6 text-center text-xs text-slate-500">
         By continuing, you agree to BooKanto&apos;s{" "}

@@ -1,0 +1,5 @@
+import { AvailabilityDashboardSkeleton } from "@/features/shops/components/dashboard-skeletons";
+
+export default function AvailabilityLoading() {
+  return <AvailabilityDashboardSkeleton />;
+}

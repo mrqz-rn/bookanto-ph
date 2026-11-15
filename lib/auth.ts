@@ -4,7 +4,11 @@ import type { AuthError } from "@supabase/supabase-js";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { cache } from "react";
 
-import { SAMPLE_ACCOUNTS, type SampleAccountRole } from "@/features/auth/constants";
+import {
+  DEFAULT_AUTH_REDIRECT,
+  SAMPLE_ACCOUNTS,
+  type SampleAccountRole,
+} from "@/features/auth/constants";
 import { writeAudit } from "@/lib/audit";
 import type { AuthzUser } from "@/lib/authz";
 import { db } from "@/lib/db";
@@ -328,13 +332,13 @@ async function assertOAuthProviderEnabled(provider: OAuthProvider): Promise<void
 /** Generates the OAuth authorization URL for Google or Facebook sign-in. */
 export async function getOAuthSignInUrl(
   provider: OAuthProvider,
-  next = "/account",
+  next = DEFAULT_AUTH_REDIRECT,
   origin?: string,
 ): Promise<string> {
   await assertOAuthProviderEnabled(provider);
 
   const supabase = await createSupabaseServerClient();
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : DEFAULT_AUTH_REDIRECT;
   const baseUrl = await resolveAuthBaseUrl(origin);
   const redirectTo = `${baseUrl}/auth/callback?next=${encodeURIComponent(safeNext)}`;
 

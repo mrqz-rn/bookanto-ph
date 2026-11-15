@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DashboardMobileNav, DashboardSubNav } from "@/features/shops/components/dashboard-nav";
+import {
+  DashboardContentSlot,
+  DashboardMobileNav,
+  DashboardNavProvider,
+  DashboardSubNav,
+} from "@/features/shops/components/dashboard-nav";
+import { getDashboardSkeletonForPath } from "@/features/shops/components/dashboard-skeletons";
 
 let mockPathname = "/dashboard";
 vi.mock("next/navigation", () => ({
@@ -74,5 +80,49 @@ describe("DashboardNav components", () => {
 
     const reportsLink = screen.getByRole("link", { name: /Reports/i });
     expect(reportsLink).toHaveClass("text-green-700");
+  });
+
+  it("optimistically switches active tab and displays target skeleton on click", () => {
+    mockPathname = "/dashboard/inbox";
+    render(
+      <DashboardNavProvider>
+        <DashboardSubNav />
+        <DashboardContentSlot>
+          <div>Current Inbox Content</div>
+        </DashboardContentSlot>
+      </DashboardNavProvider>,
+    );
+
+    expect(screen.getByText("Current Inbox Content")).toBeInTheDocument();
+
+    const calendarLink = screen.getByRole("link", { name: /Calendar/i });
+    fireEvent.click(calendarLink);
+
+    // Calendar tab is immediately highlighted
+    expect(calendarLink).toHaveClass("bg-green-100/70", "text-green-800");
+    // Calendar skeleton is immediately displayed
+    expect(screen.getByRole("status", { name: /Loading booking calendar/i })).toBeInTheDocument();
+  });
+
+  it("returns matching skeletons for each store dashboard tab route", () => {
+    const paths = [
+      "/dashboard",
+      "/dashboard/inbox",
+      "/dashboard/calendar",
+      "/dashboard/walk-ins",
+      "/dashboard/reviews",
+      "/dashboard/staff",
+      "/dashboard/reports",
+      "/dashboard/services",
+      "/dashboard/availability",
+      "/dashboard/setup",
+      "/dashboard/bookings/123",
+    ];
+
+    for (const path of paths) {
+      const { unmount } = render(<>{getDashboardSkeletonForPath(path)}</>);
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      unmount();
+    }
   });
 });

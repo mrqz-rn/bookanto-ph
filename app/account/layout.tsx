@@ -3,8 +3,13 @@ import { redirect } from "next/navigation";
 
 import { LogoMark, Wordmark } from "@/components/shared/logo";
 import { SiteFooter } from "@/components/shared/site-footer";
-import { AccountNav } from "@/features/account/components/account-nav";
+import {
+  AccountContentSlot,
+  AccountNav,
+  AccountNavProvider,
+} from "@/features/account/components/account-nav";
 import { getCurrentUser } from "@/lib/auth";
+import { isStoreAccount } from "@/lib/home";
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -24,10 +29,10 @@ export default async function AccountLayout({ children }: { children: React.Reac
           </Link>
           <div className="flex items-center gap-4">
             <Link
-              href="/explore"
+              href={isStoreAccount(user) ? "/dashboard" : "/explore"}
               className="text-sm font-medium text-slate-600 hover:text-navy-900"
             >
-              Marketplace
+              {isStoreAccount(user) ? "Dashboard" : "Marketplace"}
             </Link>
             <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-green-700">
               Account
@@ -37,16 +42,18 @@ export default async function AccountLayout({ children }: { children: React.Reac
       </header>
 
       {/* Main Account Area */}
-      <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
-          <aside>
-            <AccountNav userName={user.name} userPhone={user.phone} userEmail={user.email} />
-          </aside>
-          <main id="main" className="min-w-0">
-            {children}
-          </main>
+      <AccountNavProvider>
+        <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
+            <aside>
+              <AccountNav userName={user.name} userPhone={user.phone} userEmail={user.email} />
+            </aside>
+            <main id="main" className="min-w-0">
+              <AccountContentSlot>{children}</AccountContentSlot>
+            </main>
+          </div>
         </div>
-      </div>
+      </AccountNavProvider>
 
       <SiteFooter />
     </div>

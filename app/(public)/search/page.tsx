@@ -1,6 +1,7 @@
 import { LayoutGrid, Map as MapIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { ShopCard } from "@/components/shared/shop-card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   type SearchShopsInput,
 } from "@/features/search/schema";
 import type { BookingType } from "@/lib/db/schema/enums";
+import { getCurrentUser } from "@/lib/auth";
+import { isStoreAccount } from "@/lib/home";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +51,12 @@ export default async function SearchPage({
   }>;
 }) {
   const params = await searchParams;
+
+  // Store accounts manage their shop from the dashboard, not the marketplace.
+  const user = await getCurrentUser();
+  if (user && isStoreAccount(user)) {
+    redirect("/dashboard");
+  }
 
   const lat = params.lat ? Number(params.lat) : undefined;
   const lng = params.lng ? Number(params.lng) : undefined;

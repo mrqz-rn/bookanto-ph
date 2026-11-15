@@ -1,6 +1,15 @@
 export const OTP_COUNTDOWN_SECONDS = 60;
 
-export const DEFAULT_AUTH_REDIRECT = "/account";
+export const DEFAULT_AUTH_REDIRECT = "/auth/continue";
+
+/**
+ * Phone (SMS OTP) sign-in is temporarily disabled. Flip to `true` to re-enable
+ * the "Phone Number" tab on /login and the phone OTP server actions.
+ */
+export const PHONE_AUTH_ENABLED = false;
+
+export const PHONE_AUTH_DISABLED_MESSAGE =
+  "Phone number sign-in is temporarily unavailable. Please use email or Google.";
 
 export const OAUTH_PROVIDERS = [
   {
@@ -35,7 +44,7 @@ export const SAMPLE_ACCOUNTS = {
     email: "user@bookanto.ph",
     password: "DemoUser123!",
     phone: "+639180000001",
-    defaultNext: "/account",
+    defaultNext: "/explore",
   },
   admin: {
     role: "admin" as const,

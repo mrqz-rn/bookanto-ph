@@ -37,8 +37,8 @@ export function MarketingHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" className="hidden sm:inline-flex">
-            <Link href="/explore">Explore shops</Link>
+          <Button asChild variant="outline">
+            <Link href="/login">Log in</Link>
           </Button>
           <Button asChild>
             <a href="#contact">Contact us</a>

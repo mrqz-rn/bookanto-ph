@@ -1,5 +1,6 @@
 import { CalendarCheck, MessageSquareText, Search } from "lucide-react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { ShopRail, type ShopCardData } from "@/components/shared/shop-card";
 import { CategoryTiles } from "@/features/search/components/category-tiles";
@@ -14,11 +15,10 @@ import {
   getTopRatedShops,
 } from "@/features/search/queries";
 import { ListYourShop } from "@/features/shops/components/list-your-shop";
+import { getCurrentUser } from "@/lib/auth";
+import { isStoreAccount } from "@/lib/home";
 
-// The customer marketplace home. Static, rebuilt at least every 10 minutes,
-// and at once when shop data changes (the cache tags in lib/cache.ts). Must be
-// a literal.
-export const revalidate = 600;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Book local services near you",
@@ -28,6 +28,15 @@ export const metadata: Metadata = {
 };
 
 export default async function ExplorePage() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login?next=/explore");
+  }
+  // Store accounts manage their shop from the dashboard, not the marketplace.
+  if (isStoreAccount(user)) {
+    redirect("/dashboard");
+  }
+
   const [categories, topRated, newShops, listingLinks, cities] = await Promise.all([
     getHomeCategories(),
     getTopRatedShops(),

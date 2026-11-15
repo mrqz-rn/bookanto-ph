@@ -1,7 +1,7 @@
 // Route groups that middleware.ts treats differently.
 
 /** Need a session. /admin also needs a second factor (TOTP). */
-export const SIGNED_IN_ROUTES = ["/account", "/dashboard", "/admin"];
+export const SIGNED_IN_ROUTES = ["/account", "/dashboard", "/admin", "/explore"];
 
 /**
  * Rendered per request: they get a session refresh and a nonce-based CSP.

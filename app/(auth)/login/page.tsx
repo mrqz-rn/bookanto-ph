@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/features/auth/components/login-form";
 import { getCurrentUser } from "@/lib/auth";
+import { resolvePostLoginPath } from "@/lib/home";
 
 export const metadata: Metadata = {
   title: "Log in",
-  description: "Sign in to your BooKanto account using phone OTP, email, Google, or Facebook.",
+  description: "Sign in to your BooKanto account using email or Google.",
 };
 
 type LoginPageProps = {
@@ -18,8 +19,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const user = await getCurrentUser();
 
   if (user) {
-    const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
-    redirect(destination);
+    redirect(resolvePostLoginPath(user, next));
   }
 
   const errorMessage =

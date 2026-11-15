@@ -12,8 +12,13 @@ import {
   verifyEmailOtp,
   verifyOtp,
 } from "@/lib/auth";
-import { parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
 
+import {
+  DEFAULT_AUTH_REDIRECT,
+  PHONE_AUTH_DISABLED_MESSAGE,
+  PHONE_AUTH_ENABLED,
+} from "./constants";
 import {
   demoSignInSchema,
   emailOtpRequestSchema,
@@ -27,6 +32,7 @@ import {
 /** Requests a one-time SMS verification code to a Philippine mobile number. */
 export async function requestPhoneOtp(input: unknown): Promise<ActionResult<{ phone: string }>> {
   return runAction(async () => {
+    if (!PHONE_AUTH_ENABLED) throw new AppError("FORBIDDEN", PHONE_AUTH_DISABLED_MESSAGE);
     const { phone, captchaToken } = parseInput(phoneOtpRequestSchema, input);
     await sendOtp(phone, captchaToken);
     return { phone };
@@ -38,6 +44,7 @@ export async function verifyPhoneOtpAction(
   input: unknown,
 ): Promise<ActionResult<{ authId: string; next: string }>> {
   return runAction(async () => {
+    if (!PHONE_AUTH_ENABLED) throw new AppError("FORBIDDEN", PHONE_AUTH_DISABLED_MESSAGE);
     const { phone, code, next } = parseInput(phoneOtpVerifySchema, input);
     const { authId } = await verifyOtp(phone, code);
     return { authId, next };
@@ -94,7 +101,7 @@ export async function signInDemoAccountAction(
     const { role, next } = parseInput(demoSignInSchema, input);
     const { authId, defaultNext } = await signInDemoAccount(role);
     const destination =
-      next && next !== "/account" && next.startsWith("/") && !next.startsWith("//")
+      next && next !== DEFAULT_AUTH_REDIRECT && next.startsWith("/") && !next.startsWith("//")
         ? next
         : defaultNext;
     return { authId, next: destination };

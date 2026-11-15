@@ -62,7 +62,7 @@ describe("auth schemas", () => {
       });
       expect(parsed.email).toBe("user@example.com");
       expect(parsed.code).toBe("654321");
-      expect(parsed.next).toBe("/account");
+      expect(parsed.next).toBe("/auth/continue");
     });
   });
 

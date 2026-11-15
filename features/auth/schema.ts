@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { DEFAULT_AUTH_REDIRECT } from "@/features/auth/constants";
 import { isValidPhilippinePhone, normalizePhone } from "@/lib/phone";
 
 export const phoneOtpRequestSchema = z.strictObject({
@@ -28,7 +29,7 @@ export const phoneOtpVerifySchema = z.strictObject({
     .trim()
     .length(6, "Verification code must be 6 digits.")
     .regex(/^\d{6}$/, "Code must contain numbers only."),
-  next: z.string().optional().default("/account"),
+  next: z.string().optional().default(DEFAULT_AUTH_REDIRECT),
 });
 
 export const emailOtpRequestSchema = z.strictObject({
@@ -43,19 +44,19 @@ export const emailOtpVerifySchema = z.strictObject({
     .trim()
     .length(6, "Verification code must be 6 digits.")
     .regex(/^\d{6}$/, "Code must contain numbers only."),
-  next: z.string().optional().default("/account"),
+  next: z.string().optional().default(DEFAULT_AUTH_REDIRECT),
 });
 
 export const oauthSignInSchema = z.strictObject({
   provider: z.enum(["google", "facebook"]),
-  next: z.string().optional().default("/account"),
+  next: z.string().optional().default(DEFAULT_AUTH_REDIRECT),
   origin: z.string().url().optional(),
 });
 
 export const emailPasswordSignInSchema = z.strictObject({
   email: z.string().trim().email("Please enter a valid email address."),
   password: z.string().min(1, "Password is required."),
-  next: z.string().optional().default("/account"),
+  next: z.string().optional().default(DEFAULT_AUTH_REDIRECT),
 });
 
 export const demoSignInSchema = z.strictObject({

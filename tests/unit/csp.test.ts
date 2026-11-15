@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildCsp } from "@/lib/csp";
-import { DYNAMIC_ROUTES, matchesRoute } from "@/lib/routes";
+import { DYNAMIC_ROUTES, matchesRoute, SIGNED_IN_ROUTES } from "@/lib/routes";
 
 const supabaseUrl = "https://abc.supabase.co";
 
@@ -52,6 +52,8 @@ describe("matchesRoute", () => {
   it("matches a route and its subpaths only", () => {
     expect(matchesRoute("/account", DYNAMIC_ROUTES)).toBe(true);
     expect(matchesRoute("/account/bookings", DYNAMIC_ROUTES)).toBe(true);
+    expect(matchesRoute("/explore", DYNAMIC_ROUTES)).toBe(true);
+    expect(matchesRoute("/explore", SIGNED_IN_ROUTES)).toBe(true);
     expect(matchesRoute("/accounting", DYNAMIC_ROUTES)).toBe(false);
     expect(matchesRoute("/", DYNAMIC_ROUTES)).toBe(false);
   });

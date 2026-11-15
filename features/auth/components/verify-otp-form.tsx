@@ -12,7 +12,7 @@ import {
   verifyEmailOtpAction,
   verifyPhoneOtpAction,
 } from "@/features/auth/actions";
-import { OTP_COUNTDOWN_SECONDS } from "@/features/auth/constants";
+import { DEFAULT_AUTH_REDIRECT, OTP_COUNTDOWN_SECONDS } from "@/features/auth/constants";
 import { formatPhone } from "@/lib/phone";
 
 type VerifyOtpFormProps = {
@@ -21,7 +21,7 @@ type VerifyOtpFormProps = {
   next?: string;
 };
 
-export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpFormProps) {
+export function VerifyOtpForm({ phone, email, next = DEFAULT_AUTH_REDIRECT }: VerifyOtpFormProps) {
   const router = useRouter();
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -55,7 +55,7 @@ export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpForm
       if (phone) {
         const result = await verifyPhoneOtpAction({ phone, code, next });
         if (result.ok) {
-          router.push(result.data.next || "/account");
+          router.push(result.data.next || DEFAULT_AUTH_REDIRECT);
           router.refresh();
         } else {
           setError(result.message);
@@ -64,7 +64,7 @@ export function VerifyOtpForm({ phone, email, next = "/account" }: VerifyOtpForm
       } else if (email) {
         const result = await verifyEmailOtpAction({ email, code, next });
         if (result.ok) {
-          router.push(result.data.next || "/account");
+          router.push(result.data.next || DEFAULT_AUTH_REDIRECT);
           router.refresh();
         } else {
           setError(result.message);

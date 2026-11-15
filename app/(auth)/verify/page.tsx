@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { VerifyOtpForm } from "@/features/auth/components/verify-otp-form";
+import { PHONE_AUTH_ENABLED } from "@/features/auth/constants";
 
 export const metadata: Metadata = {
   title: "Verify Code",
@@ -13,7 +14,8 @@ type VerifyPageProps = {
 };
 
 export default async function VerifyPage({ searchParams }: VerifyPageProps) {
-  const { phone, email, next } = await searchParams;
+  const { phone: phoneParam, email, next } = await searchParams;
+  const phone = PHONE_AUTH_ENABLED ? phoneParam : undefined;
 
   if (!phone && !email) {
     redirect("/login");
