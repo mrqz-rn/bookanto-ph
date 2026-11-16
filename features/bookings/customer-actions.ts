@@ -48,6 +48,7 @@ import {
   setBookingRulesSchema,
 } from "./customer-schema";
 import { settleRefunds } from "./payments";
+import { changeBookingStatus } from "./status";
 import {
   amountDueOnline,
   canCustomerCancel,
@@ -418,14 +419,14 @@ export async function cancelMyBooking(
     await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(bookings)
-        .set({ status: "cancelled", lateCancel: verdict.late })
+        .set({ lateCancel: verdict.late })
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, booking.status)))
         .returning({ id: bookings.id });
       if (!updated) throw new AppError("CONFLICT", CHANGED_MEANWHILE);
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId,
-        fromStatus: booking.status,
-        toStatus: "cancelled",
+        from: booking.status,
+        to: "cancelled",
         actorId: user.id,
         reason: [verdict.late ? "Late cancellation by customer" : "Cancelled by customer", reason]
           .filter(Boolean)
@@ -580,14 +581,14 @@ export async function sendQuote(input: unknown): Promise<ActionResult<{ expiresA
     await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(bookings)
-        .set({ status: "quoted", quotedPriceCentavos: priceCentavos, expiresAt })
+        .set({ quotedPriceCentavos: priceCentavos, expiresAt })
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, "requested")))
         .returning({ id: bookings.id });
       if (!updated) throw new AppError("CONFLICT", CHANGED_MEANWHILE);
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId,
-        fromStatus: "requested",
-        toStatus: "quoted",
+        from: "requested",
+        to: "quoted",
         actorId: user.id,
         reason: note,
       });
@@ -634,7 +635,6 @@ export async function acceptQuote(
       const [updated] = await tx
         .update(bookings)
         .set({
-          status: "confirmed",
           totalCentavos: booking.quotedPriceCentavos,
           depositCentavos,
           expiresAt: null,
@@ -642,10 +642,10 @@ export async function acceptQuote(
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, "quoted")))
         .returning({ id: bookings.id });
       if (!updated) throw new AppError("CONFLICT", CHANGED_MEANWHILE);
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId,
-        fromStatus: "quoted",
-        toStatus: "confirmed",
+        from: "quoted",
+        to: "confirmed",
         actorId: user.id,
         reason: "Quote accepted by customer",
       });

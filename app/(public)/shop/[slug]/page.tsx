@@ -6,11 +6,13 @@ import { and, eq } from "drizzle-orm";
 import { BadgeCheck, Clock, MapPin, Phone, Star } from "lucide-react";
 
 import { CategoryIcon } from "@/components/shared/category-icon";
+import { ShopRail } from "@/components/shared/shop-card";
 import { PriceTag } from "@/components/shared/price-tag";
 import { Button } from "@/components/ui/button";
 import { ShopViewTracker } from "@/features/analytics/components/shop-view-tracker";
 import { ReviewList } from "@/features/reviews/components/review-list";
 import { getShopReviews, getShopReviewStats } from "@/features/reviews/queries";
+import { getSimilarShops } from "@/features/search/queries";
 import { getPublicShopBySlug } from "@/features/shops/queries";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/authz";
@@ -54,9 +56,10 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
   const { shop, categories, hours, photos, services } = data;
   const user = await getCurrentUser();
 
-  const [stats, reviewsData] = await Promise.all([
+  const [stats, reviewsData, similarShops] = await Promise.all([
     getShopReviewStats(shop.id),
     getShopReviews(shop.id, { limit: 20 }),
+    getSimilarShops(shop.id),
   ]);
 
   // Check if current user is owner/manager to allow replying
@@ -294,6 +297,15 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
           canReply={canReply}
         />
       </div>
+
+      {similarShops.length > 0 && (
+        <section aria-labelledby="similar-heading" className="flex flex-col gap-4">
+          <h2 id="similar-heading" className="font-display text-2xl font-semibold">
+            Similar shops
+          </h2>
+          <ShopRail shops={similarShops} />
+        </section>
+      )}
     </main>
   );
 }

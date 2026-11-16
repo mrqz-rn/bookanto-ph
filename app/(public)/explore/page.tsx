@@ -9,6 +9,7 @@ import { NearbyShops } from "@/features/search/components/nearby-shops";
 import { SearchForm } from "@/features/search/components/search-form";
 import {
   getActiveCities,
+  getCustomerRecommendations,
   getHomeCategories,
   getNewShops,
   getPopularListingLinks,
@@ -37,12 +38,13 @@ export default async function ExplorePage() {
     redirect("/dashboard");
   }
 
-  const [categories, topRated, newShops, listingLinks, cities] = await Promise.all([
+  const [categories, topRated, newShops, listingLinks, cities, personal] = await Promise.all([
     getHomeCategories(),
     getTopRatedShops(),
     getNewShops(),
     getPopularListingLinks(),
     getActiveCities(),
+    getCustomerRecommendations(user.id),
   ]);
   const hasShops = newShops.length > 0;
 
@@ -72,6 +74,12 @@ export default async function ExplorePage() {
 
       {hasShops ? (
         <>
+          {personal.bookAgain.length > 0 && (
+            <ShopSection id="book-again" title="Book again" shops={personal.bookAgain} />
+          )}
+          {personal.forYou.length > 0 && (
+            <ShopSection id="for-you" title="Recommended for you" shops={personal.forYou} />
+          )}
           <NearbyShops cities={cities} />
           {topRated.length > 0 && <ShopSection id="top-rated" title="Top rated" shops={topRated} />}
           <ShopSection id="new-shops" title="New shops" shops={newShops} />

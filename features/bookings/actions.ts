@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 
 import { writeAudit } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
+import { findBookableSlot } from "@/features/availability/queries";
 import { assertCan } from "@/lib/authz";
 import { trackServerEvent } from "@/features/analytics/server-tracker";
 import { CACHE_TAGS } from "@/lib/cache";
@@ -14,6 +15,10 @@ import type { NotificationTemplate } from "@/lib/db/schema/enums";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
 import { sendNotification, type NotificationPayload } from "@/lib/notify";
 
+import { manilaDayRange } from "./customer-queries";
+import { settleRefunds } from "./payments";
+import { canShopAccept, canShopComplete, canShopMarkNoShow } from "./rules";
+import { changeBookingStatus } from "./status";
 import {
   acceptBookingSchema,
   addWalkInSchema,
@@ -101,14 +106,35 @@ export async function acceptBooking(
       assignedStaffId: existing.staffId,
     });
 
-    if (existing.status !== "requested") {
-      throw new AppError(
-        "CONFLICT",
-        `Cannot accept booking with status '${existing.status}'. It must be in 'requested' status.`,
-      );
-    }
+    const now = new Date();
+    const verdict = canShopAccept(existing, now);
+    if (!verdict.allowed) throw new AppError("CONFLICT", verdict.reason);
 
     await db.transaction(async (tx) => {
+      // Re-check the time under the shop lock: hours, closures, capacity and
+      // staff may have changed since the request came in.
+      await tx
+        .select({ id: shops.id })
+        .from(shops)
+        .where(eq(shops.id, existing.shopId))
+        .for("update");
+      if (existing.bookingType !== "queue") {
+        const slot = await findBookableSlot(tx, {
+          serviceId: existing.serviceId,
+          startAt: existing.startAt.toISOString(),
+          staffId: data.staffId ?? existing.staffId,
+          // The request was inside the notice period when made; don't re-apply it.
+          now: new Date(0),
+          ignoreBookingId: existing.id,
+        });
+        if (!slot) {
+          throw new AppError(
+            "CONFLICT",
+            "That time is no longer free (closed, fully booked, or the staff member is away). Decline it or ask the customer to move it.",
+          );
+        }
+      }
+
       // Validate staffId belongs to shop if provided
       if (data.staffId) {
         const [member] = await tx
@@ -134,16 +160,14 @@ export async function acceptBooking(
       await tx
         .update(bookings)
         .set({
-          status: "confirmed",
           staffId: data.staffId ?? existing.staffId,
-          updatedAt: sql`now()`,
         })
         .where(eq(bookings.id, data.bookingId));
 
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId: data.bookingId,
-        fromStatus: "requested",
-        toStatus: "confirmed",
+        from: "requested",
+        to: "confirmed",
         actorId: user.id,
         reason: "Accepted by shop",
       });
@@ -226,18 +250,10 @@ export async function declineBooking(
     }
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(bookings)
-        .set({
-          status: "declined",
-          updatedAt: sql`now()`,
-        })
-        .where(eq(bookings.id, data.bookingId));
-
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId: data.bookingId,
-        fromStatus: "requested",
-        toStatus: "declined",
+        from: "requested",
+        to: "declined",
         actorId: user.id,
         reason: data.reason,
       });
@@ -253,6 +269,9 @@ export async function declineBooking(
         tx,
       );
     });
+
+    // Anything paid online goes back to the customer.
+    if (existing.paidCentavos > 0) await settleRefunds(existing.id);
 
     revalidateTag(CACHE_TAGS.shops);
     revalidatePath("/dashboard");
@@ -302,26 +321,14 @@ export async function completeBooking(
       assignedStaffId: existing.staffId,
     });
 
-    if (existing.status !== "confirmed") {
-      throw new AppError(
-        "CONFLICT",
-        `Cannot complete booking with status '${existing.status}'. Only confirmed bookings can be completed.`,
-      );
-    }
+    const verdict = canShopComplete(existing, new Date());
+    if (!verdict.allowed) throw new AppError("CONFLICT", verdict.reason);
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(bookings)
-        .set({
-          status: "completed",
-          updatedAt: sql`now()`,
-        })
-        .where(eq(bookings.id, data.bookingId));
-
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId: data.bookingId,
-        fromStatus: "confirmed",
-        toStatus: "completed",
+        from: "confirmed",
+        to: "completed",
         actorId: user.id,
         reason: "Completed service",
       });
@@ -394,26 +401,14 @@ export async function markNoShow(
       assignedStaffId: existing.staffId,
     });
 
-    if (existing.status !== "confirmed") {
-      throw new AppError(
-        "CONFLICT",
-        `Cannot mark booking with status '${existing.status}' as no-show.`,
-      );
-    }
+    const verdict = canShopMarkNoShow(existing, new Date());
+    if (!verdict.allowed) throw new AppError("CONFLICT", verdict.reason);
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(bookings)
-        .set({
-          status: "no_show",
-          updatedAt: sql`now()`,
-        })
-        .where(eq(bookings.id, data.bookingId));
-
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId: data.bookingId,
-        fromStatus: "confirmed",
-        toStatus: "no_show",
+        from: "confirmed",
+        to: "no_show",
         actorId: user.id,
         reason: "Customer did not arrive",
       });
@@ -494,18 +489,10 @@ export async function cancelBooking(
     }
 
     await db.transaction(async (tx) => {
-      await tx
-        .update(bookings)
-        .set({
-          status: "cancelled",
-          updatedAt: sql`now()`,
-        })
-        .where(eq(bookings.id, data.bookingId));
-
-      await tx.insert(bookingEvents).values({
+      await changeBookingStatus(tx, {
         bookingId: data.bookingId,
-        fromStatus: existing.status,
-        toStatus: "cancelled",
+        from: existing.status,
+        to: "cancelled",
         actorId: user.id,
         reason: data.reason,
       });
@@ -521,6 +508,9 @@ export async function cancelBooking(
         tx,
       );
     });
+
+    // Anything paid online goes back to the customer.
+    if (existing.paidCentavos > 0) await settleRefunds(existing.id);
 
     revalidateTag(CACHE_TAGS.shops);
     revalidatePath("/dashboard");
@@ -612,6 +602,29 @@ export async function addWalkIn(
     const combinedNotes = `Walk-in: ${guestLabel}${guestPhone}${extraNotes}`;
 
     const newBooking = await db.transaction(async (tx) => {
+      // Queue walk-ins take the next number in today's queue, like online customers.
+      let queueNumber: number | null = null;
+      if (service.bookingType === "queue") {
+        await tx
+          .select({ id: shops.id })
+          .from(shops)
+          .where(eq(shops.id, data.shopId))
+          .for("update");
+        const day = manilaDayRange(startAt);
+        const [last] = await tx
+          .select({ number: sql<number>`coalesce(max(${bookings.queueNumber}), 0)::int` })
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.shopId, data.shopId),
+              eq(bookings.bookingType, "queue"),
+              gte(bookings.startAt, day.start),
+              lt(bookings.startAt, day.end),
+            ),
+          );
+        queueNumber = (last?.number ?? 0) + 1;
+      }
+
       const [created] = await tx
         .insert(bookings)
         .values({
@@ -623,6 +636,8 @@ export async function addWalkIn(
           startAt,
           endAt,
           status: data.status,
+          bookingType: service.bookingType,
+          queueNumber,
           totalCentavos,
           notes: combinedNotes,
         })

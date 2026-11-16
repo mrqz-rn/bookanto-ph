@@ -6,6 +6,7 @@ import { exchangeAuthCode } from "@/lib/auth";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
   const oauthError = searchParams.get("error") ?? searchParams.get("error_code");
   const next = searchParams.get("next");
 
@@ -20,11 +21,14 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     try {
-      await exchangeAuthCode(code);
+      const { next: stateNext } = await exchangeAuthCode(code, state ?? undefined);
+      const resolvedNext = next ?? stateNext;
       // /auth/continue reads the new session and picks the account's home
       // (dashboard for store accounts, marketplace for user accounts).
       const destination = new URL(DEFAULT_AUTH_REDIRECT, origin);
-      if (next && next !== DEFAULT_AUTH_REDIRECT) destination.searchParams.set("next", next);
+      if (resolvedNext && resolvedNext !== DEFAULT_AUTH_REDIRECT) {
+        destination.searchParams.set("next", resolvedNext);
+      }
       return NextResponse.redirect(destination);
     } catch (error) {
       console.error("OAuth / Magic Link callback exchange error:", error);

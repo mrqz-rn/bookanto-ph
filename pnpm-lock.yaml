@@ -31,7 +31,7 @@ importers:
         version: 3.2.0(date-fns@4.4.0)
       drizzle-orm:
         specifier: ^0.45.4
-        version: 0.45.4(postgres@4.1.1)
+        version: 0.45.4(@electric-sql/pglite@0.5.16)(postgres@4.1.1)
       lucide-react:
         specifier: ^1.72.0
         version: 1.72.0(@types/react@19.3.0)(react@19.1.10)
@@ -60,6 +60,12 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.14.0
         version: 4.14.0(playwright-core@1.65.1)
+      '@electric-sql/pglite':
+        specifier: 0.5.16
+        version: 0.5.16
+      '@electric-sql/pglite-postgis':
+        specifier: 0.2.16
+        version: 0.2.16(@electric-sql/pglite@0.5.16)
       '@eslint/eslintrc':
         specifier: ^3.3.7
         version: 3.3.7
@@ -81,6 +87,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      '@types/google.maps':
+        specifier: ^3.66.10
+        version: 3.66.10
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2
@@ -305,6 +314,14 @@ packages:
     engines: {bun: '>=1', deno: '>=2.7.10', node: '>=16'}
     peerDependencies:
       '@noble/ciphers': ^1.0.0
+
+  '@electric-sql/pglite-postgis@0.2.16':
+    resolution: {integrity: sha512-1MiwGtFW8o0Jkwe3SVAbbm4Lqn9uelELktn/SfHMz4NT7a/m3xmFULqNwdfM3xmDHPf+YTq0XC+tELcRSsZq1A==}
+    peerDependencies:
+      '@electric-sql/pglite': 0.5.16
+
+  '@electric-sql/pglite@0.5.16':
+    resolution: {integrity: sha512-Nj8KcIsJL748W408U2N8q4+9IlONdpRIU8MJypIAAINMJ5nqKyqpX7Mgg/5XKkXiAib3AoZGR6hnJFlrlLBrcg==}
 
   '@emnapi/core@2.0.0-beta.2':
     resolution: {integrity: sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A==}
@@ -2171,6 +2188,9 @@ packages:
 
   '@types/estree@1.0.10':
     resolution: {integrity: sha512-lTyOMnOcmRBzdCv6/4zUZCrEhV0xrqQiUZBZtVcbmLHBXKLnN8q89v/wKRF/Q0HbwVsqbIG3o5HDoFl9sduM+g==}
+
+  '@types/google.maps@3.66.10':
+    resolution: {integrity: sha512-LEB9EgUn6w1tbLfHtqXyiJQnugugTXvwimYCQAiMstMv69Hk3LymTugitvXArpWAIP6Uzh47iqZbz4rJ2ln0xQ==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -4983,6 +5003,12 @@ snapshots:
     dependencies:
       '@noble/ciphers': 1.3.0
 
+  '@electric-sql/pglite-postgis@0.2.16(@electric-sql/pglite@0.5.16)':
+    dependencies:
+      '@electric-sql/pglite': 0.5.16
+
+  '@electric-sql/pglite@0.5.16': {}
+
   '@emnapi/core@2.0.0-beta.2':
     dependencies:
       '@emnapi/wasi-threads': 2.2.0
@@ -6550,6 +6576,8 @@ snapshots:
 
   '@types/estree@1.0.10': {}
 
+  '@types/google.maps@3.66.10': {}
+
   '@types/json-schema@7.0.15': {}
 
   '@types/json5@0.0.29': {}
@@ -7108,8 +7136,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.15
 
-  drizzle-orm@0.45.4(postgres@4.1.1):
+  drizzle-orm@0.45.4(@electric-sql/pglite@0.5.16)(postgres@4.1.1):
     optionalDependencies:
+      '@electric-sql/pglite': 0.5.16
       postgres: 4.1.1
 
   dunder-proto@1.0.1:

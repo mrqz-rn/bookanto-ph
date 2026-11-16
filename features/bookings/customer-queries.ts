@@ -424,3 +424,59 @@ export async function findReusableCheckout(
     .limit(1);
   return row?.checkoutUrl ?? null;
 }
+
+export type QueueEntry = {
+  id: string;
+  refCode: string;
+  queueNumber: number;
+  status: BookingStatus;
+  serviceName: string;
+  /** First name, or the walk-in label the shop typed. */
+  name: string;
+  joinedAt: string;
+  isWalkIn: boolean;
+};
+
+/** Today's queue for a shop, in number order: still waiting first, then served. */
+export async function getTodaysQueue(shopId: string, now: Date): Promise<QueueEntry[]> {
+  const day = manilaDayRange(now);
+  const rows = await db
+    .select({
+      id: bookings.id,
+      refCode: bookings.refCode,
+      queueNumber: bookings.queueNumber,
+      status: bookings.status,
+      serviceName: services.name,
+      customerName: users.name,
+      notes: bookings.notes,
+      customerId: bookings.customerId,
+      startAt: bookings.startAt,
+    })
+    .from(bookings)
+    .innerJoin(services, eq(services.id, bookings.serviceId))
+    .leftJoin(users, eq(users.id, bookings.customerId))
+    .where(
+      and(
+        eq(bookings.shopId, shopId),
+        eq(bookings.bookingType, "queue"),
+        gte(bookings.startAt, day.start),
+        lt(bookings.startAt, day.end),
+      ),
+    )
+    .orderBy(asc(bookings.queueNumber));
+
+  return rows
+    .filter((row) => row.queueNumber !== null)
+    .map((row) => ({
+      id: row.id,
+      refCode: row.refCode,
+      queueNumber: row.queueNumber!,
+      status: row.status,
+      serviceName: row.serviceName,
+      name: row.customerId
+        ? row.customerName?.trim().split(/\s+/)[0] || "Customer"
+        : (row.notes?.match(/^Walk-in: ([^·]+)/)?.[1]?.trim() ?? "Walk-in"),
+      joinedAt: row.startAt.toISOString(),
+      isWalkIn: !row.customerId,
+    }));
+}

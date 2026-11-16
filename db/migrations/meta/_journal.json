@@ -50,6 +50,48 @@
       "when": 1794638422698,
       "tag": "0006_inquiries",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794803729834,
+      "tag": "0007_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794803730936,
+      "tag": "0008_admin_announcements_fraud",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794803732043,
+      "tag": "0009_quick_replies",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794803733170,
+      "tag": "0010_analytics_funnel_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794803734297,
+      "tag": "0011_bookings",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794803735385,
+      "tag": "0012_search",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,8 @@ export type ShopCardData = {
   distanceM: number | null;
   lat?: number | null;
   lng?: number | null;
+  /** Set on live (uncached) lists: whether the shop is open right now. */
+  isOpen?: boolean | null;
 };
 
 export function ShopCard({ shop }: { shop: ShopCardData }) {
@@ -50,6 +52,11 @@ export function ShopCard({ shop }: { shop: ShopCardData }) {
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-success">
             <BadgeCheck aria-hidden className="size-3.5" />
             Verified
+          </span>
+        )}
+        {shop.isOpen && (
+          <span className="absolute top-2 right-2 rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-semibold text-navy-900">
+            Open now
           </span>
         )}
       </div>

@@ -37,6 +37,12 @@ const serverEnv = parseEnv(
     // /api/hooks/payments (event checkout_session.payment.paid).
     PAYMONGO_SECRET_KEY: z.string().optional(),
     PAYMONGO_WEBHOOK_SECRET: z.string().optional(),
+    // Google OAuth credentials for direct OAuth callback (shows "continue to BooKanto"
+    // instead of "<project-ref>.supabase.co" on Google's account chooser).
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: z.string().optional(),
+    SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: z.string().optional(),
   }),
   process.env,
 );

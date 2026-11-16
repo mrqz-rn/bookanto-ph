@@ -24,6 +24,39 @@ vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
 
+// The availability re-check and refunds have their own tests.
+vi.mock("@/features/availability/queries", () => ({
+  findBookableSlot: vi.fn().mockResolvedValue({
+    startAt: new Date().toISOString(),
+    endAt: new Date().toISOString(),
+    remaining: 1,
+    staffIds: [],
+  }),
+}));
+vi.mock("@/features/bookings/payments", () => ({
+  settleRefunds: vi.fn().mockResolvedValue({ refunded: [], failed: [] }),
+}));
+
+/**
+ * A stand-in transaction: every builder chain (select, update, insert,
+ * execute for change_booking_status()) resolves to [{ id }].
+ */
+function chainTx(rows: unknown[] = [{ id: "row" }]) {
+  const chain = (): unknown =>
+    new Proxy(
+      {},
+      {
+        get(_, key: string) {
+          if (key === "then") {
+            return (resolve: (value: unknown) => void) => resolve(rows);
+          }
+          return () => chain();
+        },
+      },
+    );
+  return { select: chain, update: chain, insert: chain, delete: chain, execute: chain };
+}
+
 describe("bookings actions", () => {
   const userId = randomUUID();
   const shopId = randomUUID();
@@ -76,6 +109,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "requested",
+                startAt: new Date(Date.now() + 86_400_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -99,6 +136,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "requested",
+                startAt: new Date(Date.now() + 86_400_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -109,16 +150,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -138,6 +170,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "confirmed",
+                startAt: new Date(Date.now() - 3_600_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -163,6 +199,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "requested",
+                startAt: new Date(Date.now() + 86_400_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -173,16 +213,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -204,6 +235,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "confirmed",
+                startAt: new Date(Date.now() - 3_600_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -214,16 +249,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -240,6 +266,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "requested",
+                startAt: new Date(Date.now() + 86_400_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -265,6 +295,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "confirmed",
+                startAt: new Date(Date.now() - 3_600_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -275,16 +309,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -303,6 +328,10 @@ describe("bookings actions", () => {
                 id: bookingId,
                 shopId,
                 status: "confirmed",
+                startAt: new Date(Date.now() - 3_600_000),
+                bookingType: "slot",
+                expiresAt: null,
+                paidCentavos: 0,
                 staffId: null,
               },
             ]),
@@ -313,16 +342,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -358,13 +378,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([mockCreated]),
-            }),
-          }),
-        };
+        const mockTx = chainTx([mockCreated]);
         return callback(mockTx);
       }) as never);
 
@@ -405,13 +419,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -466,16 +474,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -518,6 +517,10 @@ describe("bookings actions", () => {
                     serviceId,
                     customerId,
                     status: "requested",
+                    startAt: new Date(Date.now() + 86_400_000),
+                    bookingType: "slot",
+                    expiresAt: null,
+                    paidCentavos: 0,
                     staffId: null,
                   },
                 ]);
@@ -534,16 +537,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -584,6 +578,10 @@ describe("bookings actions", () => {
                     serviceId,
                     customerId,
                     status: "confirmed",
+                    startAt: new Date(Date.now() - 3_600_000),
+                    bookingType: "slot",
+                    expiresAt: null,
+                    paidCentavos: 0,
                     staffId: null,
                   },
                 ]);
@@ -600,16 +598,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 
@@ -649,6 +638,10 @@ describe("bookings actions", () => {
                     serviceId,
                     customerId,
                     status: "confirmed",
+                    startAt: new Date(Date.now() - 3_600_000),
+                    bookingType: "slot",
+                    expiresAt: null,
+                    paidCentavos: 0,
                     staffId: null,
                   },
                 ]);
@@ -665,16 +658,7 @@ describe("bookings actions", () => {
       vi.spyOn(db, "transaction").mockImplementation((async (
         callback: (t: unknown) => Promise<unknown>,
       ) => {
-        const mockTx = {
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue(undefined),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue(undefined),
-          }),
-        };
+        const mockTx = chainTx();
         return callback(mockTx);
       }) as never);
 

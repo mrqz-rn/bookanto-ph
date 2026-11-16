@@ -8,9 +8,12 @@ import {
   Calendar,
   CalendarClock,
   Clock,
+  FileText,
   Inbox,
+  ListOrdered,
   Scissors,
   Settings,
+  ShieldCheck,
   Star,
   Users,
 } from "lucide-react";
@@ -21,12 +24,15 @@ export const DESKTOP_NAV_ITEMS = [
   { href: "/dashboard", label: "Today", icon: Clock, exact: true },
   { href: "/dashboard/inbox", label: "Inbox", icon: Inbox },
   { href: "/dashboard/calendar", label: "Calendar", icon: Calendar },
+  { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
+  { href: "/dashboard/queue", label: "Queue", icon: ListOrdered },
   { href: "/dashboard/walk-ins", label: "Walk-ins", icon: Scissors },
   { href: "/dashboard/reviews", label: "Reviews", icon: Star },
   { href: "/dashboard/staff", label: "Staff Accounts", icon: Users },
   { href: "/dashboard/reports", label: "Revenue & Stats", icon: BarChart3 },
   { href: "/dashboard/services", label: "Services & Pricing", icon: Scissors },
   { href: "/dashboard/availability", label: "Availability", icon: CalendarClock },
+  { href: "/dashboard/booking-rules", label: "Booking Rules", icon: ShieldCheck },
   { href: "/dashboard/setup", label: "Shop Details", icon: Settings },
 ];
 

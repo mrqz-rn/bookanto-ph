@@ -170,3 +170,67 @@ export function shouldRefund(status: BookingStatus, lateCancel: boolean): boolea
   if (status === "declined" || status === "expired") return true;
   return status === "cancelled" && !lateCancel;
 }
+
+/** The lifecycle: which status may follow which. change_booking_status() enforces the same list. */
+export const TRANSITIONS: Readonly<Record<BookingStatus, readonly BookingStatus[]>> = {
+  requested: ["confirmed", "quoted", "declined", "expired", "cancelled"],
+  quoted: ["confirmed", "expired", "cancelled"],
+  confirmed: ["cancelled", "completed", "no_show"],
+  declined: [],
+  expired: [],
+  cancelled: [],
+  completed: [],
+  no_show: [],
+};
+
+/** A shop can mark a no-show from this long after the start time. */
+export const NO_SHOW_AFTER_MIN = 15;
+
+type ShopSideState = {
+  status: BookingStatus;
+  bookingType: BookingType;
+  startAt: Date;
+  expiresAt: Date | null;
+};
+
+/** Whether the shop can accept a request now. The slot itself is re-checked separately. */
+export function canShopAccept(booking: ShopSideState, now: Date): Verdict {
+  if (booking.status !== "requested") {
+    return { allowed: false, reason: "Only new requests can be accepted." };
+  }
+  if (booking.bookingType === "quote") {
+    return { allowed: false, reason: "Send a quote for this request instead." };
+  }
+  if (booking.expiresAt && booking.expiresAt <= now) {
+    return { allowed: false, reason: "This request has expired." };
+  }
+  if (booking.bookingType !== "queue" && booking.startAt <= now) {
+    return { allowed: false, reason: "The requested time has already passed." };
+  }
+  return { allowed: true, late: false };
+}
+
+/** Completed only once the service has started. */
+export function canShopComplete(booking: ShopSideState, now: Date): Verdict {
+  if (booking.status !== "confirmed") {
+    return { allowed: false, reason: "Only confirmed bookings can be completed." };
+  }
+  if (now < booking.startAt) {
+    return { allowed: false, reason: "You can mark this done once its start time has passed." };
+  }
+  return { allowed: true, late: false };
+}
+
+/** A no-show from 15 minutes after the start time. */
+export function canShopMarkNoShow(booking: ShopSideState, now: Date): Verdict {
+  if (booking.status !== "confirmed") {
+    return { allowed: false, reason: "Only confirmed bookings can be marked as no-show." };
+  }
+  if (now.getTime() < booking.startAt.getTime() + NO_SHOW_AFTER_MIN * 60_000) {
+    return {
+      allowed: false,
+      reason: `You can mark a no-show from ${NO_SHOW_AFTER_MIN} minutes after the start time.`,
+    };
+  }
+  return { allowed: true, late: false };
+}

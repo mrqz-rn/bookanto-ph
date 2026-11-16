@@ -4,7 +4,9 @@ import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 
 import { writeAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { bookingEvents, bookings, notifications, services, shops } from "@/lib/db/schema";
+import { bookings, notifications, services, shops } from "@/lib/db/schema";
+import { settleRefunds } from "@/features/bookings/payments";
+import { changeBookingStatus } from "@/features/bookings/status";
 import { sendNotification } from "@/lib/notify";
 
 export type ExpireBookingsResult = {
@@ -57,22 +59,16 @@ export async function expireStaleBookings(): Promise<ExpireBookingsResult> {
 
   for (const b of staleBookings) {
     await db.transaction(async (tx) => {
-      // Update status to expired
-      await tx
-        .update(bookings)
-        .set({
-          status: "expired",
-          updatedAt: sql`now()`,
-        })
-        .where(eq(bookings.id, b.id));
-
-      // Append booking event
-      await tx.insert(bookingEvents).values({
+      // Through change_booking_status(), which also records the event.
+      await changeBookingStatus(tx, {
         bookingId: b.id,
-        fromStatus: b.status,
-        toStatus: "expired",
-        actorId: null, // System event
-        reason: "Auto-expired: shop response timeout",
+        from: b.status,
+        to: "expired",
+        actorId: null,
+        reason:
+          b.status === "quoted"
+            ? "Auto-expired: quote not accepted in time"
+            : "Auto-expired: shop response timeout",
       });
 
       // Write audit log
@@ -105,6 +101,9 @@ export async function expireStaleBookings(): Promise<ExpireBookingsResult> {
       });
     }
   }
+
+  // Deposits on bookings that never happened go back to the customer.
+  await settleRefunds();
 
   return {
     expiredCount: expiredIds.length,

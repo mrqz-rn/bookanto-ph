@@ -1,301 +1,368 @@
 "use client";
 
-import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { LocateFixed, MapPin, Search, SlidersHorizontal, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BookingType } from "@/lib/db/schema/enums";
+import { coarsen, isInPhilippines } from "@/lib/geo";
 
-import { SEARCH_SORT_OPTIONS, type SearchSortOption } from "../constants";
+import {
+  RATING_FILTERS,
+  SEARCH_RADII_KM,
+  SEARCH_SORT_OPTIONS,
+  type SearchSortOption,
+} from "../constants";
+import { countActiveFilters, EMPTY_SEARCH, searchHrefWith, type SearchState } from "../params";
 
-type CategoryOption = { slug: string; name: string };
-type CityOption = { slug: string; name: string };
-
-type Props = {
-  categories: CategoryOption[];
-  cities: CityOption[];
-  initialValues: {
-    q?: string;
-    category?: string;
-    city?: string;
-    bookingType?: string;
-    priceMax?: number;
-    openNow?: boolean;
-    sort?: SearchSortOption;
-  };
-};
+type Option = { slug: string; name: string };
+type CityOption = Option & { lat: number; lng: number };
 
 const BOOKING_TYPES: Array<{ value: BookingType; label: string }> = [
-  { value: "slot", label: "Fixed Slot" },
-  { value: "home", label: "Home Service" },
-  { value: "quote", label: "Request Quote" },
-  { value: "queue", label: "Walk-in Queue" },
+  { value: "slot", label: "Pick a time" },
+  { value: "home", label: "Home service" },
+  { value: "quote", label: "Ask for a quote" },
+  { value: "queue", label: "Walk-in queue" },
 ];
 
-export function SearchFilters({ categories, cities, initialValues }: Props) {
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-white px-2.5 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
+// The place chosen on /explore ("Popular near you") is saved under this key.
+const PLACE_KEY = "bookanto:place";
+
+/** Pesos typed by the customer to centavos; empty or invalid means no bound. */
+function toCentavos(pesos: string): number | null {
+  const value = Number(pesos);
+  return pesos.trim() !== "" && Number.isFinite(value) && value >= 0
+    ? Math.round(value) * 100
+    : null;
+}
+
+export function SearchFilters({
+  state,
+  categories,
+  cities,
+  nearLabel,
+}: {
+  state: SearchState;
+  categories: Option[];
+  cities: CityOption[];
+  /** "Marikina" or "your location", when the search has a place. */
+  nearLabel: string | null;
+}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const [q, setQ] = React.useState(initialValues.q ?? "");
-  const [category, setCategory] = React.useState(initialValues.category ?? "");
-  const [city, setCity] = React.useState(initialValues.city ?? "");
-  const [bookingType, setBookingType] = React.useState(initialValues.bookingType ?? "");
-  const [priceMax, setPriceMax] = React.useState<string>(
-    initialValues.priceMax ? String(initialValues.priceMax / 100) : "",
+  const [q, setQ] = React.useState(state.q);
+  const [priceMin, setPriceMin] = React.useState(
+    state.priceMin !== null ? String(state.priceMin / 100) : "",
   );
-  const [openNow, setOpenNow] = React.useState(initialValues.openNow ?? false);
-  const [sort, setSort] = React.useState<SearchSortOption>(initialValues.sort ?? "recommended");
+  const [priceMax, setPriceMax] = React.useState(
+    state.priceMax !== null ? String(state.priceMax / 100) : "",
+  );
   const [showFilters, setShowFilters] = React.useState(false);
+  const [locating, setLocating] = React.useState(false);
+  const [locationProblem, setLocationProblem] = React.useState<string | null>(null);
+  const activeFilters = countActiveFilters(state);
 
-  const applyFilters = (override?: Record<string, string | boolean | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
+  const go = (changes: Partial<SearchState>) => router.push(searchHrefWith(state, changes));
 
-    const values = {
-      q: q.trim(),
-      category,
-      city,
-      bookingType,
-      priceMax: priceMax ? String(Number(priceMax) * 100) : "",
-      open_now: openNow ? "true" : "",
-      sort,
-      ...override,
-    };
-
-    if (values.q) params.set("q", String(values.q));
-    else params.delete("q");
-
-    if (values.category) params.set("category", String(values.category));
-    else params.delete("category");
-
-    if (values.city) params.set("city", String(values.city));
-    else params.delete("city");
-
-    if (values.bookingType) params.set("type", String(values.bookingType));
-    else params.delete("type");
-
-    if (values.priceMax) params.set("price_max", String(values.priceMax));
-    else params.delete("price_max");
-
-    if (values.open_now && values.open_now !== "false") params.set("open_now", "true");
-    else params.delete("open_now");
-
-    if (values.sort && values.sort !== "recommended") params.set("sort", String(values.sort));
-    else params.delete("sort");
-
-    router.push(`/search?${params.toString()}`);
-  };
-
-  const resetFilters = () => {
-    setQ("");
-    setCategory("");
-    setCity("");
-    setBookingType("");
-    setPriceMax("");
-    setOpenNow(false);
-    setSort("recommended");
-    router.push("/search");
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    applyFilters();
-  };
-
-  const hasActiveFilters = Boolean(
-    category || city || bookingType || priceMax || openNow || (q && q.trim().length > 0),
-  );
+  function locate() {
+    setLocationProblem(null);
+    if (!("geolocation" in navigator)) {
+      setLocationProblem("This browser can't share your location. Choose a city instead.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLocating(false);
+        const lat = coarsen(coords.latitude);
+        const lng = coarsen(coords.longitude);
+        if (!isInPhilippines(lat, lng)) {
+          setLocationProblem("BooKanto is only in the Philippines for now. Choose a city instead.");
+          return;
+        }
+        try {
+          localStorage.setItem(PLACE_KEY, JSON.stringify({ lat, lng, label: "your location" }));
+        } catch {
+          // Storage turned off: it just won't be remembered.
+        }
+        go({ near: { lat, lng }, sort: "distance" });
+      },
+      (error) => {
+        setLocating(false);
+        setLocationProblem(
+          error.code === error.PERMISSION_DENIED
+            ? "Location is turned off for this site. Choose a city instead."
+            : "We couldn't find your location. Choose a city instead.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 10 * 60_000 },
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      {/* Search Input Bar */}
-      <form onSubmit={handleSubmit} className="flex gap-2">
+    <div className="flex flex-col gap-3">
+      <form
+        role="search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          go({ q: q.trim() });
+        }}
+        className="flex gap-2"
+      >
+        <label htmlFor="search-q" className="sr-only">
+          Search shops and services
+        </label>
         <div className="relative flex-1">
           <Search
-            className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-600"
             aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-slate-600"
           />
           <Input
+            id="search-q"
             type="search"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search shops, services, or locations (e.g. fade, aircon, Marikina)..."
-            className="h-11 pl-9 text-base"
+            onChange={(event) => setQ(event.target.value)}
+            placeholder="Haircut, aircon, Marikina…"
+            enterKeyHint="search"
+            maxLength={100}
+            className="h-11 pl-10"
           />
         </div>
-        <Button type="submit" className="h-11 px-5">
-          Search
-        </Button>
+        <Button type="submit">Search</Button>
         <Button
           type="button"
-          variant={showFilters ? "default" : "outline"}
-          onClick={() => setShowFilters(!showFilters)}
-          className="h-11 px-3 sm:hidden"
+          variant={showFilters ? "secondary" : "outline"}
+          onClick={() => setShowFilters((open) => !open)}
           aria-expanded={showFilters}
-          aria-label="Toggle search filters"
+          aria-controls="search-filter-panel"
+          className="lg:hidden"
         >
-          <SlidersHorizontal className="size-4" />
+          <SlidersHorizontal aria-hidden />
+          <span className="sr-only sm:not-sr-only">Filters</span>
+          {activeFilters > 0 && (
+            <span aria-label={`${activeFilters} active`}>({activeFilters})</span>
+          )}
         </Button>
       </form>
 
-      {/* Quick Filter Pills (Always visible on desktop, collapsible on mobile) */}
-      <div
-        className={`space-y-3 rounded-lg border border-border bg-card p-4 shadow-2xs sm:block ${
-          showFilters ? "block" : "hidden sm:block"
-        }`}
-      >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Category Filter */}
-          <div>
-            <label htmlFor="search-cat" className="mb-1 block text-xs font-semibold text-slate-700">
-              Category
-            </label>
-            <select
-              id="search-cat"
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                applyFilters({ category: e.target.value });
-              }}
-              className="h-10 w-full rounded-md border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <option value="">All Categories</option>
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* City Filter */}
-          <div>
-            <label
-              htmlFor="search-city"
-              className="mb-1 block text-xs font-semibold text-slate-700"
-            >
-              City
-            </label>
-            <select
-              id="search-city"
-              value={city}
-              onChange={(e) => {
-                setCity(e.target.value);
-                applyFilters({ city: e.target.value });
-              }}
-              className="h-10 w-full rounded-md border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <option value="">All Cities</option>
-              {cities.map((ct) => (
-                <option key={ct.slug} value={ct.slug}>
-                  {ct.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Booking Type Filter */}
-          <div>
-            <label
-              htmlFor="search-type"
-              className="mb-1 block text-xs font-semibold text-slate-700"
-            >
-              Booking Type
-            </label>
-            <select
-              id="search-type"
-              value={bookingType}
-              onChange={(e) => {
-                setBookingType(e.target.value);
-                applyFilters({ bookingType: e.target.value });
-              }}
-              className="h-10 w-full rounded-md border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <option value="">Any Type</option>
-              {BOOKING_TYPES.map((bt) => (
-                <option key={bt.value} value={bt.value}>
-                  {bt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Max Price Filter */}
-          <div>
-            <label
-              htmlFor="search-price"
-              className="mb-1 block text-xs font-semibold text-slate-700"
-            >
-              Max Price (₱)
-            </label>
-            <Input
-              id="search-price"
-              type="number"
-              min="0"
-              step="50"
-              placeholder="e.g. 500"
-              value={priceMax}
-              onChange={(e) => setPriceMax(e.target.value)}
-              onBlur={() => applyFilters()}
-              className="h-10 text-sm"
-            />
-          </div>
-
-          {/* Sort Order */}
-          <div>
-            <label
-              htmlFor="search-sort"
-              className="mb-1 block text-xs font-semibold text-slate-700"
-            >
-              Sort By
-            </label>
-            <select
-              id="search-sort"
-              value={sort}
-              onChange={(e) => {
-                const newSort = e.target.value as SearchSortOption;
-                setSort(newSort);
-                applyFilters({ sort: newSort });
-              }}
-              className="h-10 w-full rounded-md border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              {SEARCH_SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Toggles & Reset */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-800">
-            <input
-              type="checkbox"
-              checked={openNow}
-              onChange={(e) => {
-                setOpenNow(e.target.checked);
-                applyFilters({ open_now: e.target.checked });
-              }}
-              className="size-4 rounded border-input text-green-600 focus:ring-green-500"
-            />
-            <span>Open now (Manila time)</span>
-          </label>
-
-          {hasActiveFilters && (
+      <div className="flex flex-wrap items-center gap-2">
+        {state.near ? (
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-full border border-input bg-white px-4 text-sm">
+            <MapPin aria-hidden className="size-4 text-green-700" />
+            Near {nearLabel ?? "you"}
             <button
               type="button"
-              onClick={resetFilters}
-              className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"
+              onClick={() =>
+                go({ near: null, sort: state.sort === "distance" ? "recommended" : state.sort })
+              }
+              className="-mr-2 inline-flex size-9 items-center justify-center rounded-full hover:bg-accent"
+              aria-label="Stop searching near this place"
             >
-              <X className="size-3.5" />
-              Reset all filters
+              <X aria-hidden className="size-4" />
             </button>
+          </span>
+        ) : (
+          <Button type="button" variant="outline" onClick={locate} disabled={locating}>
+            <LocateFixed aria-hidden />
+            {locating ? "Finding you…" : "Near me"}
+          </Button>
+        )}
+        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-input bg-white px-4 text-sm has-[:checked]:border-green-700 has-[:checked]:bg-accent">
+          <input
+            type="checkbox"
+            checked={state.openNow}
+            onChange={(event) => go({ openNow: event.target.checked })}
+            className="size-4 accent-green-700"
+          />
+          Open now
+        </label>
+        {locationProblem && (
+          <p role="alert" className="w-full text-sm text-danger">
+            {locationProblem}
+          </p>
+        )}
+      </div>
+
+      <div
+        id="search-filter-panel"
+        className={`${showFilters ? "grid" : "hidden"} gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid lg:grid-cols-4`}
+      >
+        <Field id="search-category" label="Category">
+          <select
+            id="search-category"
+            value={state.category ?? ""}
+            onChange={(event) => go({ category: event.target.value || null })}
+            className={selectClass}
+          >
+            <option value="">All categories</option>
+            {categories.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field id="search-city" label="City">
+          <select
+            id="search-city"
+            value={state.city ?? ""}
+            onChange={(event) => go({ city: event.target.value || null, barangay: null })}
+            className={selectClass}
+          >
+            <option value="">All cities</option>
+            {cities.map((city) => (
+              <option key={city.slug} value={city.slug}>
+                {city.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field id="search-type" label="How you book">
+          <select
+            id="search-type"
+            value={state.bookingType ?? ""}
+            onChange={(event) =>
+              go({ bookingType: (event.target.value || null) as BookingType | null })
+            }
+            className={selectClass}
+          >
+            <option value="">Any way</option>
+            {BOOKING_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field id="search-sort" label="Sort by">
+          <select
+            id="search-sort"
+            value={state.sort}
+            onChange={(event) => go({ sort: event.target.value as SearchSortOption })}
+            className={selectClass}
+          >
+            {SEARCH_SORT_OPTIONS.filter((option) => option.value !== "distance" || state.near).map(
+              (option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ),
+            )}
+          </select>
+        </Field>
+
+        <Field id="search-rating" label="Rating">
+          <select
+            id="search-rating"
+            value={state.minRating ?? ""}
+            onChange={(event) =>
+              go({ minRating: event.target.value ? Number(event.target.value) : null })
+            }
+            className={selectClass}
+          >
+            <option value="">Any rating</option>
+            {RATING_FILTERS.map((rating) => (
+              <option key={rating} value={rating}>
+                {rating}+ stars
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {state.near && (
+          <Field id="search-radius" label="Distance">
+            <select
+              id="search-radius"
+              value={state.radiusKm}
+              onChange={(event) => go({ radiusKm: Number(event.target.value) })}
+              className={selectClass}
+            >
+              {SEARCH_RADII_KM.map((km) => (
+                <option key={km} value={km}>
+                  Within {km} km
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <form
+          className="flex flex-col gap-1.5 sm:col-span-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            go({ priceMin: toCentavos(priceMin), priceMax: toCentavos(priceMax) });
+          }}
+        >
+          <span className="text-sm font-semibold" id="search-price-label">
+            Starting price (₱)
+          </span>
+          <div className="flex gap-2">
+            <Input
+              aria-label="Minimum price in pesos"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={50}
+              placeholder="Min"
+              value={priceMin}
+              onChange={(event) => setPriceMin(event.target.value)}
+            />
+            <Input
+              aria-label="Maximum price in pesos"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={50}
+              placeholder="Max"
+              value={priceMax}
+              onChange={(event) => setPriceMax(event.target.value)}
+            />
+            <Button type="submit" variant="outline">
+              Apply
+            </Button>
+          </div>
+        </form>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2 lg:col-span-4">
+          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={state.verified}
+              onChange={(event) => go({ verified: event.target.checked })}
+              className="size-4 accent-green-700"
+            />
+            Verified shops only
+          </label>
+          {(activeFilters > 0 || state.q) && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => router.push(searchHrefWith(EMPTY_SEARCH, {}))}
+            >
+              <X aria-hidden />
+              Clear all
+            </Button>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { AuthError } from "@supabase/supabase-js";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { cache } from "react";
@@ -25,6 +26,7 @@ import {
   users,
   type User,
 } from "@/lib/db/schema";
+import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { normalizePhone } from "@/lib/phone";
 import { publicEnv } from "@/lib/public-env";
@@ -257,6 +259,7 @@ function isAllowedRedirectOrigin(origin: string): boolean {
     const parsed = new URL(origin);
     const siteUrl = new URL(publicEnv.NEXT_PUBLIC_SITE_URL);
     if (parsed.origin === siteUrl.origin) return true;
+    if (parsed.origin === "https://bookanto-ph.vercel.app") return true;
     if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") return true;
     return false;
   } catch {
@@ -329,6 +332,80 @@ async function assertOAuthProviderEnabled(provider: OAuthProvider): Promise<void
   }
 }
 
+const GOOGLE_OAUTH_STATE_PREFIX = "g1.";
+const GOOGLE_OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
+
+type GoogleOAuthStatePayload = {
+  /** Raw unhashed nonce; SHA-256 hex is sent to Google and raw is passed to signInWithIdToken. */
+  n: string;
+  /** Post-login relative redirect target. */
+  next: string;
+  /** Exact redirect_uri sent to Google's authorization endpoint. */
+  u: string;
+  /** Creation timestamp in ms. */
+  t: number;
+};
+
+function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } | null {
+  const clientId = (env.GOOGLE_CLIENT_ID || env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)?.trim();
+  const clientSecret = (
+    env.GOOGLE_CLIENT_SECRET || env.SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET
+  )?.trim();
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+function createGoogleOAuthState(payload: GoogleOAuthStatePayload, clientSecret: string): string {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", clientSecret).update(encodedPayload).digest("base64url");
+  return `${GOOGLE_OAUTH_STATE_PREFIX}${encodedPayload}.${signature}`;
+}
+
+function verifyGoogleOAuthState(state: string, clientSecret: string): GoogleOAuthStatePayload {
+  if (!state.startsWith(GOOGLE_OAUTH_STATE_PREFIX)) {
+    throw new AppError("UNAUTHENTICATED", "Invalid OAuth state.");
+  }
+
+  const remainder = state.slice(GOOGLE_OAUTH_STATE_PREFIX.length);
+  const dotIndex = remainder.indexOf(".");
+  if (dotIndex <= 0) {
+    throw new AppError("UNAUTHENTICATED", "Malformed OAuth state.");
+  }
+
+  const encodedPayload = remainder.slice(0, dotIndex);
+  const signature = remainder.slice(dotIndex + 1);
+  const expectedSignature = createHmac("sha256", clientSecret)
+    .update(encodedPayload)
+    .digest("base64url");
+
+  const sigBuffer = Buffer.from(signature, "utf8");
+  const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+  if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
+    throw new AppError("UNAUTHENTICATED", "Invalid OAuth state signature.");
+  }
+
+  let parsed: GoogleOAuthStatePayload;
+  try {
+    parsed = JSON.parse(
+      Buffer.from(encodedPayload, "base64url").toString("utf8"),
+    ) as GoogleOAuthStatePayload;
+  } catch {
+    throw new AppError("UNAUTHENTICATED", "Invalid OAuth state payload.");
+  }
+
+  if (
+    typeof parsed.n !== "string" ||
+    typeof parsed.next !== "string" ||
+    typeof parsed.u !== "string" ||
+    typeof parsed.t !== "number" ||
+    Date.now() - parsed.t > GOOGLE_OAUTH_STATE_MAX_AGE_MS
+  ) {
+    throw new AppError("UNAUTHENTICATED", "Expired or invalid OAuth state.");
+  }
+
+  return parsed;
+}
+
 /** Generates the OAuth authorization URL for Google or Facebook sign-in. */
 export async function getOAuthSignInUrl(
   provider: OAuthProvider,
@@ -337,9 +414,42 @@ export async function getOAuthSignInUrl(
 ): Promise<string> {
   await assertOAuthProviderEnabled(provider);
 
-  const supabase = await createSupabaseServerClient();
   const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : DEFAULT_AUTH_REDIRECT;
   const baseUrl = await resolveAuthBaseUrl(origin);
+
+  // When Google OAuth credentials are configured on the server, redirect directly
+  // to Google with our own /auth/callback URI so Google displays "continue to BooKanto"
+  // instead of "<project-ref>.supabase.co".
+  if (provider === "google") {
+    const googleCreds = getGoogleOAuthCredentials();
+    if (googleCreds) {
+      const redirectUri = `${baseUrl}/auth/callback`;
+      const rawNonce = randomBytes(16).toString("hex");
+      const hashedNonce = createHash("sha256").update(rawNonce).digest("hex");
+      const state = createGoogleOAuthState(
+        {
+          n: rawNonce,
+          next: safeNext,
+          u: redirectUri,
+          t: Date.now(),
+        },
+        googleCreds.clientSecret,
+      );
+
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", googleCreds.clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", "openid email profile");
+      authUrl.searchParams.set("access_type", "offline");
+      authUrl.searchParams.set("prompt", "select_account");
+      authUrl.searchParams.set("state", state);
+      authUrl.searchParams.set("nonce", hashedNonce);
+      return authUrl.toString();
+    }
+  }
+
+  const supabase = await createSupabaseServerClient();
   const redirectTo = `${baseUrl}/auth/callback?next=${encodeURIComponent(safeNext)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -363,8 +473,79 @@ export async function getOAuthSignInUrl(
 }
 
 /** Exchanges an OAuth or magic link code for a verified Supabase session. */
-export async function exchangeAuthCode(code: string): Promise<{ authId: string }> {
+export async function exchangeAuthCode(
+  code: string,
+  state?: string,
+): Promise<{ authId: string; next?: string }> {
   const supabase = await createSupabaseServerClient();
+
+  if (state?.startsWith(GOOGLE_OAUTH_STATE_PREFIX)) {
+    const googleCreds = getGoogleOAuthCredentials();
+    if (!googleCreds) {
+      throw new AppError("INTERNAL", "Google OAuth credentials are not configured.");
+    }
+
+    const verifiedState = verifyGoogleOAuthState(state, googleCreds.clientSecret);
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: googleCreds.clientId,
+        client_secret: googleCreds.clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: verifiedState.u,
+      }),
+      cache: "no-store",
+    });
+
+    const tokenData = (await tokenResponse.json()) as {
+      id_token?: string;
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
+
+    if (!tokenResponse.ok || !tokenData.id_token) {
+      throw new AppError(
+        "UNAUTHENTICATED",
+        tokenData.error_description || "Unable to verify Google account. Please try again.",
+      );
+    }
+
+    let { data, error } = await supabase.auth.signInWithIdToken({
+      provider: "google",
+      token: tokenData.id_token,
+      nonce: verifiedState.n,
+      ...(tokenData.access_token ? { access_token: tokenData.access_token } : {}),
+    });
+
+    if (error && error.message.toLowerCase().includes("nonce")) {
+      ({ data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: tokenData.id_token,
+        ...(tokenData.access_token ? { access_token: tokenData.access_token } : {}),
+      }));
+    }
+
+    if (error) throw toAppError(error);
+    if (!data.user) throw new AppError("INTERNAL");
+
+    const metadata = data.user.user_metadata as Record<string, unknown> | undefined;
+    const metaName = (metadata?.full_name ?? metadata?.name ?? metadata?.user_name) as
+      string | undefined;
+    await syncAuthUser({
+      authId: data.user.id,
+      email: data.user.email ?? null,
+      phone: data.user.phone ?? null,
+      name: metaName ?? null,
+    });
+
+    return { authId: data.user.id, next: verifiedState.next };
+  }
+
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) throw toAppError(error);
   if (!data.user) throw new AppError("INTERNAL");

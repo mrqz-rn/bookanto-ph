@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { settleRefunds } from "@/features/bookings/payments";
 
 import * as auditModule from "@/lib/audit";
 import { db } from "@/lib/db";
 import { expireStaleBookings, runAllScheduledJobs, sendBookingReminders } from "@/lib/jobs";
 import * as notifyModule from "@/lib/notify";
 
+vi.mock("@/features/bookings/payments", () => ({
+  settleRefunds: vi.fn().mockResolvedValue({ refunded: [], failed: [] }),
+}));
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn().mockResolvedValue(undefined),
 }));
@@ -59,16 +63,8 @@ describe("Background Scheduled Jobs", () => {
         }),
       } as never);
 
-      const mockTx = {
-        update: vi.fn().mockReturnValue({
-          set: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue(undefined),
-          }),
-        }),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockResolvedValue(undefined),
-        }),
-      };
+      // The status moves through change_booking_status(), which also records the event.
+      const mockTx = { execute: vi.fn().mockResolvedValue(undefined) };
 
       vi.spyOn(db, "transaction").mockImplementation((async (
         cb: (tx: typeof mockTx) => Promise<unknown>,
@@ -86,8 +82,8 @@ describe("Background Scheduled Jobs", () => {
       expect(result.expiredCount).toBe(1);
       expect(result.bookingIds).toContain(bookingId);
 
-      expect(mockTx.update).toHaveBeenCalled();
-      expect(mockTx.insert).toHaveBeenCalled();
+      expect(mockTx.execute).toHaveBeenCalledTimes(1);
+      expect(settleRefunds).toHaveBeenCalled();
       expect(auditModule.writeAudit).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "booking.auto_expired",

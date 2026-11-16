@@ -1,6 +1,6 @@
 # dependencies
 /node_modules
-
+/.claude
 # testing
 /coverage
 /test-results/
