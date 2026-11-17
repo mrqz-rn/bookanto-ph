@@ -25,6 +25,32 @@ export const PILOT_LAUNCH = "March 8, 2027";
 export const PILOT_MONTHS = 8;
 export const PILOT_DECISION = { date: "Jul 15, 2027", month: "July 2027" };
 
+/** The main action, worded the same in the header, the hero and the close. */
+export const MAIN_ACTION = "Join the pilot";
+
+/** Header words. Features opens the panel below; every word lands on a section. */
+export const NAV = [
+  { href: "#inbox", label: "Features" },
+  { href: "#pricing", label: "Pricing" },
+  { href: "#mobile", label: "App" },
+  { href: "#faq", label: "FAQ" },
+  { href: "#investors", label: "Investors" },
+];
+
+export const FEATURE_LINKS = [
+  {
+    href: "#problems",
+    title: "What it fixes",
+    body: "Lost requests, no-shows and shops nobody can find online.",
+  },
+  {
+    href: "#features",
+    title: "Reminders, chat and Google",
+    body: "SMS reminders, booking chat, breaks and walk-ins, and a shop page on Google.",
+  },
+  { href: "#modes", title: "Booking types", body: "Time slots, home service, quotes and queues." },
+];
+
 /**
  * Direct contact details shown beside the form. Leave a value empty to hide it.
  * phone is E.164 (+639…); messengerUrl is a link such as https://m.me/yourpage.
@@ -189,16 +215,16 @@ export const PLANS: Array<{
   },
   {
     name: "Basic listing",
-    price: "₱0",
-    period: "after the pilot, too",
-    description: "Your place on BooKanto stays free.",
+    price: "Soon",
+    period: "after the pilot",
+    description: "Your place on BooKanto.",
     points: ["Your shop page", "Listing in search, category and city pages", "Customer reviews"],
   },
   {
     name: "Pro",
     price: "Soon",
     period: "after the pilot",
-    description: "Optional tools for growing shops. Price to be announced.",
+    description: "Optional tools for growing shops, priced after the pilot.",
     points: ["Staff accounts", "Reports", "Featured spots in search", "Founding partner discount"],
   },
 ];
@@ -220,7 +246,7 @@ export const MOBILE_PLATFORM = {
   eyebrow: "Mobile Platform",
   title: "Mobile platform coming soon for Play Store and App store",
   intro:
-    "We're building dedicated mobile apps for Android and iOS. While BooKanto works seamlessly right now in any phone browser, dedicated Play Store and App Store apps are on the way for instant alerts and effortless booking on the go.",
+    "We're building dedicated mobile apps for Android and iOS. While BooKanto works right now in any phone browser, dedicated Play Store and App Store apps are on the way for instant alerts and booking on the go.",
   stores: [
     {
       store: "play" as const,
@@ -238,14 +264,17 @@ export const MOBILE_PLATFORM = {
   highlights: [
     {
       title: "Instant push notifications",
+      summary: "Booking alerts even when your phone is locked.",
       body: "Receive alerts immediately for booking requests, confirmations, and customer reminders even when your phone is locked.",
     },
     {
       title: "One-tap appointment management",
+      summary: "Accept, reschedule or block time off from your phone.",
       body: "Accept walk-ins, reschedule visits, or block time off directly from your phone in seconds.",
     },
     {
       title: "Optimized for Philippine networks",
+      summary: "Small downloads, fast on budget phones and mobile data.",
       body: "Lightweight download sizes, smooth offline calendar viewing, and fast operation on budget phones and mobile data.",
     },
   ],
@@ -265,7 +294,7 @@ export const FAQS: Array<{ question: string; answer: string }> = [
   {
     question: "Do my customers need to download an app?",
     answer:
-      "Not right now. BooKanto works in any phone browser. Customers who use it often can add it to their home screen like an app. Dedicated mobile apps for Google Play Store and Apple App Store are also coming soon!",
+      "Not right now. BooKanto works in any phone browser. Customers who use it often can add it to their home screen like an app. Dedicated mobile apps for Google Play Store and Apple App Store are also coming soon.",
   },
   {
     question: "When will the mobile apps for Play Store and App Store be released?",
@@ -296,3 +325,8 @@ export const FAQS: Array<{ question: string; answer: string }> = [
       "We follow the Data Privacy Act (RA 10173). A customer's phone number and exact address are shown to a shop only after it accepts the booking, and chat happens inside the app.",
   },
 ];
+
+/** The questions the landing page shows. The apps' release is answered in the mobile section. */
+export const LANDING_FAQS = FAQS.filter(
+  ({ question }) => !question.startsWith("When will the mobile apps"),
+);

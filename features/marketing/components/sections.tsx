@@ -1,148 +1,289 @@
-import {
-  ArrowRight,
-  Bell,
-  Check,
-  ChevronDown,
-  Mail,
-  MessageCircle,
-  Phone,
-  Smartphone,
-  X,
-  Zap,
-} from "lucide-react";
-import Link from "next/link";
+import { ArrowRight, Mail, MessageCircle, Phone } from "lucide-react";
+import { Fragment, type CSSProperties } from "react";
 
-import { Button } from "@/components/ui/button";
 import { formatPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 import {
   BOOKING_TYPES,
   CONTACT,
-  FAQS,
-  FEATURES,
+  LANDING_FAQS,
+  MAIN_ACTION,
   MILESTONES,
   MOBILE_PLATFORM,
   PILOT_DECISION,
   PILOT_GOALS,
   PILOT_LAUNCH,
-  PILOT_MONTHS,
   PLANS,
   PROBLEMS,
   STEPS,
 } from "../content";
-import { BookingPreview } from "./booking-preview";
 import { ContactForm } from "./contact-form";
-import { MobilePreview } from "./mobile-preview";
+import {
+  BookingChat,
+  CustomerBookingPhone,
+  DaySchedule,
+  GoogleResult,
+  InboxWindow,
+  LockScreenPhone,
+  PhoneInbox,
+  SmsStack,
+} from "./mocks";
+import { PauseButton } from "./pause-button";
 import { AppleIcon, GooglePlayIcon } from "./store-icons";
 
-// Sections link to each other by id (#features, #pricing, …); scroll-mt keeps
-// headings clear of the sticky header.
-const section = "scroll-mt-20";
+// The business landing page. Section order: hero, problems (the scroll
+// moment), the inbox (the product, big), features, booking types, pricing,
+// the coming apps (the navy band), FAQ, investors, contact. The close and the
+// directory are the footer (marketing-footer.tsx).
 
-function SectionHeading({
-  id,
-  eyebrow,
-  title,
-  intro,
-  invert,
-}: {
-  id: string;
-  eyebrow: string;
-  title: string;
-  intro?: string;
-  invert?: boolean;
-}) {
+type Vars = CSSProperties & Record<`--${string}`, string | number>;
+
+export function Hero() {
+  const lines = ["Online booking", "for the shops", "sa kanto mo"];
+  const facts = [
+    ["₱0", "fees during the pilot"],
+    ["0%", "commission on bookings"],
+    ["24/7", "online booking"],
+    ["Any phone", "no app to download"],
+  ];
+
   return (
-    <div className="flex max-w-2xl flex-col gap-3">
-      <p
-        className={cn(
-          "text-sm font-semibold tracking-wide uppercase",
-          invert ? "text-yellow-400" : "text-green-700",
-        )}
-      >
-        {eyebrow}
-      </p>
-      <h2 id={id} className="font-display text-3xl font-bold sm:text-4xl">
-        {title}
-      </h2>
-      {intro && (
-        <p className={cn("text-lg", invert ? "text-white/85" : "text-slate-600")}>{intro}</p>
-      )}
-    </div>
+    <section
+      aria-labelledby="hero-heading"
+      className="mk-hero mk-enter hero hero--split"
+      data-enter
+    >
+      <div className="mk-wrap wrap">
+        <div className="hero-text mk-hero__grid">
+          <div className="flex flex-col lg:col-span-5">
+            <p className="mk-label mk-enter-up mb-4" style={{ "--i": 0 } as Vars}>
+              Public pilot opens {PILOT_LAUNCH}
+            </p>
+            <h1 id="hero-heading" className="mk-hero__h1">
+              {lines.map((line, index) => (
+                <span key={line} className="mk-line">
+                  <span
+                    className={index === 2 ? "text-green-600" : undefined}
+                    style={{ "--i": index } as Vars}
+                  >
+                    {line}
+                  </span>
+                </span>
+              ))}
+            </h1>
+            <p className="mk-hero__lead hero__lead mk-enter-up mt-6" style={{ "--i": 1 } as Vars}>
+              Barbershops, salons, aircon technicians and other local services take bookings day and
+              night, send SMS reminders and log walk-ins from one phone.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <a
+                href="#contact"
+                className="mk-btn btn btn--primary mk-btn--primary mk-enter-up"
+                style={{ "--i": 2 } as Vars}
+              >
+                {MAIN_ACTION}
+                <ArrowRight aria-hidden className="mk-arrow size-5" />
+              </a>
+              <a
+                href="#inbox"
+                className="mk-btn btn btn--secondary mk-btn--tonal mk-enter-up"
+                style={{ "--i": 3 } as Vars}
+              >
+                See the booking inbox
+              </a>
+            </div>
+            <dl
+              className="mk-enter-up mt-auto hidden grid-cols-2 gap-x-6 gap-y-5 border-t border-[var(--line)] pt-6 xl:grid"
+              style={{ "--i": 4 } as Vars}
+            >
+              {facts.map(([value, label]) => (
+                <div key={label} className="flex flex-col">
+                  <dt className="order-last text-[15px] text-[var(--ink-2)]">{label}</dt>
+                  <dd className="font-display text-[26px] leading-tight font-bold">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div
+            data-visual
+            className="mk-hero__visual hero__media mk-enter-media lg:col-span-6 lg:col-start-7"
+          >
+            <div className="mk-fade-b absolute inset-0">
+              <PhoneInbox className="top-8 left-1/2 h-[calc(100%+24px)] -translate-x-1/2 lg:top-12 lg:right-14 lg:left-auto lg:translate-x-0" />
+            </div>
+            <div className="mk-float hidden lg:flex" aria-hidden>
+              <span className="mk-dot" />
+              <span className="mk-ui">
+                <span className="block font-semibold">SMS sent to Maria Santos</span>
+                <span className="block text-[var(--ink-2)]">Confirmed for today, 2:30 PM</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
-export function Hero() {
+/** Spread each letter a little, the same way on every render. */
+function scatter(index: number) {
+  const noise = (salt: number) => {
+    const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  return {
+    "--i": index,
+    "--dx": `${((noise(1) - 0.5) * 1.8).toFixed(2)}em`,
+    "--dy": `${((noise(2) - 0.15) * 1.6).toFixed(2)}em`,
+    "--r": `${Math.round((noise(3) - 0.5) * 70)}deg`,
+  } as Vars;
+}
+
+function AssembledLines({ lines }: { lines: string[] }) {
+  let index = 0;
   return (
-    <section className="grid items-center gap-12 pt-10 sm:pt-16 lg:grid-cols-[1.1fr_1fr]">
-      <div className="flex flex-col gap-6">
-        <p className="w-fit rounded-full bg-yellow-400 px-3 py-1 text-sm font-semibold text-navy-900">
-          Free during the pilot · Opens {PILOT_LAUNCH.replace("March", "Mar")}
-        </p>
-        <h1 className="font-display text-4xl leading-tight font-bold sm:text-6xl">
-          Online booking for shops <span className="text-green-600">sa kanto mo</span>
-        </h1>
-        <p className="max-w-xl text-lg text-slate-600">
-          BooKanto helps barbershops, salons, aircon technicians, auto shops and other local
-          services get found on Google, take bookings day and night, and run walk-ins and reminders
-          from one phone.
-        </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <a href="#contact">
-              List your shop for free
-              <ArrowRight aria-hidden />
-            </a>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <a href="#investors">For investors</a>
-          </Button>
-        </div>
-        <dl className="grid grid-cols-2 gap-4 border-t pt-6 sm:grid-cols-4">
-          {[
-            ["₱0", "fees during the pilot"],
-            ["0%", "commission on bookings"],
-            ["24/7", "online booking"],
-            ["Any phone", "no app to download"],
-          ].map(([value, label]) => (
-            <div key={label} className="flex flex-col">
-              <dt className="order-last text-sm text-slate-600">{label}</dt>
-              <dd className="font-display text-xl font-bold whitespace-nowrap sm:text-2xl">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-      <BookingPreview />
-    </section>
+    <>
+      <span className="sr-only">{lines.join(" ")}</span>
+      <span aria-hidden>
+        {lines.map((line) => (
+          <span key={line} className="block">
+            {line.split(" ").map((word, w) => (
+              <Fragment key={word}>
+                {w > 0 && " "}
+                <span className="mk-word">
+                  {[...word].map((letter) => {
+                    const i = index++;
+                    return (
+                      <span key={i} className="mk-letter" style={scatter(i)}>
+                        {letter}
+                      </span>
+                    );
+                  })}
+                </span>
+              </Fragment>
+            ))}
+          </span>
+        ))}
+      </span>
+    </>
   );
 }
 
 export function Problems() {
+  const fixes = [
+    "One inbox and one-tap accept",
+    "SMS reminders and a no-show record",
+    "A free shop page made for Google",
+  ];
   return (
-    <section aria-labelledby="problems-heading" className={cn(section, "flex flex-col gap-8")}>
-      <SectionHeading
-        id="problems-heading"
-        eyebrow="Sounds familiar?"
-        title="Common shop problems, solved"
-      />
-      <ul className="grid gap-4 md:grid-cols-3">
-        {PROBLEMS.map(({ problem, solution }) => (
-          <li key={problem} className="flex flex-col gap-4 rounded-xl border bg-white p-5">
-            <p className="flex gap-2 font-semibold text-slate-600">
-              <X aria-hidden className="mt-0.5 size-5 shrink-0 text-danger" />
-              {problem}
-            </p>
-            <p className="flex gap-2">
-              <Check aria-hidden className="mt-0.5 size-5 shrink-0 text-green-700" />
-              {solution}
-            </p>
-          </li>
-        ))}
-      </ul>
+    <section
+      id="problems"
+      aria-labelledby="problems-heading"
+      className="mk-section mk-statement-section statement"
+      data-moment="word-highlight"
+      data-statement
+    >
+      <div className="mk-wrap wrap grid grid-cols-12 items-center gap-x-6">
+        <div className="col-span-12 lg:col-span-6">
+          <h2 id="problems-heading" className="mk-h2">
+            Common booking problems shops face: lost messages and no-shows
+          </h2>
+          <p className="mk-intro mo-wh__text mt-4">
+            Most neighborhood shops manage customer bookings across Facebook Messenger, SMS and
+            paper notebooks. <strong>Messages get buried</strong>, walk-ins double-book the chair,
+            and no-shows waste hours every single week.
+          </p>
+          <ul className="mt-8">
+            {PROBLEMS.map(({ problem }, index) => (
+              <li
+                key={problem}
+                className="grid grid-cols-12 gap-x-4 border-b border-[var(--line)] py-3 text-[16px]"
+              >
+                <p className="col-span-6 font-semibold">{problem}</p>
+                <p className="col-span-6 text-green-800">{fixes[index]}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div
+          data-visual
+          className="mk-frame frame col-span-12 mt-8 p-4 sm:p-6 lg:col-span-6 lg:mt-0"
+        >
+          <SmsStack />
+        </div>
+      </div>
     </section>
+  );
+}
+
+export function Inbox() {
+  return (
+    <section id="inbox" aria-labelledby="inbox-heading" className="mk-section">
+      <div className="mk-wrap wrap flex flex-col">
+        <h2 id="inbox-heading" className="mk-h2">
+          Booking inbox: day and night appointment manager
+        </h2>
+        <p className="mk-intro">
+          See the whole day at a glance. Accept, decline or suggest another time in one tap, and
+          BooKanto texts the customer for you.
+        </p>
+        <div
+          data-visual
+          className="mk-frame frame mt-10 h-[400px] p-3 sm:h-[clamp(440px,calc(100svh-372px),540px)] sm:p-6 lg:mt-12 lg:p-8"
+        >
+          <InboxWindow />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const FEATURE_CARDS = [
+  {
+    title: "Texts customers for you",
+    body: "An SMS when you confirm and a reminder before the visit. Requests with no answer expire after 2 hours.",
+    picture: <SmsStack />,
+    loop: true,
+  },
+  {
+    title: "Keeps chat in the booking",
+    body: "Sort out landmarks, gate passes and photos in the booking thread, without giving out your number.",
+    picture: <BookingChat />,
+    loop: false,
+  },
+  {
+    title: "Blocks breaks and logs walk-ins",
+    body: "Block lunch or a day off and add walk-ins, so no time slot gets booked twice.",
+    picture: <DaySchedule />,
+    loop: false,
+  },
+  {
+    title: "Puts your shop on Google",
+    body: "Your free shop page is built to show up for searches like “barbershop Marikina”.",
+    picture: <GoogleResult />,
+    loop: false,
+  },
+];
+
+function FeatureCard({ card }: { card: (typeof FEATURE_CARDS)[number] }) {
+  return (
+    <article
+      className={cn(
+        "mk-card card col-span-12 h-[320px] sm:h-[390px] lg:col-span-6 lg:h-[var(--card-h)]",
+        card.loop && "mk-loop",
+      )}
+    >
+      <div className="mk-card__text">
+        <h3 className="mk-h3">{card.title}</h3>
+        <p className="mk-body mt-2 max-w-[46ch]">{card.body}</p>
+      </div>
+      <div className="mk-card__panel panel" data-visual>
+        {card.picture}
+        {card.loop && <PauseButton />}
+      </div>
+    </article>
   );
 }
 
@@ -151,177 +292,68 @@ export function Features() {
     <section
       id="features"
       aria-labelledby="features-heading"
-      className={cn(section, "flex flex-col gap-8")}
+      className="mk-section mk-ground-surface"
+      style={{ "--h": 2 } as Vars}
     >
-      <SectionHeading
-        id="features-heading"
-        eyebrow="Features"
-        title="Everything you need to run bookings"
-        intro="A complete toolkit for Philippine neighborhood shops, from a one-chair barbershop to a busy car wash."
-      />
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map(({ icon: Icon, title, body, soon }) => (
-          <li key={title} className="flex gap-4 rounded-xl border bg-white p-5">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-accent">
-              <Icon aria-hidden className="size-5 text-green-700" />
-            </span>
-            <div className="flex flex-col gap-1">
-              <h3 className="flex flex-wrap items-center gap-2 font-semibold">
-                {title}
-                {soon && <SoonBadge />}
-              </h3>
-              <p className="text-sm text-slate-600">{body}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function SoonBadge() {
-  return (
-    <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-semibold text-navy-900">
-      Soon
-    </span>
-  );
-}
-
-export function BookingTypes() {
-  return (
-    <section aria-labelledby="booking-types-heading" className={cn(section, "flex flex-col gap-8")}>
-      <SectionHeading
-        id="booking-types-heading"
-        eyebrow="One system, four ways to book"
-        title="Built for every kind of local service"
-        intro="Each service picks the booking style that fits how the shop really works."
-      />
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {BOOKING_TYPES.map(({ name, tagline, examples, soon }) => (
-          <li key={name} className="flex flex-col gap-2 rounded-xl border bg-white p-5">
-            <p className="flex items-center gap-2 font-display text-xl font-bold">
-              {name}
-              {soon && <SoonBadge />}
-            </p>
-            <p className="font-semibold">{tagline}</p>
-            <p className="text-sm text-slate-600">{examples}</p>
-          </li>
-        ))}
-      </ul>
-      <p className="text-sm text-slate-600">
-        “Soon” means coming during the pilot, at no cost to pilot shops.
-      </p>
-    </section>
-  );
-}
-
-export function HowItWorks() {
-  return (
-    <section aria-labelledby="how-heading" className={cn(section, "flex flex-col gap-8")}>
-      <SectionHeading id="how-heading" eyebrow="How it works" title="Live in four steps" />
-      <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STEPS.map(({ title, body }, index) => (
-          <li key={title} className="flex flex-col gap-3 rounded-xl border bg-white p-5">
-            <span className="flex size-10 items-center justify-center rounded-full bg-navy-900 font-display text-lg font-bold text-white">
-              {index + 1}
-            </span>
-            <h3 className="font-semibold">{title}</h3>
-            <p className="text-sm text-slate-600">{body}</p>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function StoreBadge({
-  subtitle,
-  title,
-  icon: Icon,
-}: {
-  subtitle: string;
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs sm:min-w-64">
-      <div className="flex items-center gap-3">
-        <Icon className="size-8 shrink-0 text-navy-900" />
-        <div className="flex flex-col text-left leading-tight">
-          <span className="text-[11px] font-medium tracking-wider text-slate-600 uppercase">
-            {subtitle}
-          </span>
-          <span className="font-display text-base font-bold text-navy-900">{title}</span>
-        </div>
-      </div>
-      <span className="rounded-full bg-yellow-400 px-2.5 py-0.5 text-xs font-semibold text-navy-900">
-        Coming soon
-      </span>
-    </div>
-  );
-}
-
-export function MobilePlatform() {
-  return (
-    <section
-      id="mobile"
-      aria-labelledby="mobile-heading"
-      className={cn(
-        section,
-        "flex flex-col gap-10 rounded-2xl border bg-gradient-to-b from-accent/30 via-white to-white p-6 sm:p-10 lg:p-14",
-      )}
-    >
-      <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
-        <div className="flex flex-col gap-6">
-          <SectionHeading
-            id="mobile-heading"
-            eyebrow={MOBILE_PLATFORM.eyebrow}
-            title={MOBILE_PLATFORM.title}
-            intro={MOBILE_PLATFORM.intro}
-          />
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {MOBILE_PLATFORM.stores.map((store) => (
-              <StoreBadge
-                key={store.title}
-                subtitle={store.subtitle}
-                title={store.title}
-                icon={store.store === "play" ? GooglePlayIcon : AppleIcon}
-              />
+      <div
+        className="mk-wrap wrap mk-g2 flex flex-col gap-6"
+        style={{ "--card-h": "calc(100svh - var(--padt) - var(--padb) - 176px)" } as Vars}
+      >
+        <div className="flex flex-col">
+          <h2 id="features-heading" className="mk-h2">
+            Platform features for neighborhood shops
+          </h2>
+          <p className="mk-intro">
+            Made for budget Android phones and mobile data, with nothing to download.
+          </p>
+          <div className="mt-10 grid grid-cols-12 gap-6 lg:mt-12">
+            {FEATURE_CARDS.slice(0, 2).map((card) => (
+              <FeatureCard key={card.title} card={card} />
             ))}
           </div>
+        </div>
+        <div className="grid grid-cols-12 content-start gap-6">
+          {FEATURE_CARDS.slice(2).map((card) => (
+            <FeatureCard key={card.title} card={card} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <ul className="grid gap-3 pt-2">
-            {MOBILE_PLATFORM.highlights.map(({ title, body }, idx) => {
-              const Icon = idx === 0 ? Bell : idx === 1 ? Smartphone : Zap;
-              return (
-                <li key={title} className="flex gap-3.5 rounded-xl border bg-white p-4 shadow-2xs">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent">
-                    <Icon aria-hidden className="size-4 text-green-700" />
-                  </span>
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className="text-sm font-semibold text-navy-900">{title}</h3>
-                    <p className="text-xs text-slate-600">{body}</p>
-                  </div>
-                </li>
-              );
-            })}
+export function BookingModes() {
+  return (
+    <section id="modes" aria-labelledby="modes-heading" className="mk-section mk-split">
+      <div className="mk-wrap wrap grid grid-cols-12 gap-x-6">
+        <div className="col-span-12 lg:col-span-5">
+          <h2 id="modes-heading" className="mk-h2">
+            Four booking modes for every service shop
+          </h2>
+          <p className="mk-intro">
+            Time slots and home service open with the pilot. Quotes and queues come next.
+          </p>
+          <ul className="mt-8">
+            {BOOKING_TYPES.map((type) => (
+              <li key={type.name} className="border-b border-[var(--line)] py-4">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="mk-h3">{type.name}</span>
+                  <span className="text-[16px] text-[var(--ink-2)]">{type.tagline}</span>
+                  {type.soon && <span className="mk-chip mk-chip--soon">Coming soon</span>}
+                </p>
+                <p className="mk-body mt-1">{type.examples}</p>
+              </li>
+            ))}
           </ul>
-
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
-            <Button asChild size="lg">
-              <a href="#contact">
-                Get notified on launch
-                <ArrowRight aria-hidden />
-              </a>
-            </Button>
-            <p className="text-xs text-slate-600">
-              Pilot partner shops receive priority early access before public store releases.
-            </p>
+        </div>
+        <div
+          data-visual
+          className="mk-frame frame mk-split__visual col-span-12 lg:col-span-6 lg:col-start-7"
+        >
+          <div className="mk-fade-b absolute inset-0">
+            <CustomerBookingPhone className="top-10 left-1/2 h-[calc(100%+24px)] -translate-x-1/2" />
           </div>
         </div>
-
-        <MobilePreview />
       </div>
     </section>
   );
@@ -332,136 +364,126 @@ export function Pricing() {
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className={cn(section, "flex flex-col gap-8")}
+      className="mk-section mk-ground-surface mk-tall-sm"
     >
-      <SectionHeading
-        id="pricing-heading"
-        eyebrow="Pricing"
-        title="Simple, honest pricing"
-        intro="Free during the pilot. If paid plans come later, we'll tell you at least 30 days before, and your basic listing stays free."
-      />
-      <ul className="grid gap-4 lg:grid-cols-3">
-        {PLANS.map((plan) => (
-          <li
-            key={plan.name}
-            className={cn(
-              "relative flex flex-col gap-5 rounded-xl border bg-white p-6",
-              plan.highlight && "border-2 border-green-600 shadow-lg",
-            )}
-          >
-            {plan.highlight && (
-              <span className="absolute -top-3 left-6 rounded-full bg-green-600 px-3 py-0.5 text-xs font-semibold text-white">
-                Now enrolling
-              </span>
-            )}
-            <div className="flex flex-col gap-1">
-              <h3 className="font-display text-2xl font-bold">{plan.name}</h3>
-              <p className="text-sm text-slate-600">{plan.description}</p>
-            </div>
-            <p className="flex items-baseline gap-2">
-              <span className="font-display text-4xl font-bold">{plan.price}</span>
-              <span className="text-sm text-slate-600">{plan.period}</span>
-            </p>
-            <ul className="flex flex-col gap-2 text-sm">
-              {plan.points.map((point) => (
-                <li key={point} className="flex gap-2">
-                  <Check aria-hidden className="size-5 shrink-0 text-green-700" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-            {plan.highlight && (
-              <Button asChild className="mt-auto">
-                <a href="#contact">Join the pilot</a>
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="text-sm text-slate-600">
-        Customers always book for free, with no convenience fees during the pilot. Shops that join
-        early become Founding Partners: a badge on their page and a discount on any future paid
-        plan.
-      </p>
+      <div className="mk-wrap wrap">
+        <h2 id="pricing-heading" className="mk-h2">
+          Pilot pricing: free for founding shops
+        </h2>
+        <p className="mk-intro">
+          No fees and no commissions while we build BooKanto with you. If paid plans come later, you
+          get at least 30 days&apos; notice.
+        </p>
+        <ul className="mt-10 grid grid-cols-12 gap-6 lg:mt-12">
+          {PLANS.map((plan) => (
+            <li
+              key={plan.name}
+              className={cn(
+                "mk-card card col-span-12 gap-5 p-6 lg:col-span-4 lg:p-8",
+                plan.highlight && "border-2 border-green-600",
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/assets/icons/ui-sparkles.svg"
+                    className="size-5 shrink-0 text-green-700"
+                    alt=""
+                  />
+                  <h3 className="mk-h3">{plan.name}</h3>
+                </div>
+                {plan.highlight && <span className="mk-chip mk-chip--new">Now enrolling</span>}
+              </div>
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-display text-[28px] leading-none font-bold sm:text-[34px] lg:text-[40px]">
+                  {plan.price}
+                </span>
+                <span className="text-[15px] text-[var(--ink-2)]">{plan.period}</span>
+              </p>
+              <p className="mk-body">{plan.description}</p>
+              <ul className="border-t border-[var(--line)]">
+                {plan.points.map((point) => (
+                  <li
+                    key={point}
+                    className="flex items-center gap-2 border-b border-[var(--line)] py-2.5 text-[16px]"
+                  >
+                    <img
+                      src="/assets/icons/ui-check.svg"
+                      className="size-4 shrink-0 text-green-700"
+                      alt=""
+                    />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+        <p className="mk-body mt-6">Customers always book for free.</p>
+      </div>
     </section>
   );
 }
 
-export function Investors() {
+export function MobilePlatform() {
   return (
     <section
-      id="investors"
-      aria-labelledby="investors-heading"
-      className={cn(
-        section,
-        "flex flex-col gap-10 rounded-2xl bg-navy-900 px-5 py-10 text-white sm:px-10 sm:py-14",
-      )}
+      id="mobile"
+      aria-labelledby="mobile-heading"
+      className="mk-section mk-ground-navy mk-split overflow-hidden"
     >
-      <SectionHeading
-        id="investors-heading"
-        eyebrow="For investors"
-        title="Building the booking layer for neighborhood services"
-        intro="Most neighborhood shops in the Philippines still take bookings by walk-in, text and Messenger. BooKanto gives them a free booking system, and gives customers one place to find and book them."
-        invert
-      />
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          {
-            title: "Lean by design",
-            body: `A serverless stack and a ${PILOT_MONTHS}-month pilot in one launch area, so we learn fast and spend little before scaling.`,
-          },
-          {
-            title: "A clear path to revenue",
-            body: "A free basic listing grows supply. Revenue comes from optional Pro tools and featured spots, then online payments.",
-          },
-          {
-            title: "Decided by numbers",
-            body: `We decide on scaling up in ${PILOT_DECISION.month} using real pilot data: active shops, monthly bookings and repeat customers.`,
-          },
-        ].map(({ title, body }) => (
-          <div key={title} className="flex flex-col gap-2 rounded-xl bg-white/10 p-5">
-            <h3 className="font-display text-xl font-bold">{title}</h3>
-            <p className="text-white/85">{body}</p>
+      <div className="mk-wrap wrap grid grid-cols-12 gap-x-6">
+        <div className="col-span-12 lg:col-span-5">
+          <p className="mk-label">{MOBILE_PLATFORM.eyebrow}</p>
+          <h2 id="mobile-heading" className="mk-h2 mt-3">
+            {MOBILE_PLATFORM.title}
+          </h2>
+          <p className="mk-intro">
+            BooKanto already works in any phone browser. Android and iOS apps are on the way, and
+            pilot shops get them first.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            {MOBILE_PLATFORM.stores.map((store) => (
+              <span
+                key={store.store}
+                className="flex min-h-14 items-center gap-2.5 rounded-[12px] border border-white/25 bg-black px-3 py-2 sm:gap-3 sm:px-4"
+              >
+                {store.store === "play" ? (
+                  <GooglePlayIcon className="size-6" />
+                ) : (
+                  <AppleIcon className="size-6 text-white" />
+                )}
+                <span className="leading-tight">
+                  <span className="block text-[13px]">{store.subtitle}</span>
+                  <span className="block text-[18px] font-semibold">{store.title}</span>
+                </span>
+              </span>
+            ))}
+            <span className="mk-chip mk-chip--soon">Coming soon</span>
           </div>
-        ))}
-      </div>
-
-      <div className="grid gap-10 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
-          <h3 className="font-display text-xl font-bold">Pilot timeline</h3>
-          <ol className="flex flex-col gap-4 border-l border-white/30 pl-5">
-            {MILESTONES.map(({ date, title }) => (
-              <li key={title} className="relative">
-                <span
-                  aria-hidden
-                  className="absolute top-1.5 -left-[25px] size-2.5 rounded-full bg-green-600"
-                />
-                <p className="text-sm font-semibold text-yellow-400">{date}</p>
-                <p>{title}</p>
+          <ul className="mt-6">
+            {MOBILE_PLATFORM.highlights.map((item) => (
+              <li key={item.title} className="border-b border-white/20 py-3">
+                <p className="text-[17px] font-semibold">{item.title}</p>
+                <p className="hidden text-[16px] text-white/80 sm:block">{item.summary}</p>
               </li>
             ))}
-          </ol>
-        </div>
-        <div className="flex flex-col gap-4">
-          <h3 className="font-display text-xl font-bold">Pilot goals for {PILOT_DECISION.month}</h3>
-          <dl className="grid gap-3 sm:grid-cols-3">
-            {PILOT_GOALS.map(({ value, label }) => (
-              <div
-                key={label}
-                className="flex items-baseline gap-3 rounded-xl bg-white/10 p-4 sm:flex-col sm:gap-0"
-              >
-                <dt className="order-last text-sm text-white/85">{label}</dt>
-                <dd className="font-display text-2xl font-bold sm:text-3xl">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <Button asChild size="lg" className="mt-2 w-full sm:w-fit">
-            <a href="#contact">
-              Talk to the founder
-              <ArrowRight aria-hidden />
+          </ul>
+          <p className="mt-6">
+            <a href="#contact" className="mk-link inline-flex min-h-11 items-center">
+              Get notified on launch
             </a>
-          </Button>
+          </p>
+        </div>
+        <div data-visual className="mk-split__visual col-span-12 lg:col-span-6 lg:col-start-7">
+          <div
+            data-visual
+            className="mk-frame frame h-full bg-[radial-gradient(90%_70%_at_50%_0%,#1f6b45_0%,rgb(31_107_69/0)_70%),linear-gradient(180deg,#1b2b4d,#14213d)]"
+          >
+            <div className="mk-fade-b absolute inset-0">
+              <LockScreenPhone className="top-10 left-1/2 h-[calc(100%+24px)] -translate-x-1/2" />
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -469,22 +491,124 @@ export function Investors() {
 }
 
 export function Faq() {
+  const half = Math.ceil(LANDING_FAQS.length / 2);
+  const columns = [LANDING_FAQS.slice(0, half), LANDING_FAQS.slice(half)];
   return (
-    <section id="faq" aria-labelledby="faq-heading" className={cn(section, "flex flex-col gap-8")}>
-      <SectionHeading id="faq-heading" eyebrow="FAQ" title="Frequently asked questions" />
-      <div className="flex flex-col gap-3">
-        {FAQS.map(({ question, answer }) => (
-          <details key={question} className="group rounded-xl border bg-white">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold [&::-webkit-details-marker]:hidden">
-              {question}
-              <ChevronDown
-                aria-hidden
-                className="size-5 shrink-0 text-slate-600 transition-transform group-open:rotate-180"
-              />
-            </summary>
-            <p className="px-5 pb-5 text-slate-600">{answer}</p>
-          </details>
+    <section id="faq" aria-labelledby="faq-heading" className="mk-section mk-split">
+      <div className="mk-wrap wrap grid grid-cols-12 gap-x-6">
+        {columns.map((column, index) => (
+          <div
+            key={index}
+            className={cn(
+              "col-span-12 lg:col-span-6 lg:row-start-2",
+              index === 0 ? "lg:contents" : "lg:col-start-7",
+            )}
+          >
+            {index === 0 && (
+              <h2 id="faq-heading" className="mk-h2 col-span-12 mb-10 lg:mb-6">
+                Frequently asked questions from local shop owners
+              </h2>
+            )}
+            <dl className="col-span-12 lg:col-span-6 lg:row-start-2">
+              {column.map(({ question, answer }) => (
+                <div key={question} className="border-b border-[var(--line)] py-5">
+                  <dt className="flex items-center gap-2 text-[18px] font-semibold">
+                    <img
+                      src="/assets/icons/ui-chat.svg"
+                      className="size-4 shrink-0 text-green-700"
+                      alt=""
+                    />
+                    <span>{question}</span>
+                  </dt>
+                  <dd className="mk-body mt-1">{answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function PilotTimeline() {
+  return (
+    <div data-visual className="mk-frame frame flex h-full flex-col justify-center p-6 sm:p-10">
+      <div className="mk-ui-surface card flex flex-col gap-8 p-6 sm:p-8">
+        <div>
+          <h3 className="mk-h3">Pilot timeline</h3>
+          <ol className="mt-5 flex flex-col">
+            {MILESTONES.map((milestone, index) => (
+              <li key={milestone.title} className="relative flex gap-4 pb-5 last:pb-0">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "relative z-10 mt-1 size-3.5 shrink-0 rounded-full border-2",
+                    index === 0
+                      ? "border-green-600 bg-green-600"
+                      : "border-[var(--line-strong)] bg-white",
+                  )}
+                />
+                {index < MILESTONES.length - 1 && (
+                  <span
+                    aria-hidden
+                    className="absolute top-5 bottom-0 left-[6px] w-0.5 bg-[var(--line)]"
+                  />
+                )}
+                <p>
+                  <span className="block text-[14px] font-semibold text-[var(--ink-2)]">
+                    {milestone.date}
+                    {index === 0 && <span className="ml-2 text-green-800">Under way</span>}
+                  </span>
+                  <span className="block text-[17px] font-semibold">{milestone.title}</span>
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="border-t border-[var(--line)] pt-6">
+          <h3 className="mk-h3">Targets for {PILOT_DECISION.month}</h3>
+          <dl className="mt-4 grid grid-cols-1 gap-3 min-[420px]:grid-cols-3 min-[420px]:gap-4">
+            {PILOT_GOALS.map((goal) => (
+              <div key={goal.label} className="flex flex-col">
+                <dt className="order-last text-[14px] text-[var(--ink-2)]">{goal.label}</dt>
+                <dd className="font-display text-[26px] leading-tight font-bold">{goal.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Investors() {
+  return (
+    <section id="investors" aria-labelledby="investors-heading" className="mk-section mk-split">
+      <div className="mk-wrap wrap grid grid-cols-12 gap-x-6">
+        <div className="col-span-12 lg:col-span-5">
+          <p className="mk-label">For investors</p>
+          <h2 id="investors-heading" className="mk-h2 mt-3">
+            Pilot roadmap &amp; investment milestones
+          </h2>
+          <p className="mk-intro">
+            Most neighborhood shops in the Philippines still take bookings by walk-in, text and
+            Messenger. BooKanto gives them a free booking system and gives customers one place to
+            find and book them.
+          </p>
+          <p className="mk-intro">
+            We decide on scaling up in {PILOT_DECISION.month}, on real pilot numbers: active shops,
+            monthly bookings and repeat customers.
+          </p>
+          <p className="mt-8">
+            <a href="#contact" className="mk-link inline-flex min-h-11 items-center">
+              Talk to the founder
+            </a>
+          </p>
+        </div>
+        <div data-visual className="mk-split__visual col-span-12 lg:col-span-6 lg:col-start-7">
+          <PilotTimeline />
+        </div>
       </div>
     </section>
   );
@@ -509,59 +633,68 @@ export function Contact() {
     <section
       id="contact"
       aria-labelledby="contact-heading"
-      className={cn(section, "grid gap-10 lg:grid-cols-[1fr_1.2fr]")}
+      className="mk-section mk-ground-surface mk-split mk-split--flow-sm"
     >
-      <div className="flex flex-col gap-6">
-        <SectionHeading
-          id="contact-heading"
-          eyebrow="Contact us"
-          title="Let's talk"
-          intro="Shop owners, business partners and investors: send a message and we'll get back to you."
-        />
-        <ul className="flex flex-col gap-4">
-          {[
-            ["Shop owners", "Join the pilot for free and get help setting up your shop."],
-            [
-              "Businesses and partners",
-              "Suppliers, associations and local groups: let's grow together.",
-            ],
-            ["Investors", "Ask about the pilot, our plans and the numbers as they come in."],
-          ].map(([who, what]) => (
-            <li key={who} className="flex gap-3">
-              <Check aria-hidden className="mt-0.5 size-5 shrink-0 text-green-700" />
-              <p>
-                <span className="font-semibold">{who}.</span>{" "}
-                <span className="text-slate-600">{what}</span>
-              </p>
-            </li>
-          ))}
-        </ul>
-        {links.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {links.map(({ icon: Icon, label, href }) => (
-              <li key={href}>
-                <a
-                  href={href}
-                  className="inline-flex min-h-11 items-center gap-2 font-semibold text-green-700 underline-offset-4 hover:underline"
-                >
-                  <Icon aria-hidden className="size-5" />
-                  {label}
-                </a>
+      <div className="mk-wrap wrap grid grid-cols-12 gap-x-6">
+        <div className="col-span-12 lg:col-span-5">
+          <h2 id="contact-heading" className="mk-h2">
+            Contact us: reserve your pilot spot
+          </h2>
+          <p className="mk-intro">
+            Shop owners, business partners and investors: send a message and we&apos;ll reply by
+            email or text.
+          </p>
+          <h3 className="mk-h3 mt-8 sm:mt-10">What happens next</h3>
+          <ol className="mt-4 flex flex-col gap-3 sm:gap-4">
+            {STEPS.map((step, index) => (
+              <li key={step.title}>
+                <p className="flex items-center gap-3 font-semibold">
+                  <span
+                    aria-hidden
+                    className="grid size-7 shrink-0 place-items-center rounded-full bg-[var(--color-accent)] font-display text-[15px] font-bold text-green-800"
+                  >
+                    {index + 1}
+                  </span>
+                  <span>{step.title}</span>
+                </p>
+                <p className="mk-body mt-1 pl-10">{step.body}</p>
               </li>
             ))}
-          </ul>
-        )}
-        <p className="text-sm text-slate-600">
-          Looking for a shop instead?{" "}
-          <Link
-            href="/explore"
-            className="font-semibold text-green-700 underline underline-offset-4"
-          >
-            Explore shops near you
-          </Link>
-        </p>
+          </ol>
+          {links.length > 0 && (
+            <ul className="mt-8 flex flex-col gap-2">
+              {links.map(({ icon: Icon, label, href }) => (
+                <li key={href}>
+                  <a href={href} className="mk-link inline-flex min-h-11 items-center gap-2">
+                    <Icon aria-hidden className="size-5" />
+                    {label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div data-visual className="col-span-12 lg:col-span-6 lg:col-start-7">
+          <ContactForm />
+        </div>
       </div>
-      <ContactForm />
     </section>
+  );
+}
+
+export function LandingPage() {
+  return (
+    <>
+      <Hero />
+      <Problems />
+      <Inbox />
+      <Features />
+      <BookingModes />
+      <Pricing />
+      <MobilePlatform />
+      <Faq />
+      <Investors />
+      <Contact />
+    </>
   );
 }

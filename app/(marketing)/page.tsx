@@ -1,34 +1,32 @@
 import type { Metadata } from "next";
 
 import { JsonLd } from "@/components/shared/json-ld";
-import {
-  BookingTypes,
-  Contact,
-  Faq,
-  Features,
-  Hero,
-  HowItWorks,
-  Investors,
-  MobilePlatform,
-  Pricing,
-  Problems,
-} from "@/features/marketing/components/sections";
-import { FAQS } from "@/features/marketing/content";
+import { LandingPage as LandingSections } from "@/features/marketing/components/sections";
+import { LANDING_FAQS } from "@/features/marketing/content";
 import { absoluteUrl, SITE_NAME } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: { absolute: "BooKanto: online booking for local service shops in the Philippines" },
+  description:
+    "Online booking for barbershops, salons, and local service shops across the Philippines. Take 24/7 bookings, walk-ins, and SMS reminders for ₱0 during the 8-month pilot.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "BooKanto: online booking for local service shops in the Philippines",
+    description:
+      "Online booking for barbershops, salons, and local service shops across the Philippines. Free for 8 months during the pilot.",
+  },
+  other: {
+    "site-kind": "software",
+    "page-type": "software",
+  },
+};
 
 // The business landing page: shops, partners and investors. Customers browse
 // shops at /explore. Fully static.
 
-export const metadata: Metadata = {
-  title: { absolute: "BooKanto: online booking for local shops in the Philippines" },
-  description:
-    "Free online booking for barbershops, salons and local service shops in the Philippines. Join the BooKanto pilot, or talk to us about partnering and investing.",
-  alternates: { canonical: "/" },
-};
-
 export default function LandingPage() {
   return (
-    <main id="main" className="mx-auto flex max-w-6xl flex-col gap-20 px-4 sm:gap-28">
+    <>
       <JsonLd
         data={[
           {
@@ -55,7 +53,7 @@ export default function LandingPage() {
           {
             "@context": "https://schema.org",
             "@type": "FAQPage",
-            mainEntity: FAQS.map(({ question, answer }) => ({
+            mainEntity: LANDING_FAQS.map(({ question, answer }) => ({
               "@type": "Question",
               name: question,
               acceptedAnswer: { "@type": "Answer", text: answer },
@@ -63,16 +61,7 @@ export default function LandingPage() {
           },
         ]}
       />
-      <Hero />
-      <Problems />
-      <Features />
-      <BookingTypes />
-      <HowItWorks />
-      <MobilePlatform />
-      <Pricing />
-      <Investors />
-      <Faq />
-      <Contact />
-    </main>
+      <LandingSections />
+    </>
   );
 }

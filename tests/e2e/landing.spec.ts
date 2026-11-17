@@ -2,6 +2,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test("landing page has one heading and no accessibility violations", async ({ page }) => {
+  // Check the page at rest: mid-way through the hero's entrance, text is still
+  // fading in and axe would measure the blend.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
@@ -14,9 +17,9 @@ test("landing page has one heading and no accessibility violations", async ({ pa
   expect(results.violations).toEqual([]);
 });
 
-test("header links jump to the contact form", async ({ page }) => {
+test("the main action jumps to the contact form", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Contact us" }).first().click();
+  await page.getByRole("link", { name: "Join the pilot" }).first().click();
   await expect(page).toHaveURL(/#contact$/);
   await expect(page.getByRole("heading", { name: "Let's talk" })).toBeInViewport();
 });

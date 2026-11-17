@@ -42,7 +42,7 @@ export function ContactForm() {
     <form
       action={formAction}
       noValidate
-      className="flex flex-col gap-5 rounded-xl border bg-white p-5 sm:p-6"
+      className="card flex flex-col gap-4 rounded-xl border bg-white p-5 sm:p-6"
     >
       <fieldset
         className="flex flex-col gap-2"
@@ -76,7 +76,7 @@ export function ContactForm() {
         <Input id="name" name="name" autoComplete="name" defaultValue={values.name} required />
       </Field>
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Email" name="email" error={errorFor("email")}>
           <Input
             id="email"
@@ -99,7 +99,7 @@ export function ContactForm() {
         </Field>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field
           label="Shop or company"
           name="businessName"
@@ -122,11 +122,11 @@ export function ContactForm() {
         <Textarea
           id="message"
           name="message"
-          rows={5}
+          rows={4}
           placeholder="Tell us about your shop, your business or what you'd like to discuss."
           defaultValue={values.message}
           required
-          className="min-h-32"
+          className="min-h-24"
         />
       </Field>
 
@@ -143,7 +143,13 @@ export function ContactForm() {
       )}
 
       <div className="flex flex-col gap-3">
-        <Button type="submit" size="lg" disabled={pending} className="w-full sm:w-fit">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={pending}
+          // 19px bold is large text, so white on Kanto Green meets WCAG AA.
+          className="w-full text-[19px] font-bold sm:w-fit"
+        >
           <Send aria-hidden />
           {pending ? "Sending…" : "Send message"}
         </Button>

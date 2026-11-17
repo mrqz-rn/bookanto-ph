@@ -21,6 +21,8 @@ const eslintConfig = [
     ignores: [
       ".next/**",
       ".claude/**",
+      ".taste-skill/**",
+      "public/assets/**",
       "node_modules/**",
       "out/**",
       "build/**",

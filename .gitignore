@@ -1,6 +1,10 @@
 # dependencies
 /node_modules
 /.claude
+/.taste-skill
+# taste-skill kit copies (not used by the app)
+/public/assets
+/public/fonts
 # testing
 /coverage
 /test-results/

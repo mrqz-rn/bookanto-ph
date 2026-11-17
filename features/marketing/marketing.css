@@ -1,0 +1,876 @@
+/*
+ * The business landing page (/). Layout, motion and the product mock-ups.
+ *
+ * The page follows the taste-skill system: every section is one or two
+ * screens tall, every block sits on one 1280px wrap with a 12-column grid, the
+ * hero enters once on load, every link and button answers the pointer, and
+ * two moments move with the reader (the statement in #problems assembles on
+ * scroll; the closing wordmark ripples under the pointer).
+ *
+ * Colours and type are the BooKanto brand from app/globals.css. Every class
+ * starts with mk- so nothing here reaches the app's own pages after a client
+ * navigation.
+ */
+
+/* In the components layer, so Tailwind utilities on the same element win. */
+@layer components {
+  .mk {
+    --nav: 72px;
+    --padt: 120px;
+    --padb: 72px;
+    --gut: 80px;
+    --hgap: 48px;
+    --hpadb: 64px;
+    --r-lg: 20px;
+    --r-md: 12px;
+    --r-sm: 8px;
+    --ink: var(--color-navy-900);
+    --ink-2: var(--color-slate-600);
+    --line: color-mix(in oklab, var(--color-navy-900) 12%, transparent);
+    --line-strong: color-mix(in oklab, var(--color-navy-900) 24%, transparent);
+    --surface: #f4f7f4;
+    --action: var(--color-green-700);
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+    --cycle: 3.2s;
+    /* The lit ground behind every product picture: Kanto Green light from the
+       top, Araw Yellow warmth from the lower right. */
+    --lit:
+      radial-gradient(120% 75% at 30% -12%, #d5f0de 0%, rgb(213 240 222 / 0) 62%),
+      radial-gradient(90% 70% at 105% 105%, #ffeccb 0%, rgb(255 236 203 / 0) 60%),
+      linear-gradient(180deg, #eef7f1 0%, #f8f5ec 100%);
+    color: var(--ink);
+  }
+
+  @media (max-width: 1023px) {
+    .mk {
+      --gut: 48px;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .mk {
+      --nav: 56px;
+      --padt: 96px;
+      --padb: 48px;
+      --gut: 24px;
+      --hgap: 40px;
+      --hpadb: 24px;
+      --r-lg: 18px;
+    }
+  }
+
+  /* ---------- Wrap, sections, type ---------- */
+
+  .mk-wrap {
+    position: relative;
+    z-index: 1;
+    width: min(100% - 2 * var(--gut), 1280px);
+    margin-inline: auto;
+  }
+
+  .mk-section {
+    position: relative;
+    min-height: calc(var(--h, 1) * 100svh);
+    padding-block: var(--padt) var(--padb);
+  }
+
+  .mk-ground-surface {
+    background: var(--surface);
+  }
+
+  .mk-ground-navy {
+    background: var(--color-navy-900);
+    color: #fff;
+  }
+
+  .mk-h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(30px, 1.9vw + 20px, 48px);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .mk-h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(18px, 0.4vw + 16px, 20px);
+    line-height: 1.25;
+  }
+
+  .mk-intro {
+    margin-top: 16px;
+    max-width: 58ch;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+
+  .mk-ground-navy .mk-intro {
+    color: rgb(255 255 255 / 0.86);
+  }
+
+  .mk-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--action);
+  }
+
+  .mk-ground-navy .mk-label {
+    color: var(--color-yellow-400);
+  }
+
+  .mk-body {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+
+  /* ---------- Header ---------- */
+
+  .mk-nav {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 40;
+    height: var(--nav);
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mk-skip {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    z-index: 2;
+    translate: 0 -50%;
+    padding: 10px 16px;
+    border-radius: var(--r-sm);
+    background: #fff;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mk-skip:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mk-navword {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 44px;
+    padding-inline: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--ink-2);
+    transition: color 150ms var(--ease);
+  }
+
+  .mk-navword::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 6px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 120ms var(--ease);
+  }
+
+  .mk-navword:hover,
+  .mk-navword:focus-visible {
+    color: var(--ink);
+  }
+
+  .mk-navword:hover::after,
+  .mk-navword:focus-visible::after {
+    transform: scaleX(1);
+    transform-origin: left;
+    transition-duration: 150ms;
+  }
+
+  /* The one panel: Features opens a flat full-width panel after 150ms of intent. */
+  .mk-mega__panel {
+    position: fixed;
+    inset: calc(var(--nav) - 1px) 0 auto;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition:
+      opacity 120ms var(--ease),
+      transform 120ms var(--ease),
+      visibility 0s linear 120ms;
+  }
+
+  .mk-mega:hover .mk-mega__panel,
+  .mk-mega:focus-within .mk-mega__panel {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition:
+      opacity 200ms var(--ease) 150ms,
+      transform 200ms var(--ease) 150ms,
+      visibility 0s linear 150ms;
+  }
+
+  .mk-mega__chevron {
+    transition: transform 200ms var(--ease);
+  }
+
+  .mk-mega:hover .mk-mega__chevron,
+  .mk-mega:focus-within .mk-mega__chevron {
+    transform: rotate(180deg);
+  }
+
+  .mk-mega__link {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px;
+    border-radius: var(--r-md);
+    transition: background-color 150ms var(--ease);
+  }
+
+  .mk-mega__link:hover,
+  .mk-mega__link:focus-visible {
+    background: var(--surface);
+  }
+
+  /* ---------- Buttons and links ---------- */
+
+  .mk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding-inline: 24px;
+    border-radius: 12px;
+    /* 19px bold is large text, so white on Kanto Green (3.3:1) meets WCAG AA. */
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      transform 120ms var(--ease),
+      background-color 120ms var(--ease),
+      border-color 120ms var(--ease);
+  }
+
+  .mk-btn--primary {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+  }
+
+  /* Tonal: the dealt secondary, a light green fill with green-800 text. */
+  .mk-btn--tonal {
+    background: var(--color-accent);
+    color: var(--color-green-800);
+  }
+
+  .mk-ground-navy .mk-btn--tonal {
+    background: rgb(255 255 255 / 0.12);
+    color: #fff;
+  }
+
+  .mk-btn .mk-arrow {
+    transition: transform 120ms var(--ease);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .mk-btn:hover {
+      transform: translateY(-1px);
+      transition-duration: 150ms;
+    }
+
+    .mk-btn--primary:hover {
+      background: color-mix(in oklab, var(--color-primary) 86%, var(--ink));
+    }
+
+    .mk-btn--tonal:hover {
+      background: color-mix(in oklab, var(--color-accent) 86%, var(--color-green-700));
+    }
+
+    .mk-ground-navy .mk-btn--tonal:hover {
+      background: rgb(255 255 255 / 0.2);
+    }
+
+    .mk-btn:hover .mk-arrow {
+      transform: translateX(3px);
+      transition-duration: 150ms;
+    }
+  }
+
+  .mk-btn:active {
+    transform: translateY(1px) scale(0.985);
+    transition-duration: 90ms;
+  }
+
+  /* Running-text links rest on a faint hairline; an ink line draws left to right. */
+  .mk-link {
+    font-weight: 600;
+    color: var(--action);
+    background-image:
+      linear-gradient(currentColor, currentColor),
+      linear-gradient(color-mix(in oklab, currentColor 30%, transparent), transparent);
+    background-size:
+      0% 1px,
+      100% 1px;
+    background-position:
+      100% 100%,
+      0 100%;
+    background-repeat: no-repeat;
+    padding-bottom: 2px;
+    transition: background-size 120ms var(--ease);
+  }
+
+  .mk-link:hover,
+  .mk-link:focus-visible {
+    background-size:
+      100% 1px,
+      100% 1px;
+    background-position:
+      0 100%,
+      0 100%;
+    transition-duration: 150ms;
+  }
+
+  .mk-ground-navy .mk-link {
+    color: #fff;
+  }
+
+  .mk-footlink {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .mk-footlink::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 120ms var(--ease);
+  }
+
+  .mk-footlink:hover::after,
+  .mk-footlink:focus-visible::after {
+    transform: scaleX(1);
+    transform-origin: left;
+    transition-duration: 150ms;
+  }
+
+  .mk :focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+  }
+
+  .mk-ground-navy :focus-visible {
+    outline-color: var(--color-yellow-400);
+  }
+
+  /* ---------- Hero ---------- */
+
+  .mk-hero {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    padding-block: calc(var(--nav) + var(--hgap)) var(--hpadb);
+  }
+
+  .mk-hero > .mk-wrap {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .mk-hero__grid {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .mk-hero__h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(40px, 3.9vw, 56px);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+  }
+
+  /* Each line rises out of its own mask; the padding keeps descenders whole. */
+  .mk-line {
+    display: block;
+    overflow: clip;
+    padding-bottom: 0.08em;
+    margin-bottom: -0.08em;
+  }
+
+  .mk-line > span {
+    display: block;
+  }
+
+  .mk-hero__lead {
+    max-width: 42ch;
+    font-size: clamp(17px, 0.3vw + 16px, 20px);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+
+  .mk-hero__visual {
+    position: relative;
+    flex: 1;
+    min-height: 240px;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--lit);
+  }
+
+  @media (min-width: 1024px) {
+    .mk-hero {
+      height: 100svh;
+    }
+
+    .mk-hero__grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: 24px;
+    }
+
+    .mk-hero__visual {
+      min-height: 0;
+    }
+  }
+
+  /* The float card: one opaque card on the picture's lower left. */
+  .mk-float {
+    position: absolute;
+    left: 24px;
+    bottom: 24px;
+    z-index: 3;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    width: min(300px, calc(100% - 48px));
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: #fff;
+  }
+
+  .mk-dot {
+    position: relative;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--color-green-600);
+  }
+
+  .mk-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--color-green-600);
+    opacity: 0;
+  }
+
+  /* ---------- The hero's entrance (once, on load; nothing ever waits on script) ---------- */
+
+  @media (prefers-reduced-motion: no-preference) {
+    .mk-enter .mk-line > span {
+      animation: mk-rise 700ms var(--ease-enter) both;
+      animation-delay: calc(var(--i, 0) * 80ms);
+    }
+
+    .mk-enter .mk-enter-up {
+      animation: mk-up 520ms var(--ease-enter) both;
+      animation-delay: calc(420ms + var(--i, 0) * 60ms);
+    }
+
+    .mk-enter .mk-enter-media {
+      animation: mk-settle 900ms var(--ease-enter) both;
+    }
+
+    .mk-enter .mk-dot::after {
+      animation: mk-breathe 2.4s linear 1.2s 2;
+    }
+  }
+
+  @keyframes mk-rise {
+    from {
+      transform: translateY(105%);
+    }
+  }
+
+  @keyframes mk-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  @keyframes mk-settle {
+    from {
+      transform: scale(0.98);
+    }
+  }
+
+  @keyframes mk-breathe {
+    0% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  /* ---------- Frames, stages and cards ---------- */
+
+  .mk-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--lit);
+  }
+
+  /* The bottom edge dissolves where a fragment runs past it. */
+  .mk-fade-b {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
+  }
+
+  .mk-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: #fff;
+  }
+
+  .mk-card__text {
+    padding: 32px 32px 0;
+  }
+
+  @media (max-width: 1023px) {
+    .mk-card__text {
+      padding: 28px 28px 0;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .mk-card__text {
+      padding: 24px 24px 0;
+    }
+  }
+
+  .mk-card__panel {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin: 32px 32px 0;
+    overflow: hidden;
+    border-radius: 12px 12px 0 0;
+    background: var(--lit);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+  }
+
+  @media (max-width: 639px) {
+    .mk-card__panel {
+      margin: 24px 16px 0;
+    }
+  }
+
+  /* The UI on the panels: real product screens at true size. */
+  .mk-ui {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+
+  .mk-ui-surface {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgb(20 33 61 / 0.06),
+      0 12px 32px -12px rgb(20 33 61 / 0.18);
+  }
+
+  .mk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .mk-chip--ok {
+    background: #e3f4e8;
+    color: var(--color-green-800);
+  }
+
+  .mk-chip--new {
+    background: var(--color-green-700);
+    color: #fff;
+  }
+
+  .mk-chip--muted {
+    background: #eef1f5;
+    color: var(--ink-2);
+  }
+
+  .mk-chip--soon {
+    background: var(--color-yellow-400);
+    color: var(--ink);
+  }
+
+  /* Phones: the shop's screen and the customer's screen. */
+  .mk-phone {
+    position: absolute;
+    overflow: hidden;
+    width: 296px;
+    border: 9px solid var(--ink);
+    border-radius: 44px;
+    background: #fff;
+  }
+
+  .mk-phone__status {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ---------- Card loop: a new SMS enters the stack (tech; 3.2 s, paused on request) ---------- */
+
+  .mk-sms {
+    --row: 76px;
+    position: absolute;
+    inset: 32px 24px auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mk-sms__item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    min-height: 66px;
+    padding: 12px 14px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .mk-loop .mk-sms {
+      animation: mk-sms-shift var(--cycle) var(--ease) infinite;
+    }
+
+    .mk-loop .mk-sms__item:first-child {
+      animation: mk-sms-new var(--cycle) var(--ease) infinite;
+    }
+
+    /* The pointer entering the card restarts the story from the top. */
+    .mk-loop:hover .mk-sms {
+      animation-name: mk-sms-shift-again;
+    }
+
+    .mk-loop:hover .mk-sms__item:first-child {
+      animation-name: mk-sms-new-again;
+    }
+
+    .mk-loop[data-paused] * {
+      animation-play-state: paused !important;
+    }
+  }
+
+  @keyframes mk-sms-shift {
+    0%,
+    12% {
+      transform: translateY(calc(-1 * var(--row)));
+    }
+    30%,
+    100% {
+      transform: none;
+    }
+  }
+
+  @keyframes mk-sms-shift-again {
+    0%,
+    12% {
+      transform: translateY(calc(-1 * var(--row)));
+    }
+    30%,
+    100% {
+      transform: none;
+    }
+  }
+
+  @keyframes mk-sms-new {
+    0%,
+    14% {
+      opacity: 0;
+    }
+    30%,
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes mk-sms-new-again {
+    0%,
+    14% {
+      opacity: 0;
+    }
+    30%,
+    100% {
+      opacity: 1;
+    }
+  }
+
+  .mk-pause {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #fff;
+  }
+
+  .mk-pause > span {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mk-pause {
+      display: none;
+    }
+  }
+
+  /* ---------- Moment 1: the statement's letters assemble as it rises (scroll-driven) ---------- */
+
+  .mk-statement {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.2vw, 44px);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+
+  /* The statement section */
+  .mk-statement-section {
+    overflow-x: clip;
+  }
+
+  .mk-word {
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .mk-letter {
+    display: inline-block;
+  }
+
+  /* ---------- Moment 2: the closing wordmark ripples under the pointer ---------- */
+
+  .mk-wordmark {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    user-select: none;
+  }
+
+  /* ---------- Two-screen sections: two groups, each on its own screen ---------- */
+
+  @media (min-width: 1024px) {
+    .mk-g2 {
+      display: grid;
+      grid-template-rows: repeat(2, calc(100svh - var(--padt) - var(--padb)));
+      row-gap: calc(var(--padt) + var(--padb));
+    }
+  }
+
+  /* ---------- Splits: side by side from 1024; below, two screens as two groups ---------- */
+
+  .mk-split > .mk-wrap {
+    row-gap: 40px;
+  }
+
+  .mk-split__visual {
+    position: relative;
+    height: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .mk-split__visual {
+      height: calc(100svh - var(--padt) - var(--padb));
+      max-height: 708px;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .mk-split,
+    .mk-tall-sm {
+      --h: 2;
+    }
+
+    .mk-split > .mk-wrap {
+      grid-template-rows: repeat(2, minmax(calc(100svh - var(--padt) - var(--padb)), auto));
+      row-gap: calc(var(--padt) + var(--padb));
+    }
+  }
+
+  /* The contact form is taller than a phone screen, so there the section simply flows. */
+  @media (max-width: 639px) {
+    .mk-split--flow-sm > .mk-wrap {
+      grid-template-rows: none;
+      row-gap: 24px;
+    }
+  }
+
+  /* ---------- Footer ---------- */
+
+  .mk-closing {
+    background: var(--lit);
+  }
+}

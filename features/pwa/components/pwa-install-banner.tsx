@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { Download, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -10,10 +11,11 @@ import { usePwaInstall } from "../use-pwa-install";
 import { PwaInstallModal } from "./pwa-install-modal";
 
 export function PwaInstallBanner() {
+  const pathname = usePathname();
   const { canInstall, isDismissed, isIOS, promptInstall, dismissPrompt } = usePwaInstall();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-  if (!canInstall || isDismissed) {
+  if (pathname === "/" || !canInstall || isDismissed) {
     return null;
   }
 
