@@ -1,4 +1,5 @@
 import type { NotificationChannel } from "@/lib/db/schema/enums";
+import { AVAILABLE_NOTIFICATION_CHANNELS } from "@/lib/notification-channels";
 
 export type ChannelInfo = {
   id: NotificationChannel;
@@ -18,9 +19,9 @@ export const CHANNELS: Record<NotificationChannel, ChannelInfo> = {
   },
   email: {
     id: "email",
-    label: "Email Receipts & Notices",
-    badge: "HTML Receipts",
-    description: "Full receipts with breakdown, shop address and calendar details.",
+    label: "Email",
+    badge: "Recommended",
+    description: "Booking confirmations, reminders and receipts with the shop address and time.",
     icon: "✉️",
   },
   push: {
@@ -46,10 +47,7 @@ export const CHANNELS: Record<NotificationChannel, ChannelInfo> = {
   },
 };
 
-export const NOTIFICATION_CHANNELS_LIST: NotificationChannel[] = [
-  "sms",
-  "email",
-  "push",
-  "whatsapp",
-  "viber",
-];
+/** The channels shown in settings, in display order. SMS appears only when it's switched on. */
+export const NOTIFICATION_CHANNELS_LIST: NotificationChannel[] = (
+  ["sms", "email", "push", "whatsapp", "viber"] as const
+).filter((channel) => AVAILABLE_NOTIFICATION_CHANNELS.includes(channel));

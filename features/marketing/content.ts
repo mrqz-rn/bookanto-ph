@@ -3,7 +3,7 @@ import {
   CalendarCheck,
   Clock,
   Inbox,
-  MessageSquareText,
+  Mail,
   MessagesSquare,
   QrCode,
   Search,
@@ -34,7 +34,7 @@ export const NAV = [
   { href: "#pricing", label: "Pricing" },
   { href: "#mobile", label: "App" },
   { href: "#faq", label: "FAQ" },
-  { href: "#investors", label: "Investors" },
+  // { href: "#investors", label: "Investors" },
 ];
 
 export const FEATURE_LINKS = [
@@ -46,7 +46,7 @@ export const FEATURE_LINKS = [
   {
     href: "#features",
     title: "Reminders, chat and Google",
-    body: "SMS reminders, booking chat, breaks and walk-ins, and a shop page on Google.",
+    body: "Email reminders, booking chat, breaks and walk-ins, and a shop page on Google.",
   },
   { href: "#modes", title: "Booking types", body: "Time slots, home service, quotes and queues." },
 ];
@@ -64,7 +64,7 @@ export const CONTACT = {
 export const PROBLEMS: Array<{ problem: string; solution: string }> = [
   {
     problem: "Bookings buried in Messenger, texts and calls",
-    solution: "One inbox for every booking request, with confirmations sent to customers by SMS.",
+    solution: "One inbox for every booking request, with confirmations sent to customers by email.",
   },
   {
     problem: "Customers who forget or don't show up",
@@ -94,9 +94,9 @@ export const FEATURES: Array<{ icon: LucideIcon; title: string; body: string; so
     body: "Add walk-ins and block breaks or days off, so you're never double-booked.",
   },
   {
-    icon: MessageSquareText,
-    title: "SMS confirmations and reminders",
-    body: "Customers get a text when you confirm and a reminder before their visit. Unanswered requests expire on their own.",
+    icon: Mail,
+    title: "Email confirmations and reminders",
+    body: "Customers get an email when you confirm and a reminder before their visit. Unanswered requests expire on their own.",
   },
   {
     icon: MessagesSquare,
@@ -207,7 +207,7 @@ export const PLANS: Array<{
     points: [
       "Every feature included",
       "No fees and no commissions",
-      "SMS confirmations and reminders",
+      "Email confirmations and reminders",
       "Help setting up your shop",
       "Founding partner badge",
     ],

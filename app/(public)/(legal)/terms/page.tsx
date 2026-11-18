@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="November 14, 2026">
+    <LegalPage title="Terms of Service" updated="November 18, 2026">
       <p>
         These terms apply when you use BooKanto, as a customer booking a service or as a shop
         offering one. By creating an account or using BooKanto, you agree to them. If you don&apos;t
@@ -130,8 +130,8 @@ export default function TermsPage() {
 
       <h2>11. Changes to these terms</h2>
       <p>
-        If we make important changes, we&apos;ll tell you in the app or by email or SMS before they
-        take effect. Using BooKanto after that means you accept the new terms.
+        If we make important changes, we&apos;ll tell you in the app or by email before they take
+        effect. Using BooKanto after that means you accept the new terms.
       </p>
 
       <h2>12. Governing law</h2>

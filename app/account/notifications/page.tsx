@@ -12,7 +12,7 @@ import { requireUser } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "Notification Settings",
   description:
-    "Manage your notification channels, SMS, email receipts, web push, and messaging channels on BooKanto.",
+    "Manage how BooKanto reaches you: email confirmations and reminders, web push, and messaging channels.",
 };
 
 export default async function NotificationsPage() {

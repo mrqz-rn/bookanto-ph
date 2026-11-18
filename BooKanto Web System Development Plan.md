@@ -12,7 +12,7 @@ This is the technical blueprint for building BooKanto's web system for the 6-mon
 - Customer accounts: book (Slot, Home, Quote, Queue), manage bookings, chat, review
 - Shop dashboard: onboarding, services, hours, booking inbox, calendar, walk-ins, staff (phase 2)
 - Admin console: shop approval, categories, users, bookings, disputes, audit log
-- Notifications by SMS, web push and email; installable PWA
+- Notifications by email and web push (SMS is switched off for now); installable PWA
 
 **Engineering principles**
 
@@ -47,11 +47,11 @@ One TypeScript codebase, mostly open-source libraries, with managed services for
 | Client data | TanStack Query | Caching and refetching in the shop dashboard |
 | Database | PostgreSQL on Supabase, PostGIS, pg\_cron | Data, nearby search, scheduled jobs |
 | ORM and migrations | Drizzle ORM and drizzle-kit | Typed queries; SQL migrations in git; swaps to the RDS Data API driver on AWS |
-| Auth | Supabase Auth (phone OTP, Google) behind `lib/auth` | Sessions in secure cookies through `@supabase/ssr` |
+| Auth | Supabase Auth (email OTP with email confirmation at sign-up, Google) behind `lib/auth`; phone OTP built but off | Sessions in secure cookies through `@supabase/ssr` |
 | Files | Supabase Storage behind `lib/storage` | Public shop photos; private documents |
 | Realtime | Supabase Realtime broadcast behind `lib/realtime` | Live booking inbox and chat |
-| SMS | Semaphore (PH gateway) through the Send SMS Hook and `lib/notify` | OTPs and booking texts |
-| Email | Resend with React Email templates | Receipts and notices |
+| SMS (off) | Semaphore (PH gateway) through the Send SMS Hook and `lib/notify` | Switched off (`SMS_NOTIFICATIONS_ENABLED`, `PHONE_AUTH_ENABLED`); kept for later |
+| Email | Resend through `lib/notify`; Supabase Auth emails from `supabase/templates` | Sign-up confirmation and sign-in codes, booking confirmations, reminders, receipts, new-request alerts to shops |
 | Web push | `web-push` library with VAPID keys | Free alerts to installed PWAs |
 | Maps | Google Maps JavaScript API, Places Autocomplete | Shop location and map view |
 | Bot protection | Cloudflare Turnstile | On OTP request and sign-up forms |
@@ -107,7 +107,7 @@ bookanto/
 │  ├─ storage.ts     # adapter: upload and signed URLs
 │  ├─ realtime.ts    # adapter: publish and subscribe
 │  ├─ jobs.ts        # expire requests, reminders, ratings, sitemap
-│  ├─ notify.ts      # SMS, push, email router
+│  ├─ notify.ts      # email, push (and dormant SMS) router
 │  ├─ rate-limit.ts, audit.ts, errors.ts, env.ts (zod-validated)
 │  └─ seo.ts, geo.ts, money.ts, time.ts
 ├─ db/migrations/      # SQL from drizzle-kit, plus PostGIS, triggers, policies
@@ -129,14 +129,14 @@ Fourteen modules make up the system. Phase 1 is everything needed for the public
 
 | Module | Phase 1 (pilot launch) | Phase 2 (during pilot) | Phase 3 (after pilot) |
 | --- | --- | --- | --- |
-| Accounts and auth | Phone OTP, Google sign-in, profile, delete account | Email login, saved addresses | Facebook login |
+| Accounts and auth | Email OTP with email confirmation, Google sign-in, profile, delete account | Saved addresses | Facebook login, phone OTP |
 | Shop onboarding | 5-step wizard, map pin, hours, photos, document upload | Category service templates | Bulk import of services |
 | Services and pricing | Fixed, starts-at and quote prices; duration; booking type; capacity | Service photos, add-ons | Packages and memberships |
 | Availability | Weekly hours, breaks, closures, buffer, capacity per slot | Per-staff schedules | Holiday templates |
 | Search and discovery | Nearby search, filters, sort, map view, category and city pages | Typo-tolerant search, "open now" | Recommendations |
 | Booking | Slot and Home flows, booking rules, cancel, reschedule | Quote and Queue flows | Deposits and online payment |
 | Shop dashboard | Today view, inbox, calendar, walk-ins, accept and decline | Staff accounts, simple stats | Revenue reports, exports |
-| Notifications | SMS for OTP and confirmations, email receipts, reminders, auto-expiry | Web push, notification settings | WhatsApp or Viber channel |
+| Notifications | Email for confirmations, reminders, auto-expiry, receipts and new requests to shops | Web push, notification settings | SMS, WhatsApp or Viber channel |
 | Messaging | Chat per booking with photos | Quick replies for shops | Read receipts |
 | Reviews | Rating and comment after completed booking, shop replies | Review photos, report a review | Review highlights |
 | Admin | Shop approval and verification, categories, users, bookings, audit log | Disputes, announcements | Fraud signals |
@@ -243,7 +243,7 @@ Use server actions for everything the app's own pages do, and route handlers onl
 - Messages shown to users are short and friendly, in English with Filipino-friendly wording; details go to Sentry only.
 - **Idempotency:** booking creation takes a client-generated `idempotency_key` so a double tap on a slow connection makes one booking.
 - **Pagination:** cursor-based (`created_at`, `id`), 20 items by default.
-- **Rate limits** (per user and per IP, stored in Postgres or Upstash Redis): OTP requests 3 per 10 minutes per phone; bookings 10 per day per customer; messages 30 per minute; search 60 per minute.
+- **Rate limits** (per user and per IP, stored in Postgres or Upstash Redis): OTP requests 3 per 10 minutes per email address; bookings 10 per day per customer; messages 30 per minute; search 60 per minute.
 - **Route handlers:** `/api/cron/[job]` requires a secret header; `/api/hooks/send-sms` verifies the Supabase hook signature; all check the HTTP method and return JSON.
 - **Time:** accept and return ISO strings in UTC; convert to Asia/Manila only in the UI.
 
@@ -300,7 +300,7 @@ BooKanto holds names, phone numbers, addresses and locations, so security is bui
 
 | Area | Controls |
 | --- | --- |
-| Authentication | Phone OTP: 6 digits, 5-minute expiry, 5 tries then lock 15 minutes; Cloudflare Turnstile before sending an OTP; sessions in `httpOnly`, `Secure`, `SameSite=Lax` cookies; refresh tokens rotated; sign out everywhere option; TOTP two-factor required for admins |
+| Authentication | Email OTP: 6 digits, new accounts confirm their email before first sign-in; 5-minute expiry, 5 tries then lock 15 minutes; Cloudflare Turnstile before sending an OTP; sessions in `httpOnly`, `Secure`, `SameSite=Lax` cookies; refresh tokens rotated; sign out everywhere option; TOTP two-factor required for admins |
 | Authorization | `assertCan` in every action (see RBAC); 404 for records the user must not see; RLS as a second guard; service-role key only on the server |
 | Input validation | Zod schemas on every input, strict mode (unknown fields rejected); length limits on all text; phone numbers normalized to E.164 |
 | Injection | Only parameterized queries through Drizzle; no string-built SQL; database functions use bound parameters |
@@ -412,7 +412,7 @@ Automate the checks that protect money-like data (bookings) and private data (pe
 | Performance | Lighthouse CI | Budgets above | Every pull request |
 | Security | OWASP ZAP baseline, `pnpm audit` | Headers, common vulnerabilities, vulnerable packages | Weekly and before launch |
 | Load | k6 | 200 concurrent users searching and booking on staging | Before beta and before public launch |
-| Manual | Real devices (a budget Android, an iPhone) | Full flows on mobile data, SMS delivery on Globe, Smart and DITO | Weekly during the build |
+| Manual | Real devices (a budget Android, an iPhone) | Full flows on mobile data, email delivery to Gmail, Yahoo and Outlook (inbox, not spam) | Weekly during the build |
 
 **Test data:** a seed script creates demo categories, cities, 30 shops and customers on staging; production never receives seed data. **Beta feedback:** a "Report a problem" link in the dashboard sends a screenshot and context to a GitHub issue template.
 
@@ -423,7 +423,7 @@ Three environments, one-click deploys from GitHub, and alerts that reach your ph
 | Environment | Web app | Database | Data |
 | --- | --- | --- | --- |
 | Local | `pnpm dev` | Supabase CLI in Docker | Seed data |
-| Staging (preview) | Vercel preview deploy per pull request | Free Supabase project | Seed data, test SMS numbers only |
+| Staging (preview) | Vercel preview deploy per pull request | Free Supabase project | Seed data, test email addresses only |
 | Production | Vercel production (Singapore functions) | Supabase Pro, Singapore | Real users |
 
 **Branching and releases**
@@ -447,9 +447,9 @@ Three environments, one-click deploys from GitHub, and alerts that reach your ph
 **Monitoring and alerts**
 
 - Sentry: errors with release tags; alert on new error types and spikes
-- Uptime checks every minute on home, a shop page and the health endpoint (`/api/health`); alert by SMS or push
+- Uptime checks every minute on home, a shop page and the health endpoint (`/api/health`); alert by email or push
 - Job monitoring: each cron job records its last success; alert if reminders or expiry have not run for 30 minutes
-- Business alerts: bookings with no shop response for 2 hours; SMS delivery failures above 5%
+- Business alerts: bookings with no shop response for 2 hours; email delivery failures above 5%
 - Weekly review: errors, slow queries (Supabase query performance), Core Web Vitals, costs
 
 **Incident basics:** a one-page runbook (who, how to roll back on Vercel, how to restore the database), and a status message banner the admin can switch on.

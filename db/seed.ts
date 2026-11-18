@@ -754,8 +754,8 @@ async function main() {
         CREATE TABLE IF NOT EXISTS "notification_preferences" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
           "user_id" uuid NOT NULL REFERENCES "public"."users"("id") ON DELETE cascade,
-          "preferred_channel" text DEFAULT 'sms' NOT NULL,
-          "sms_enabled" boolean DEFAULT true NOT NULL,
+          "preferred_channel" text DEFAULT 'email' NOT NULL,
+          "sms_enabled" boolean DEFAULT false NOT NULL,
           "email_enabled" boolean DEFAULT true NOT NULL,
           "push_enabled" boolean DEFAULT true NOT NULL,
           "whatsapp_enabled" boolean DEFAULT false NOT NULL,

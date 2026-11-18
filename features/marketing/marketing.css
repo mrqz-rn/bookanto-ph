@@ -870,7 +870,14 @@
 
   /* ---------- Footer ---------- */
 
-  .mk-closing {
-    background: var(--lit);
+  /* On the navy footer the directory links rest at 86% white and brighten on hover. */
+  .mk-footer .mk-footlink {
+    color: rgb(255 255 255 / 0.86);
+    transition: color 150ms var(--ease);
+  }
+
+  .mk-footer .mk-footlink:hover,
+  .mk-footer .mk-footlink:focus-visible {
+    color: #fff;
   }
 }

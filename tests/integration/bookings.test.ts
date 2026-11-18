@@ -22,9 +22,10 @@ vi.mock("@/lib/auth", () => ({
   },
   getCurrentUser: async () => currentUser,
 }));
-vi.mock("@/lib/notify", () => ({
-  sendNotification: vi.fn().mockResolvedValue({ success: true, channel: "sms" }),
+const notify = vi.hoisted(() => ({
+  sendNotification: vi.fn().mockResolvedValue({ success: true, channel: "email" }),
 }));
+vi.mock("@/lib/notify", () => notify);
 vi.mock("@/features/analytics/server-tracker", () => ({ trackServerEvent: vi.fn() }));
 const provider = vi.hoisted(() => ({
   createCheckout: vi.fn(),
@@ -146,10 +147,21 @@ describe("slot bookings", () => {
     as(ana());
     const idempotencyKey = key();
     const input = { serviceId: ids.haircut, startAt: at("10:00"), idempotencyKey };
+    notify.sendNotification.mockClear();
     first = expectOk(await customer.createBooking(input)).bookingId;
     const again = expectOk(await customer.createBooking(input));
 
     expect(again.bookingId).toBe(first);
+    // The shop owner is emailed about the new request once, not on the repeat tap.
+    const toShop = notify.sendNotification.mock.calls.filter(
+      ([options]) => options.template === "booking_request_received",
+    );
+    expect(toShop).toHaveLength(1);
+    expect(toShop[0]![0]).toMatchObject({
+      userId: ids.owner,
+      payload: { bookingId: first, customerName: "Test", startAt: new Date(at("10:00")) },
+    });
+    expect(toShop[0]![0].payload.expiresAt).toBeInstanceOf(Date);
     const row = await bookingRow(first);
     expect(row).toMatchObject({
       status: "requested",

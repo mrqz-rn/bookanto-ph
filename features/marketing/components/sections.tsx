@@ -1,4 +1,4 @@
-import { ArrowRight, Mail, MessageCircle, Phone } from "lucide-react";
+import { ArrowRight, Check, Mail, MessageCircle, Phone, Sparkles } from "lucide-react";
 import { Fragment, type CSSProperties } from "react";
 
 import { formatPhone } from "@/lib/phone";
@@ -27,7 +27,7 @@ import {
   InboxWindow,
   LockScreenPhone,
   PhoneInbox,
-  SmsStack,
+  EmailStack,
 } from "./mocks";
 import { PauseButton } from "./pause-button";
 import { AppleIcon, GooglePlayIcon } from "./store-icons";
@@ -74,7 +74,7 @@ export function Hero() {
             </h1>
             <p className="mk-hero__lead hero__lead mk-enter-up mt-6" style={{ "--i": 1 } as Vars}>
               Barbershops, salons, aircon technicians and other local services take bookings day and
-              night, send SMS reminders and log walk-ins from one phone.
+              night, send email reminders and log walk-ins from one phone.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <a
@@ -94,7 +94,7 @@ export function Hero() {
               </a>
             </div>
             <dl
-              className="mk-enter-up mt-auto hidden grid-cols-2 gap-x-6 gap-y-5 border-t border-[var(--line)] pt-6 xl:grid"
+              className="mk-enter-up mt-10 hidden grid-cols-2 gap-x-6 gap-y-5 border-t border-[var(--line)] pt-[60px] xl:grid"
               style={{ "--i": 4 } as Vars}
             >
               {facts.map(([value, label]) => (
@@ -109,6 +109,7 @@ export function Hero() {
           <div
             data-visual
             className="mk-hero__visual hero__media mk-enter-media lg:col-span-6 lg:col-start-7"
+            style={{ maxHeight: "68vh" }}
           >
             <div className="mk-fade-b absolute inset-0">
               <PhoneInbox className="top-8 left-1/2 h-[calc(100%+24px)] -translate-x-1/2 lg:top-12 lg:right-14 lg:left-auto lg:translate-x-0" />
@@ -116,7 +117,7 @@ export function Hero() {
             <div className="mk-float hidden lg:flex" aria-hidden>
               <span className="mk-dot" />
               <span className="mk-ui">
-                <span className="block font-semibold">SMS sent to Maria Santos</span>
+                <span className="block font-semibold">Email sent to Maria Santos</span>
                 <span className="block text-[var(--ink-2)]">Confirmed for today, 2:30 PM</span>
               </span>
             </div>
@@ -174,14 +175,14 @@ function AssembledLines({ lines }: { lines: string[] }) {
 export function Problems() {
   const fixes = [
     "One inbox and one-tap accept",
-    "SMS reminders and a no-show record",
+    "Email reminders and a no-show record",
     "A free shop page made for Google",
   ];
   return (
     <section
       id="problems"
       aria-labelledby="problems-heading"
-      className="mk-section mk-statement-section statement"
+      className="mk-section mk-statement-section statement min-h-0"
       data-moment="word-highlight"
       data-statement
     >
@@ -211,7 +212,7 @@ export function Problems() {
           data-visual
           className="mk-frame frame col-span-12 mt-8 p-4 sm:p-6 lg:col-span-6 lg:mt-0"
         >
-          <SmsStack />
+          <EmailStack inFlow />
         </div>
       </div>
     </section>
@@ -227,7 +228,7 @@ export function Inbox() {
         </h2>
         <p className="mk-intro">
           See the whole day at a glance. Accept, decline or suggest another time in one tap, and
-          BooKanto texts the customer for you.
+          BooKanto emails the customer for you.
         </p>
         <div
           data-visual
@@ -242,9 +243,9 @@ export function Inbox() {
 
 const FEATURE_CARDS = [
   {
-    title: "Texts customers for you",
-    body: "An SMS when you confirm and a reminder before the visit. Requests with no answer expire after 2 hours.",
-    picture: <SmsStack />,
+    title: "Emails customers for you",
+    body: "An email when you confirm and a reminder before the visit. Requests with no answer expire after 2 hours.",
+    picture: <EmailStack />,
     loop: true,
   },
   {
@@ -293,7 +294,6 @@ export function Features() {
       id="features"
       aria-labelledby="features-heading"
       className="mk-section mk-ground-surface"
-      style={{ "--h": 2 } as Vars}
     >
       <div
         className="mk-wrap wrap mk-g2 flex flex-col gap-6"
@@ -349,6 +349,7 @@ export function BookingModes() {
         <div
           data-visual
           className="mk-frame frame mk-split__visual col-span-12 lg:col-span-6 lg:col-start-7"
+          style={{ maxHeight: "68vh" }}
         >
           <div className="mk-fade-b absolute inset-0">
             <CustomerBookingPhone className="top-10 left-1/2 h-[calc(100%+24px)] -translate-x-1/2" />
@@ -385,11 +386,7 @@ export function Pricing() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <img
-                    src="/assets/icons/ui-sparkles.svg"
-                    className="size-5 shrink-0 text-green-700"
-                    alt=""
-                  />
+                  <Sparkles aria-hidden className="size-5 shrink-0 text-green-700" />
                   <h3 className="mk-h3">{plan.name}</h3>
                 </div>
                 {plan.highlight && <span className="mk-chip mk-chip--new">Now enrolling</span>}
@@ -407,11 +404,7 @@ export function Pricing() {
                     key={point}
                     className="flex items-center gap-2 border-b border-[var(--line)] py-2.5 text-[16px]"
                   >
-                    <img
-                      src="/assets/icons/ui-check.svg"
-                      className="size-4 shrink-0 text-green-700"
-                      alt=""
-                    />
+                    <Check aria-hidden className="size-4 shrink-0 text-green-700" />
                     <span>{point}</span>
                   </li>
                 ))}
@@ -419,7 +412,7 @@ export function Pricing() {
             </li>
           ))}
         </ul>
-        <p className="mk-body mt-6">Customers always book for free.</p>
+        {/* <p className="mk-body mt-6">Customers always book for free.</p> */}
       </div>
     </section>
   );
@@ -479,6 +472,7 @@ export function MobilePlatform() {
           <div
             data-visual
             className="mk-frame frame h-full bg-[radial-gradient(90%_70%_at_50%_0%,#1f6b45_0%,rgb(31_107_69/0)_70%),linear-gradient(180deg,#1b2b4d,#14213d)]"
+            style={{ maxHeight: "68vh" }}
           >
             <div className="mk-fade-b absolute inset-0">
               <LockScreenPhone className="top-10 left-1/2 h-[calc(100%+24px)] -translate-x-1/2" />
@@ -513,11 +507,7 @@ export function Faq() {
               {column.map(({ question, answer }) => (
                 <div key={question} className="border-b border-[var(--line)] py-5">
                   <dt className="flex items-center gap-2 text-[18px] font-semibold">
-                    <img
-                      src="/assets/icons/ui-chat.svg"
-                      className="size-4 shrink-0 text-green-700"
-                      alt=""
-                    />
+                    <MessageCircle aria-hidden className="size-4 shrink-0 text-green-700" />
                     <span>{question}</span>
                   </dt>
                   <dd className="mk-body mt-1">{answer}</dd>
@@ -693,7 +683,7 @@ export function LandingPage() {
       <Pricing />
       <MobilePlatform />
       <Faq />
-      <Investors />
+      {/* <Investors /> */}
       <Contact />
     </>
   );

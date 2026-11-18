@@ -24,7 +24,7 @@ export const PWA_BENEFITS = [
   },
   {
     title: "Instant Booking Alerts",
-    description: "Receive push notifications immediately without SMS carrier delays.",
+    description: "Get new booking requests the moment they arrive, even with the app closed.",
     icon: "bell",
   },
   {

@@ -60,8 +60,9 @@ export const notificationPreferences = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     preferredChannel: text("preferred_channel", { enum: NOTIFICATION_CHANNELS })
       .notNull()
-      .default("sms"),
-    smsEnabled: boolean("sms_enabled").notNull().default(true),
+      .default("email"),
+    // SMS is switched off (lib/notification-channels.ts); email is the default.
+    smsEnabled: boolean("sms_enabled").notNull().default(false),
     emailEnabled: boolean("email_enabled").notNull().default(true),
     pushEnabled: boolean("push_enabled").notNull().default(true),
     whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),

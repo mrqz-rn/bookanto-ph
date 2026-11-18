@@ -12,6 +12,16 @@ import {
 import { AppError } from "@/lib/errors";
 import * as authAdapter from "@/lib/auth";
 
+// Phone sign-in is switched off in the app (PHONE_AUTH_ENABLED); these tests
+// turn it on to keep the dormant code covered, and check it's refused when off.
+const phoneAuth = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/features/auth/constants", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/auth/constants")>()),
+  get PHONE_AUTH_ENABLED() {
+    return phoneAuth.enabled;
+  },
+}));
+
 vi.mock("@/lib/auth", () => ({
   sendOtp: vi.fn().mockResolvedValue(undefined),
   verifyOtp: vi.fn().mockResolvedValue({ authId: "user-123" }),
@@ -26,6 +36,23 @@ vi.mock("@/lib/auth", () => ({
 describe("auth server actions", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    phoneAuth.enabled = true;
+  });
+
+  describe("while phone sign-in is switched off", () => {
+    it("refuses to send or check a phone code", async () => {
+      phoneAuth.enabled = false;
+      expect(await requestPhoneOtp({ phone: "0917 123 4567" })).toMatchObject({
+        ok: false,
+        code: "FORBIDDEN",
+      });
+      expect(await verifyPhoneOtpAction({ phone: "0917 123 4567", code: "123456" })).toMatchObject({
+        ok: false,
+        code: "FORBIDDEN",
+      });
+      expect(authAdapter.sendOtp).not.toHaveBeenCalled();
+      expect(authAdapter.verifyOtp).not.toHaveBeenCalled();
+    });
   });
 
   describe("requestPhoneOtp", () => {

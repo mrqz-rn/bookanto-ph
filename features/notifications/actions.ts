@@ -14,6 +14,7 @@ import {
   type NotificationPreference,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { effectiveChannel, SMS_NOTIFICATIONS_ENABLED } from "@/lib/notification-channels";
 import { getOrCreateNotificationPreferences, sendNotification } from "@/lib/notify";
 import { normalizePhone } from "@/lib/phone";
 
@@ -52,8 +53,9 @@ export async function updateNotificationPreferencesAction(
     const [updated] = await db
       .update(notificationPreferences)
       .set({
-        preferredChannel: data.preferredChannel,
-        smsEnabled: data.smsEnabled,
+        // A channel that's switched off (SMS) can't be chosen or turned on.
+        preferredChannel: effectiveChannel(data.preferredChannel),
+        smsEnabled: SMS_NOTIFICATIONS_ENABLED && data.smsEnabled,
         emailEnabled: data.emailEnabled,
         pushEnabled: data.pushEnabled,
         whatsappEnabled: data.whatsappEnabled,
@@ -80,8 +82,8 @@ export async function updateNotificationPreferencesAction(
       targetType: "user",
       targetId: user.id,
       data: {
-        preferredChannel: data.preferredChannel,
-        smsEnabled: data.smsEnabled,
+        preferredChannel: updated.preferredChannel,
+        smsEnabled: updated.smsEnabled,
         emailEnabled: data.emailEnabled,
         pushEnabled: data.pushEnabled,
         whatsappEnabled: data.whatsappEnabled,

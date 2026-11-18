@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="November 14, 2026">
+    <LegalPage title="Privacy Policy" updated="November 18, 2026">
       <p>
         BooKanto is an online marketplace where customers find and book local service shops in the
         Philippines, and where shops manage those bookings. This policy explains what personal
@@ -62,9 +62,9 @@ export default function PrivacyPage() {
 
       <h2>2. How we use your information</h2>
       <ul>
-        <li>To create your account and sign you in, including texting you one-time codes.</li>
+        <li>To create your account and sign you in, including emailing you one-time codes.</li>
         <li>
-          To make, confirm, change and remind you about bookings, by SMS, email or app notification.
+          To make, confirm, change and remind you about bookings, by email or app notification.
         </li>
         <li>To let customers and shops chat about a booking, and to show reviews.</li>
         <li>To verify shops that upload business documents.</li>
@@ -97,8 +97,7 @@ export default function PrivacyPage() {
       </p>
       <ul>
         <li>Vercel and Supabase, for hosting, our database, sign-in and file storage.</li>
-        <li>An SMS gateway in the Philippines, for codes, confirmations and reminders.</li>
-        <li>Resend, for email.</li>
+        <li>Resend, for email, including sign-in codes, booking confirmations and reminders.</li>
         <li>Google Maps, for maps and addresses.</li>
         <li>Cloudflare Turnstile, to block automated sign-ups.</li>
         <li>Sentry and PostHog, for error reports and usage statistics.</li>
@@ -162,8 +161,8 @@ export default function PrivacyPage() {
 
       <h2>11. Changes to this policy</h2>
       <p>
-        If we make important changes, we&apos;ll tell you in the app or by email or SMS before they
-        take effect. The date at the top shows the latest version.
+        If we make important changes, we&apos;ll tell you in the app or by email before they take
+        effect. The date at the top shows the latest version.
       </p>
 
       <h2>12. Contact us</h2>

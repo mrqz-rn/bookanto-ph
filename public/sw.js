@@ -2,7 +2,7 @@
 // Version: 1.0.0
 // Features: Offline shell, navigation fallback, today's schedule API caching, and Web Push notifications.
 
-const SHELL_CACHE_NAME = "bookanto-shell-v1";
+const SHELL_CACHE_NAME = "bookanto-shell-v2";
 const DATA_CACHE_NAME = "bookanto-data-v1";
 
 const PRECACHE_RESOURCES = [

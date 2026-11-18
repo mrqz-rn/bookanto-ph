@@ -8,7 +8,7 @@ import { absoluteUrl, SITE_NAME } from "@/lib/seo";
 export const metadata: Metadata = {
   title: { absolute: "BooKanto: online booking for local service shops in the Philippines" },
   description:
-    "Online booking for barbershops, salons, and local service shops across the Philippines. Take 24/7 bookings, walk-ins, and SMS reminders for ₱0 during the 8-month pilot.",
+    "Online booking for barbershops, salons, and local service shops across the Philippines. Take 24/7 bookings, walk-ins, and email reminders for ₱0 during the 8-month pilot.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "BooKanto: online booking for local service shops in the Philippines",

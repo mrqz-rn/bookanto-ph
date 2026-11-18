@@ -3,25 +3,36 @@
 import { useEffect, useRef } from "react";
 
 const FILTER_ID = "mk-liquid";
+const NAVY = "#14213D";
+const GREEN = "#16A34A";
+
+// The K is the app icon's K (components/shared/logo.tsx), scaled so its stem
+// is Fredoka Bold's cap height at 228px: icon units x 1.679, with the stem's
+// foot on the baseline. "Boo" and "anto" are placed from Fredoka's measured
+// advances (393.3 and 478.8 at 228px), so the K sits where Fredoka's own K
+// would. The viewBox is cropped to the ink, so the name runs exactly from the
+// wrap's left line to its right line.
+const K_X = 399.3;
+const ANTO_X = 539.6;
 
 /**
- * The name set across the closing section. Under a fine pointer it ripples like
- * type seen through water and settles back to crisp type within about a second.
- * The SVG filter is applied only while it moves; touch screens and reduced
- * motion get the still name.
+ * "BooKanto" set across the closing section, white on navy with the brand K.
+ * Under a fine pointer it ripples like type seen through water and settles
+ * back within about a second. The SVG filter is applied only while it moves;
+ * touch screens and reduced motion get the still name.
  */
 export function LiquidWordmark() {
   const svgRef = useRef<SVGSVGElement>(null);
-  const textRef = useRef<SVGTextElement>(null);
+  const groupRef = useRef<SVGGElement>(null);
   const noiseRef = useRef<SVGFETurbulenceElement>(null);
   const mapRef = useRef<SVGFEDisplacementMapElement>(null);
 
   useEffect(() => {
     const svg = svgRef.current;
-    const text = textRef.current;
+    const group = groupRef.current;
     const noise = noiseRef.current;
     const map = mapRef.current;
-    if (!svg || !text || !noise || !map) return;
+    if (!svg || !group || !noise || !map) return;
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!finePointer || reduced) return;
@@ -44,7 +55,7 @@ export function LiquidWordmark() {
       map.setAttribute("scale", scale.toFixed(2));
       if (energy < 0.05 && scale < 0.05) {
         map.setAttribute("scale", "0");
-        text.style.removeProperty("filter");
+        group.removeAttribute("filter");
         frame = 0;
         return;
       }
@@ -56,7 +67,7 @@ export function LiquidWordmark() {
       lastX = event.clientX;
       lastY = event.clientY;
       energy = Math.min(36, energy + Math.min(distance, 40) * 0.5);
-      text.style.filter = `url(#${FILTER_ID})`;
+      group.setAttribute("filter", `url(#${FILTER_ID})`);
       if (!frame) frame = requestAnimationFrame(tick);
     };
 
@@ -67,8 +78,14 @@ export function LiquidWordmark() {
     };
   }, []);
 
+  const type = {
+    fontFamily: "var(--font-fredoka), ui-rounded, sans-serif",
+    fontWeight: 700,
+    fontSize: 228,
+  };
+
   return (
-    <svg ref={svgRef} viewBox="0 0 1000 178" className="mk-wordmark" aria-hidden="true">
+    <svg ref={svgRef} viewBox="6.8 -169 1008.4 181" className="mk-wordmark" aria-hidden="true">
       <defs>
         <filter id={FILTER_ID} x="-4%" y="-25%" width="108%" height="150%">
           <feTurbulence
@@ -89,21 +106,32 @@ export function LiquidWordmark() {
           />
         </filter>
       </defs>
-      <text
-        ref={textRef}
-        x="0"
-        y="166"
-        textLength="1000"
-        lengthAdjust="spacingAndGlyphs"
-        fill="#14213D"
-        style={{
-          fontFamily: "var(--font-fredoka), ui-rounded, sans-serif",
-          fontWeight: 700,
-          fontSize: 228,
-        }}
-      >
-        Boo<tspan fill="#16A34A">K</tspan>anto
-      </text>
+      <g ref={groupRef}>
+        <text x="0" y="0" fill="#fff" style={type}>
+          Boo
+        </text>
+        <g transform={`translate(${K_X} 0)`}>
+          <path
+            d="M115.9 -149.4 45.3 -78.9"
+            stroke={GREEN}
+            strokeWidth="34.4"
+            strokeLinecap="round"
+          />
+          <path
+            d="M50.4 -94.7 131.8 -13.2V7.6H111L33.6 -70.1z"
+            fill={GREEN}
+            stroke={GREEN}
+            strokeWidth="5"
+            strokeLinejoin="round"
+          />
+          <rect x="0" y="-157.8" width="36.9" height="157.8" rx="18.5" fill="#fff" />
+          <circle cx="45.3" cy="-78.9" r="26" fill="#fff" />
+          <circle cx="45.3" cy="-78.9" r="15.9" fill={NAVY} />
+        </g>
+        <text x={ANTO_X} y="0" fill="#fff" style={type}>
+          anto
+        </text>
+      </g>
     </svg>
   );
 }

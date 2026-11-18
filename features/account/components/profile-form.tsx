@@ -135,7 +135,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
               />
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Used for booking updates and SMS notifications.
+              Shared with a shop only after it accepts your booking, so it can reach you.
             </p>
           </div>
 

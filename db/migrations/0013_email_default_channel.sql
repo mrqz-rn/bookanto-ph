@@ -1,0 +1,2 @@
+ALTER TABLE "notification_preferences" ALTER COLUMN "preferred_channel" SET DEFAULT 'email';--> statement-breakpoint
+ALTER TABLE "notification_preferences" ALTER COLUMN "sms_enabled" SET DEFAULT false;

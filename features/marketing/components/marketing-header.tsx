@@ -1,4 +1,4 @@
-import { ChevronDown, MessageSquareText } from "lucide-react";
+import { ChevronDown, Mail } from "lucide-react";
 import Link from "next/link";
 
 import { LogoMark, Wordmark } from "@/components/shared/logo";
@@ -22,7 +22,7 @@ export function MarketingHeader() {
           href="/"
           className="nav__logo flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap"
         >
-          <img src="/icon.png" width={36} height={36} alt="" className="h-9 w-auto shrink-0" />
+          <LogoMark className="h-9" />
           <Wordmark className="text-[22px] sm:text-2xl" />
         </Link>
 
@@ -47,9 +47,9 @@ export function MarketingHeader() {
                   </ul>
                   <div className="mk-frame frame col-span-4 flex items-center p-6">
                     <div aria-hidden className="mk-ui mk-ui-surface flex w-full gap-3 p-4">
-                      <MessageSquareText className="mt-0.5 size-5 shrink-0 text-green-700" />
+                      <Mail className="mt-0.5 size-5 shrink-0 text-green-700" />
                       <p>
-                        <span className="block font-semibold">SMS to Maria Santos</span>
+                        <span className="block font-semibold">Email to Maria Santos</span>
                         <span className="text-[var(--ink-2)]">
                           Your Gupit + Balbas at Kuya Jun&apos;s is confirmed for today, 2:30 PM.
                         </span>

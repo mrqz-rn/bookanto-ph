@@ -42,8 +42,10 @@ describe("Notification UI Components", () => {
 
       // Primary Channel cards
       expect(html).toContain("Primary Delivery Channel");
-      expect(html).toContain("SMS Text Message");
-      expect(html).toContain("Email Receipts &amp; Notices");
+      // SMS is switched off, so it isn't offered; an old "sms" preference shows as email.
+      expect(html).not.toContain("SMS");
+      expect(html).toContain("Email Notifications");
+      expect(html).toContain("Confirmations, reminders and receipts go to: user@example.com");
       expect(html).toContain("Web Push Alerts");
       expect(html).toContain("WhatsApp");
       expect(html).toContain("Viber");

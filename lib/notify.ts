@@ -15,6 +15,11 @@ import {
 } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { formatPeso } from "@/lib/money";
+import {
+  DEFAULT_NOTIFICATION_CHANNEL,
+  effectiveChannel,
+  SMS_NOTIFICATIONS_ENABLED,
+} from "@/lib/notification-channels";
 import { normalizePhone } from "@/lib/phone";
 import { publicEnv } from "@/lib/public-env";
 import { formatManila } from "@/lib/time";
@@ -30,6 +35,8 @@ export type NotificationPayload = {
   shopName?: string;
   startAt?: string | Date;
   endAt?: string | Date;
+  /** When an unanswered request lapses (shown to the shop). */
+  expiresAt?: string | Date;
   priceCentavos?: number;
   totalCentavos?: number;
   customerName?: string;
@@ -550,6 +557,36 @@ export function renderNotificationTemplate(
       return { smsText, emailSubject, emailHtml, emailText, push, whatsAppText, viberText };
     }
 
+    case "booking_request_received": {
+      // To the shop owner: a customer is waiting for an answer.
+      const customerName = payload.customerName ?? "A customer";
+      const inboxUrl = `${siteUrl}/dashboard/inbox`;
+      const answerBy = payload.expiresAt ? formatManila(payload.expiresAt) : null;
+      const answerLine = answerBy
+        ? `Accept or decline by ${answerBy}, or the request expires.`
+        : "Accept or decline soon, or the request expires.";
+      const smsText = `BooKanto: New booking request from ${customerName} for ${serviceName} on ${formattedTime}. Ref: ${refCode}. ${answerLine} ${inboxUrl}`;
+      const emailSubject = `New booking request: ${serviceName}, ${formattedTime}`;
+      const emailHtml = generateSimpleEmailHtml({
+        title: "New Booking Request",
+        message: `<strong>${escapeHtml(customerName)}</strong> asked to book <strong>${escapeHtml(serviceName)}</strong> at <strong>${escapeHtml(shopName)}</strong> on <strong>${escapeHtml(formattedTime)}</strong>. ${escapeHtml(answerLine)}`,
+        refCode,
+        ctaText: "Open Booking Inbox",
+        ctaUrl: inboxUrl,
+      });
+      const emailText = `BooKanto: New Booking Request\nCustomer: ${customerName}\nService: ${serviceName}\nTime: ${formattedTime}\nRef: ${refCode}\n\n${answerLine}\nOpen your inbox: ${inboxUrl}`;
+      const push = {
+        title: "New Booking Request",
+        body: `${customerName} wants ${serviceName} on ${formattedTime}.`,
+        url: "/dashboard/inbox",
+        tag: `booking-${refCode}`,
+      };
+      const whatsAppText = `📥 *New BooKanto Booking Request*\n\n${customerName} wants *${serviceName}* on ${formattedTime}. Ref: \`${refCode}\`\n\n${answerLine}\n${inboxUrl}`;
+      const viberText = `📥 New BooKanto request: ${customerName}, ${serviceName} on ${formattedTime}. Ref: ${refCode}. ${inboxUrl}`;
+
+      return { smsText, emailSubject, emailHtml, emailText, push, whatsAppText, viberText };
+    }
+
     case "booking_reminder": {
       const smsText = `BooKanto Reminder: You have an upcoming booking at ${shopName} for ${serviceName} on ${formattedTime}. Ref: ${refCode}. Need changes? ${bookingUrl}`;
       const emailSubject = `Reminder: Upcoming Booking at ${shopName} (${formattedTime})`;
@@ -816,6 +853,16 @@ function generateReceiptEmailHtml({
 </html>`;
 }
 
+/** Text from people (names, notes) goes into email HTML escaped. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function generateSimpleEmailHtml({
   title,
   message,
@@ -897,8 +944,8 @@ export async function getOrCreateNotificationPreferences(
     .insert(notificationPreferences)
     .values({
       userId,
-      preferredChannel: "sms",
-      smsEnabled: true,
+      preferredChannel: DEFAULT_NOTIFICATION_CHANNEL,
+      smsEnabled: SMS_NOTIFICATIONS_ENABLED,
       emailEnabled: true,
       pushEnabled: true,
       whatsappEnabled: false,
@@ -940,7 +987,7 @@ export async function sendNotification(
     .limit(1);
 
   if (!user) {
-    return { success: false, channel: "sms", error: "User not found" };
+    return { success: false, channel: DEFAULT_NOTIFICATION_CHANNEL, error: "User not found" };
   }
 
   const prefs = await getOrCreateNotificationPreferences(userId);
@@ -956,24 +1003,28 @@ export async function sendNotification(
     return { success: false, channel: prefs.preferredChannel, error: "Auto-expiry disabled" };
   }
 
-  // 3. Resolve target channel
-  let targetChannel: NotificationChannel =
-    preferredChannelOverride ?? prefs.preferredChannel ?? "sms";
+  // 3. Resolve target channel. A channel that's switched off (SMS, see
+  // lib/notification-channels.ts) resolves to the default, email.
+  let targetChannel: NotificationChannel = effectiveChannel(
+    preferredChannelOverride ?? prefs.preferredChannel,
+  );
 
   const recipientPhone = options.recipientPhone ?? user.phone ?? "";
   const recipientEmail = options.recipientEmail ?? user.email ?? "";
   const waPhone = prefs.whatsappPhone ?? recipientPhone;
   const viberPhone = prefs.viberPhone ?? recipientPhone;
+  const smsReady = SMS_NOTIFICATIONS_ENABLED && prefs.smsEnabled && Boolean(recipientPhone);
+  const emailReady = prefs.emailEnabled && Boolean(recipientEmail);
 
   // Ensure channel is enabled and has necessary contact info, otherwise fall back
-  if (targetChannel === "sms" && (!prefs.smsEnabled || !recipientPhone)) {
-    targetChannel = prefs.emailEnabled && recipientEmail ? "email" : "push";
-  } else if (targetChannel === "email" && (!prefs.emailEnabled || !recipientEmail)) {
-    targetChannel = prefs.smsEnabled && recipientPhone ? "sms" : "push";
+  if (targetChannel === "sms" && !smsReady) {
+    targetChannel = emailReady ? "email" : "push";
+  } else if (targetChannel === "email" && !emailReady) {
+    targetChannel = smsReady ? "sms" : "push";
   } else if (targetChannel === "whatsapp" && (!prefs.whatsappEnabled || !waPhone)) {
-    targetChannel = prefs.smsEnabled && recipientPhone ? "sms" : "email";
+    targetChannel = smsReady ? "sms" : "email";
   } else if (targetChannel === "viber" && (!prefs.viberEnabled || !viberPhone)) {
-    targetChannel = prefs.smsEnabled && recipientPhone ? "sms" : "email";
+    targetChannel = smsReady ? "sms" : "email";
   }
 
   // 4. Render content
@@ -1050,10 +1101,20 @@ export async function sendNotification(
         sendSuccess = results.some((r) => r.success);
         messageId = `push_${subs.length}_devices`;
       } else {
-        // Fall back to SMS if push not subscribed
-        if (prefs.smsEnabled && recipientPhone) {
+        // No device subscribed to push: fall back to SMS (when on), then email.
+        if (smsReady) {
           targetChannel = "sms";
           const res = await smsProvider.sendSms({ to: recipientPhone, text: content.smsText });
+          sendSuccess = res.success;
+          messageId = res.messageId;
+        } else if (emailReady) {
+          targetChannel = "email";
+          const res = await emailProvider.sendEmail({
+            to: recipientEmail,
+            subject: content.emailSubject,
+            html: content.emailHtml,
+            text: content.emailText,
+          });
           sendSuccess = res.success;
           messageId = res.messageId;
         }

@@ -42,6 +42,7 @@ export const NOTIFICATION_TEMPLATES = [
   "otp",
   "booking_confirmed",
   "booking_requested",
+  "booking_request_received",
   "booking_reminder",
   "booking_auto_expired",
   "booking_cancelled",

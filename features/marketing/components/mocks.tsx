@@ -5,7 +5,7 @@ import {
   Clock3,
   Inbox,
   Lock,
-  MessageSquareText,
+  Mail,
   QrCode,
   Scissors,
   Search,
@@ -238,12 +238,12 @@ export function InboxWindow() {
 
 const MESSAGES = [
   {
-    label: "SMS sent · Confirmed",
+    label: "Email sent · Confirmed",
     when: "now",
     text: "Carlo Reyes: your Gupit + Hot Towel is confirmed for today, 3:30 PM.",
   },
   {
-    label: "SMS sent · Reminder",
+    label: "Email sent · Reminder",
     when: "12 min",
     text: "Maria Santos: see you today at 2:30 PM at Kuya Jun's Barbershop.",
   },
@@ -254,20 +254,25 @@ const MESSAGES = [
     muted: true,
   },
   {
-    label: "SMS sent · Confirmed",
+    label: "Email sent · Confirmed",
     when: "2 h",
     text: "Paolo Villanueva: Classic cut confirmed for tomorrow, 10:00 AM.",
   },
 ];
 
-/** Card: a new SMS enters the stack every cycle (the card group's one loop). */
-export function SmsStack() {
+/**
+ * The message log. In a feature card it sits absolutely in the card's panel,
+ * cut by the panel's foot, and a new email enters every cycle (the card group's
+ * one loop). With `inFlow` it takes its own height, for a frame that sizes to
+ * its content.
+ */
+export function EmailStack({ inFlow = false }: { inFlow?: boolean }) {
   return (
     <div
       role="img"
       data-visual
-      aria-label="BooKanto's message log: an SMS confirmation to Carlo Reyes, a reminder to Maria Santos and a request that expired after two hours"
-      className="mk-ui ui mk-sms"
+      aria-label="BooKanto's message log: an email confirmation to Carlo Reyes, a reminder to Maria Santos and a request that expired after two hours"
+      className={cn("mk-ui ui mk-sms", inFlow && "relative inset-auto")}
     >
       {MESSAGES.map((message, index) => (
         <div key={index} className="mk-ui-surface mk-sms__item">
@@ -280,7 +285,7 @@ export function SmsStack() {
             {message.muted ? (
               <Timer aria-hidden className="size-4" />
             ) : (
-              <MessageSquareText aria-hidden className="size-4" />
+              <Mail aria-hidden className="size-4" />
             )}
           </span>
           <span className="min-w-0 flex-1">

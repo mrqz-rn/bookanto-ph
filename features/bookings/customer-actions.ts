@@ -173,7 +173,16 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
     const result = await db.transaction(async (tx) => {
       await lockShop(tx, service.shopId);
       const repeat = await findByIdempotencyKey(tx, user.id, data.idempotencyKey);
-      if (repeat) return { created: repeat, isNew: false, shopName: "", serviceName: "" };
+      if (repeat) {
+        return {
+          created: repeat,
+          isNew: false,
+          shopName: "",
+          serviceName: "",
+          shopOwnerId: null,
+          expiresAt: null,
+        };
+      }
       await assertWithinLimits(tx, user.id, now);
 
       const slot = await findBookableSlot(tx, {
@@ -190,6 +199,7 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
           priceCentavos: services.priceCentavos,
           serviceName: services.name,
           shopName: shops.name,
+          shopOwnerId: shops.ownerId,
         })
         .from(services)
         .innerJoin(shops, eq(shops.id, services.shopId))
@@ -223,13 +233,20 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
           expiresAt: requestExpiry(now, startAt),
           idempotencyKey: data.idempotencyKey,
         })
-        .returning({ id: bookings.id, refCode: bookings.refCode });
+        .returning({ id: bookings.id, refCode: bookings.refCode, expiresAt: bookings.expiresAt });
       if (!created) throw new AppError("INTERNAL");
 
       await tx
         .insert(bookingEvents)
         .values({ bookingId: created.id, toStatus: "requested", actorId: user.id });
-      return { created, isNew: true, shopName: priced.shopName, serviceName: priced.serviceName };
+      return {
+        created,
+        isNew: true,
+        shopName: priced.shopName,
+        serviceName: priced.serviceName,
+        shopOwnerId: priced.shopOwnerId,
+        expiresAt: created.expiresAt,
+      };
     });
 
     if (result.isNew) {
@@ -252,6 +269,23 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
           startAt,
         },
       });
+      // The shop owner hears about it by email too, so a request isn't missed
+      // while they're away from the dashboard.
+      if (result.shopOwnerId) {
+        await notifyQuietly({
+          userId: result.shopOwnerId,
+          template: "booking_request_received",
+          payload: {
+            bookingId: result.created.id,
+            refCode: result.created.refCode,
+            shopName: result.shopName,
+            serviceName: result.serviceName,
+            customerName: user.name ?? undefined,
+            startAt,
+            expiresAt: result.expiresAt ?? undefined,
+          },
+        });
+      }
       revalidateBooking();
     }
     return { bookingId: result.created.id, refCode: result.created.refCode };

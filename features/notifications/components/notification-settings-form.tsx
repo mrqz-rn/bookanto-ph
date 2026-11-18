@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import type { NotificationChannel, NotificationPreference } from "@/lib/db/schema";
+import { effectiveChannel, SMS_NOTIFICATIONS_ENABLED } from "@/lib/notification-channels";
 import { publicEnv } from "@/lib/public-env";
 
 import {
@@ -31,7 +32,7 @@ export function NotificationSettingsForm({
   const [isPending, startTransition] = useTransition();
 
   const [preferredChannel, setPreferredChannel] = useState<NotificationChannel>(
-    initialPreferences.preferredChannel,
+    effectiveChannel(initialPreferences.preferredChannel),
   );
   const [smsEnabled, setSmsEnabled] = useState(initialPreferences.smsEnabled);
   const [emailEnabled, setEmailEnabled] = useState(initialPreferences.emailEnabled);
@@ -258,41 +259,43 @@ export function NotificationSettingsForm({
           </p>
 
           <div className="mt-6 space-y-6 divide-y divide-border">
-            {/* SMS */}
-            <div className="flex flex-col justify-between gap-3 pt-4 first:pt-0 sm:flex-row sm:items-center">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">📱</span>
-                  <span className="font-semibold text-navy-900">SMS Notifications</span>
+            {/* SMS (switched off for now; see lib/notification-channels.ts) */}
+            {SMS_NOTIFICATIONS_ENABLED && (
+              <div className="flex flex-col justify-between gap-3 pt-4 first:pt-0 sm:flex-row sm:items-center">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📱</span>
+                    <span className="font-semibold text-navy-900">SMS Notifications</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {userPhone
+                      ? `Registered mobile number: ${userPhone}`
+                      : "Add your phone number in your Profile to enable SMS."}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {userPhone
-                    ? `Registered mobile number: ${userPhone}`
-                    : "Add your phone number in your Profile to enable SMS."}
-                </p>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={smsEnabled}
+                    onChange={(e) => setSmsEnabled(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                </label>
               </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  checked={smsEnabled}
-                  onChange={(e) => setSmsEnabled(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-              </label>
-            </div>
+            )}
 
             {/* Email */}
-            <div className="flex flex-col justify-between gap-3 pt-6 sm:flex-row sm:items-center">
+            <div className="flex flex-col justify-between gap-3 pt-6 first:pt-0 sm:flex-row sm:items-center">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xl">✉️</span>
-                  <span className="font-semibold text-navy-900">Email Receipts</span>
+                  <span className="font-semibold text-navy-900">Email Notifications</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {userEmail
-                    ? `Receipts will be sent to: ${userEmail}`
-                    : "Add an email address in your Profile to receive receipts."}
+                    ? `Confirmations, reminders and receipts go to: ${userEmail}`
+                    : "Add an email address in your Profile to get booking confirmations."}
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
