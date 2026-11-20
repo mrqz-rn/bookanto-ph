@@ -2,11 +2,21 @@
 
 import * as React from "react";
 
+import { Store, Trash2, UserRound } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { addClosure, addTimeOff, removeClosure, removeTimeOff } from "../actions";
-import { CheckField, fieldLabel, FormMessage, selectClass, type FormState } from "./panel";
+import {
+  DateTile,
+  fieldLabel,
+  FormMessage,
+  Segmented,
+  selectClass,
+  SwitchField,
+  type FormState,
+} from "./panel";
 
 export type ClosureItem = {
   id: string;
@@ -15,6 +25,8 @@ export type ClosureItem = {
   who: string;
   when: string;
   reason: string | null;
+  /** The first day as a calendar tile ("NOV", "28"). */
+  tile: { month: string; day: string };
 };
 
 type Props = {
@@ -39,6 +51,7 @@ function heldMessage(count: number) {
 
 export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlock }: Props) {
   const [who, setWho] = React.useState(canEditShop ? SHOP : (staff[0]?.userId ?? SHOP));
+  const [lastPerson, setLastPerson] = React.useState(staff[0]?.userId ?? "");
   const [allDay, setAllDay] = React.useState(true);
   const [startDate, setStartDate] = React.useState(today);
   const [endDate, setEndDate] = React.useState(today);
@@ -96,27 +109,49 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
 
   const canRemove = (item: ClosureItem) => (item.kind === "closure" ? canEditShop : canBlock);
 
+  const forShop = who === SHOP;
+  const scopes = [
+    ...(canEditShop ? [{ value: "shop" as const, label: "Close the shop" }] : []),
+    ...(canBlock && staff.length > 0
+      ? [{ value: "person" as const, label: "One person off" }]
+      : []),
+  ];
+
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div>
-        <h3 className="text-sm font-semibold text-navy-900">Coming up</h3>
+    <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8">
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold text-navy-900">Coming up</h3>
         {items.length === 0 ? (
-          <div className="mt-2 rounded-lg border border-dashed border-border p-6 text-center">
-            <p className="font-medium text-navy-900">No closures or time off planned</p>
-            <p className="mt-1 text-sm text-slate-600">
-              Add one for a fiesta, renovation, or a day off, and customers won&apos;t be able to
-              book those times.
+          <div className="mt-3 rounded-xl border border-dashed border-border px-6 py-10 text-center">
+            <p className="font-semibold text-navy-900">No closures or time off planned</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">
+              Add one for a fiesta, a renovation or a day off, and customers can&apos;t book those
+              times.
             </p>
           </div>
         ) : (
-          <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+          <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
             {items.map((item) => (
-              <li key={item.id} className="flex items-start justify-between gap-3 p-3">
-                <div className="min-w-0">
-                  <p className="font-medium text-navy-900">{item.when}</p>
-                  <p className="text-sm text-slate-600">
-                    {item.who}
-                    {item.reason && <> · {item.reason}</>}
+              <li key={item.id} className="flex items-center gap-3 p-3 sm:p-4">
+                <DateTile month={item.tile.month} day={item.tile.day} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-navy-900">{item.when}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        item.kind === "closure"
+                          ? "bg-navy-900 text-white"
+                          : "bg-muted text-navy-900"
+                      }`}
+                    >
+                      {item.kind === "closure" ? (
+                        <Store aria-hidden="true" className="size-3" />
+                      ) : (
+                        <UserRound aria-hidden="true" className="size-3" />
+                      )}
+                      {item.who}
+                    </span>
+                    {item.reason && <span className="min-w-0 truncate">{item.reason}</span>}
                   </p>
                 </div>
                 {canRemove(item) && (
@@ -126,9 +161,12 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
                     onClick={() => remove(item)}
                     disabled={pending}
                     aria-label={`Remove ${item.who}, ${item.when}`}
-                    className="shrink-0 text-danger hover:bg-red-50 hover:text-danger"
+                    className="shrink-0 rounded-full text-danger hover:bg-red-50 hover:text-danger"
                   >
-                    {removing === item.id ? "Removing…" : "Remove"}
+                    <Trash2 aria-hidden="true" className="size-4" />
+                    <span className="hidden sm:inline">
+                      {removing === item.id ? "Removing…" : "Remove"}
+                    </span>
                   </Button>
                 )}
               </li>
@@ -138,31 +176,49 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
       </div>
 
       {canAdd ? (
-        <form onSubmit={submit} className="space-y-3" aria-labelledby="add-closure-title">
-          <h3 id="add-closure-title" className="text-sm font-semibold text-navy-900">
+        <form
+          onSubmit={submit}
+          className="space-y-4 rounded-xl bg-neutral-50 p-4 sm:p-5"
+          aria-labelledby="add-closure-title"
+        >
+          <h3 id="add-closure-title" className="text-base font-semibold text-navy-900">
             Add a closure or time off
           </h3>
-          <div>
-            <label htmlFor="closure-who" className={fieldLabel}>
-              Who
-            </label>
-            <select
-              id="closure-who"
-              value={who}
-              onChange={(event) => setWho(event.target.value)}
-              className={selectClass}
-            >
-              {canEditShop && <option value={SHOP}>Whole shop (closed)</option>}
-              {canBlock &&
-                staff.map((member) => (
+
+          {scopes.length > 1 && (
+            <Segmented
+              name="closure-scope"
+              legend="Who is away"
+              options={scopes}
+              value={forShop ? "shop" : "person"}
+              onChange={(scope) => setWho(scope === "shop" ? SHOP : lastPerson)}
+            />
+          )}
+
+          {!forShop && (
+            <div>
+              <label htmlFor="closure-who" className={fieldLabel}>
+                Who is off
+              </label>
+              <select
+                id="closure-who"
+                value={who}
+                onChange={(event) => {
+                  setWho(event.target.value);
+                  setLastPerson(event.target.value);
+                }}
+                className={selectClass}
+              >
+                {staff.map((member) => (
                   <option key={member.userId} value={member.userId}>
-                    {member.name} (time off)
+                    {member.name}
                   </option>
                 ))}
-            </select>
-          </div>
+              </select>
+            </div>
+          )}
 
-          <CheckField id="closure-all-day" checked={allDay} onChange={setAllDay} label="All day" />
+          <SwitchField id="closure-all-day" checked={allDay} onChange={setAllDay} label="All day" />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -175,6 +231,7 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
                 min={today}
                 required
                 value={startDate}
+                className="h-11"
                 onChange={(event) => {
                   setStartDate(event.target.value);
                   if (event.target.value > endDate) setEndDate(event.target.value);
@@ -191,6 +248,7 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
                 min={startDate}
                 required
                 value={endDate}
+                className="h-11"
                 onChange={(event) => setEndDate(event.target.value)}
               />
             </div>
@@ -206,6 +264,7 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
                     step={300}
                     required
                     value={startTime}
+                    className="h-11"
                     onChange={(event) => setStartTime(event.target.value)}
                   />
                 </div>
@@ -219,6 +278,7 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
                     step={300}
                     required
                     value={endTime}
+                    className="h-11"
                     onChange={(event) => setEndTime(event.target.value)}
                   />
                 </div>
@@ -235,12 +295,17 @@ export function ClosuresPanel({ shopId, today, items, staff, canEditShop, canBlo
               maxLength={200}
               placeholder="e.g. Barangay fiesta"
               value={reason}
+              className="h-11"
               onChange={(event) => setReason(event.target.value)}
             />
           </div>
 
-          <Button type="submit" disabled={pending}>
-            {pending && !removing ? "Adding…" : "Add"}
+          <Button
+            type="submit"
+            disabled={pending}
+            className="w-full motion-safe:hover:-translate-y-px motion-safe:active:scale-[0.98]"
+          >
+            {pending && !removing ? "Adding…" : forShop ? "Add closure" : "Add time off"}
           </Button>
         </form>
       ) : (

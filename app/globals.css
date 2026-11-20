@@ -108,3 +108,10 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Room under the page for the customer tab bar (features/account/components/site-nav.tsx). */
+@media (width < 48rem) {
+  body:has([data-tab-bar]) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}

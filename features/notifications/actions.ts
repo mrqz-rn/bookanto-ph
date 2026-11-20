@@ -14,7 +14,12 @@ import {
   type NotificationPreference,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
-import { effectiveChannel, SMS_NOTIFICATIONS_ENABLED } from "@/lib/notification-channels";
+import {
+  EMAIL_NOTIFICATIONS_REQUIRED,
+  effectiveChannel,
+  MESSAGING_APP_NOTIFICATIONS_ENABLED,
+  SMS_NOTIFICATIONS_ENABLED,
+} from "@/lib/notification-channels";
 import { getOrCreateNotificationPreferences, sendNotification } from "@/lib/notify";
 import { normalizePhone } from "@/lib/phone";
 
@@ -53,13 +58,14 @@ export async function updateNotificationPreferencesAction(
     const [updated] = await db
       .update(notificationPreferences)
       .set({
-        // A channel that's switched off (SMS) can't be chosen or turned on.
+        // A channel that's switched off (SMS, WhatsApp, Viber) can't be chosen
+        // or turned on, and email can't be turned off.
         preferredChannel: effectiveChannel(data.preferredChannel),
         smsEnabled: SMS_NOTIFICATIONS_ENABLED && data.smsEnabled,
-        emailEnabled: data.emailEnabled,
+        emailEnabled: EMAIL_NOTIFICATIONS_REQUIRED || data.emailEnabled,
         pushEnabled: data.pushEnabled,
-        whatsappEnabled: data.whatsappEnabled,
-        viberEnabled: data.viberEnabled,
+        whatsappEnabled: MESSAGING_APP_NOTIFICATIONS_ENABLED && data.whatsappEnabled,
+        viberEnabled: MESSAGING_APP_NOTIFICATIONS_ENABLED && data.viberEnabled,
         bookingConfirmations: data.bookingConfirmations,
         bookingReminders: data.bookingReminders,
         bookingAutoExpiry: data.bookingAutoExpiry,
@@ -84,10 +90,10 @@ export async function updateNotificationPreferencesAction(
       data: {
         preferredChannel: updated.preferredChannel,
         smsEnabled: updated.smsEnabled,
-        emailEnabled: data.emailEnabled,
-        pushEnabled: data.pushEnabled,
-        whatsappEnabled: data.whatsappEnabled,
-        viberEnabled: data.viberEnabled,
+        emailEnabled: updated.emailEnabled,
+        pushEnabled: updated.pushEnabled,
+        whatsappEnabled: updated.whatsappEnabled,
+        viberEnabled: updated.viberEnabled,
       },
     });
 
@@ -132,6 +138,13 @@ export async function savePushSubscriptionAction(
         },
       });
 
+    // Allowing push on a device turns the push channel on.
+    await getOrCreateNotificationPreferences(user.id);
+    await db
+      .update(notificationPreferences)
+      .set({ pushEnabled: true, updatedAt: sql`now()` })
+      .where(eq(notificationPreferences.userId, user.id));
+
     // 5. Audit log
     await writeAudit({
       actorId: user.id,
@@ -169,6 +182,19 @@ export async function deletePushSubscriptionAction(
       .where(
         and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.endpoint, data.endpoint)),
       );
+
+    // Turning push off on the last device turns the push channel off.
+    const [remaining] = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, user.id))
+      .limit(1);
+    if (!remaining) {
+      await db
+        .update(notificationPreferences)
+        .set({ pushEnabled: false, updatedAt: sql`now()` })
+        .where(eq(notificationPreferences.userId, user.id));
+    }
 
     // 5. Audit log
     await writeAudit({

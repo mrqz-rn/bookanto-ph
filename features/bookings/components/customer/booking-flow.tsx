@@ -31,6 +31,7 @@ export type FlowService = {
   depositLabel: string | null;
   /** "Free to cancel up to 2 hours before." */
   cancelNote: string;
+  photos?: Array<{ id: string; path: string; url: string }>;
 };
 
 type Props = {

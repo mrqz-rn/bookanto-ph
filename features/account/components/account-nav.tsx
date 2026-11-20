@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { signOutAction } from "@/features/auth/actions";
+import { formatPhone } from "@/lib/phone";
 import { ACCOUNT_NAV_ITEMS } from "../constants";
 
 type AccountNavContextValue = {
@@ -100,12 +101,12 @@ export function AccountNav({ userName, userPhone, userEmail }: AccountNavProps) 
   const activePathname = pendingHref ?? pathname;
 
   const displayName = userName || userPhone || userEmail || "Valued Customer";
-  const contactInfo = userPhone || userEmail || "";
+  const contactInfo = (userPhone && formatPhone(userPhone)) || userEmail || "";
 
   return (
-    <div className="space-y-6">
+    <div className="lg:space-y-6">
       {/* User greeting card */}
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-5">
+      <div className="hidden items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-5 lg:flex">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent font-display text-xl font-bold text-green-700">
           {displayName.charAt(0).toUpperCase()}
         </div>
@@ -116,7 +117,11 @@ export function AccountNav({ userName, userPhone, userEmail }: AccountNavProps) 
       </div>
 
       {/* Navigation tabs */}
-      <nav aria-label="Account navigation" className="flex flex-col gap-1">
+      {/* A pill row on phones and tablets, a list beside the page from 1024px. */}
+      <nav
+        aria-label="Account navigation"
+        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0"
+      >
         {ACCOUNT_NAV_ITEMS.map((item) => {
           const isActive =
             activePathname === item.href || activePathname.startsWith(`${item.href}/`);
@@ -145,20 +150,23 @@ export function AccountNav({ userName, userPhone, userEmail }: AccountNavProps) 
                 }
                 setPendingHref(item.href);
               }}
-              className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-150 ${
+              className={`flex min-h-11 shrink-0 items-center justify-between rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 lg:rounded-lg lg:border-0 lg:py-3 ${
                 isActive
-                  ? "bg-accent font-semibold text-navy-900"
+                  ? "border-transparent bg-accent font-semibold text-navy-900"
                   : "text-slate-600 hover:bg-slate-100 hover:text-navy-900"
               }`}
             >
               <span>{item.label}</span>
-              <span className="text-slate-400">→</span>
+              <span aria-hidden className="hidden text-slate-600 lg:inline">
+                →
+              </span>
             </Link>
           );
         })}
 
         {/* Sign out button */}
-        <form action={signOutAction} className="mt-2 border-t border-border pt-2">
+        {/* On phones and tablets, Log out is in the header's account menu. */}
+        <form action={signOutAction} className="mt-2 hidden border-t border-border pt-2 lg:block">
           <button
             type="submit"
             className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium text-danger transition-colors hover:bg-red-50"

@@ -33,9 +33,9 @@ function Tile({ href, label, icon }: { href: string; label: string; icon: ReactN
   return (
     <Link
       href={href}
-      className="flex h-full flex-col items-center gap-2 rounded-lg p-1 text-center text-sm leading-tight font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="group flex h-full flex-col items-center gap-2 rounded-lg p-1 text-center text-sm leading-tight font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <span className="flex size-14 items-center justify-center rounded-full border bg-white shadow-xs">
+      <span className="flex size-14 items-center justify-center rounded-full border bg-white shadow-xs transition-[transform,box-shadow,background-color] duration-200 group-hover:-translate-y-0.5 group-hover:bg-accent group-hover:shadow-md group-active:translate-y-0">
         {icon}
       </span>
       <span className="line-clamp-2">{label}</span>

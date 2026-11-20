@@ -2,7 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getOpenSlots, setHours } from "@/features/availability/actions";
+import { getOpenSlots, setHolidayRules, setHours } from "@/features/availability/actions";
+import { ClosuresPanel } from "@/features/availability/components/closures-panel";
+import { HolidayRulesForm } from "@/features/availability/components/holiday-rules-form";
 import { fromDraft, toDraft } from "@/features/availability/components/hours-draft";
 import { ShopHoursForm } from "@/features/availability/components/shop-hours-form";
 import { SlotPreview } from "@/features/availability/components/slot-preview";
@@ -10,6 +12,11 @@ import { SlotPreview } from "@/features/availability/components/slot-preview";
 vi.mock("@/features/availability/actions", () => ({
   setHours: vi.fn(),
   getOpenSlots: vi.fn(),
+  setHolidayRules: vi.fn(),
+  addClosure: vi.fn(),
+  addTimeOff: vi.fn(),
+  removeClosure: vi.fn(),
+  removeTimeOff: vi.fn(),
 }));
 
 const SHOP = "8c1f3f7e-2a8a-4f43-9a54-3c1d2f9a0b11";
@@ -70,6 +77,101 @@ describe("ShopHoursForm", () => {
     render(<ShopHoursForm shopId={SHOP} hours={weekdays} canEdit={false} />);
     expect(screen.queryByRole("button", { name: "Save hours" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Monday opens")).toBeDisabled();
+  });
+});
+
+describe("WeekHoursEditor in the hours form", () => {
+  it("opens a closed day with its switch, flags the change and resets it", () => {
+    render(<ShopHoursForm shopId={SHOP} hours={weekdays} canEdit />);
+    const sunday = screen.getByRole("switch", { name: /Sunday/ });
+    expect(sunday).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(sunday);
+    expect(sunday).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText("Sunday opens")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(screen.getByText(/Open 6 days/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.queryByLabelText("Sunday opens")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+  });
+
+  it("removes a break and saves the day without one", async () => {
+    vi.mocked(setHours).mockResolvedValue({ ok: true, data: { openDays: 5 } });
+    render(<ShopHoursForm shopId={SHOP} hours={weekdays} canEdit />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Monday break" }));
+    expect(screen.getByRole("button", { name: /Add break.*Monday/ })).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save hours" })));
+
+    const saved = (
+      vi.mocked(setHours).mock.calls[0]![0] as {
+        hours: { weekday: number; breakStart: string | null; breakEnd: string | null }[];
+      }
+    ).hours;
+    expect(saved.find((day) => day.weekday === 1)).toMatchObject({
+      breakStart: null,
+      breakEnd: null,
+    });
+    expect(saved.find((day) => day.weekday === 2)).toMatchObject({ breakStart: "12:00" });
+  });
+});
+
+describe("HolidayRulesForm", () => {
+  const holidays = [
+    {
+      key: "christmas",
+      name: "Christmas Day",
+      kind: "regular" as const,
+      dateLabel: "Fri, Dec 25, 2026",
+      tile: { month: "Dec", day: "25" },
+      movable: false,
+    },
+  ];
+
+  it("saves a holiday set to closed", async () => {
+    vi.mocked(setHolidayRules).mockResolvedValue({
+      ok: true,
+      data: { closedOn: 1, specialHours: 0 },
+    });
+    render(<HolidayRulesForm shopId={SHOP} holidays={holidays} rules={[]} canEdit />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Closed" }));
+    expect(screen.getByText("Closed on 1")).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save holidays" })));
+
+    expect(setHolidayRules).toHaveBeenCalledWith({
+      shopId: SHOP,
+      rules: [{ holidayKey: "christmas", opens: null, closes: null }],
+    });
+  });
+
+  it("asks for opening times on special hours", () => {
+    render(<HolidayRulesForm shopId={SHOP} holidays={holidays} rules={[]} canEdit />);
+    fireEvent.click(screen.getByRole("radio", { name: "Special" }));
+    expect(screen.getByLabelText("Christmas Day opens")).toBeInTheDocument();
+  });
+});
+
+describe("ClosuresPanel", () => {
+  it("switches between closing the shop and one person's time off", () => {
+    render(
+      <ClosuresPanel
+        shopId={SHOP}
+        today="2026-11-20"
+        items={[]}
+        staff={[{ userId: "u1", name: "Rico" }]}
+        canEditShop
+        canBlock
+      />,
+    );
+    expect(screen.getByText("No closures or time off planned")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add closure" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "One person off" }));
+    expect(screen.getByLabelText("Who is off")).toHaveValue("u1");
+    expect(screen.getByRole("button", { name: "Add time off" })).toBeInTheDocument();
   });
 });
 

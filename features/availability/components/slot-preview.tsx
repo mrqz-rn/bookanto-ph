@@ -61,7 +61,7 @@ export function SlotPreview({
 
   if (services.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-6 text-center">
+      <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
         <p className="font-medium text-navy-900">No bookable services yet</p>
         <p className="mt-1 text-sm text-slate-600">
           Add an active service with Slot, Home or Quote booking to see its open times here.
@@ -149,10 +149,10 @@ export function SlotPreview({
                     type="button"
                     aria-pressed={selected}
                     onClick={() => setSelectedDate(entry.date)}
-                    className={`flex min-h-11 w-20 shrink-0 flex-col items-center rounded-lg border px-2 py-2 text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none ${
+                    className={`flex min-h-11 w-20 shrink-0 flex-col items-center rounded-xl border px-2 py-2.5 text-sm transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none ${
                       selected
                         ? "border-navy-900 bg-navy-900 text-white"
-                        : "border-border bg-background text-navy-900 hover:border-green-700"
+                        : "border-border bg-white text-navy-900 hover:border-green-700 hover:bg-accent"
                     }`}
                   >
                     <span className="font-semibold">{weekday}</span>
@@ -168,7 +168,7 @@ export function SlotPreview({
             </div>
 
             {day && day.slots.length === 0 && (
-              <p className="mt-3 rounded-lg border border-dashed border-border p-6 text-center text-sm text-slate-600">
+              <p className="mt-3 rounded-xl border border-dashed border-border p-6 text-center text-sm text-slate-600">
                 No open times on {day.label}. The shop is closed, fully booked, or it&apos;s too
                 late to book today.
               </p>
@@ -181,7 +181,7 @@ export function SlotPreview({
                 {day.slots.map((slot) => (
                   <li
                     key={slot.startAt}
-                    className="flex min-h-11 flex-col items-center justify-center rounded-lg border border-green-700/40 bg-accent px-2 py-1 text-sm font-semibold text-navy-900"
+                    className="flex min-h-11 flex-col items-center justify-center rounded-xl border border-green-700/40 bg-accent px-2 py-1 text-sm font-semibold text-navy-900 tabular-nums"
                   >
                     {slot.label}
                     {slot.remaining > 1 && (

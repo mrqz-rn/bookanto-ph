@@ -30,6 +30,17 @@ describe("Notification UI Components", () => {
   };
 
   describe("NotificationSettingsForm", () => {
+    it("explains that web push is off when the server has no VAPID key", () => {
+      const html = renderToStaticMarkup(
+        <NotificationSettingsForm
+          initialPreferences={mockPreferences}
+          userEmail="user@example.com"
+          vapidPublicKey={null}
+        />,
+      );
+      expect(html).toContain("Web push isn&#x27;t available yet");
+    });
+
     it("renders primary channels and notification settings", () => {
       const html = renderToStaticMarkup(
         <NotificationSettingsForm
@@ -37,6 +48,7 @@ describe("Notification UI Components", () => {
           userPhone="+639171234567"
           userEmail="user@example.com"
           hasActivePushSubscription={true}
+          vapidPublicKey="test-vapid-key"
         />,
       );
 
@@ -47,13 +59,17 @@ describe("Notification UI Components", () => {
       expect(html).toContain("Email Notifications");
       expect(html).toContain("Confirmations, reminders and receipts go to: user@example.com");
       expect(html).toContain("Web Push Alerts");
-      expect(html).toContain("WhatsApp");
-      expect(html).toContain("Viber");
+      // WhatsApp and Viber are switched off.
+      expect(html).not.toContain("WhatsApp");
+      expect(html).not.toContain("Viber");
+      // Email can't be turned off.
+      expect(html).toContain("Always on");
 
       // Channel settings
       expect(html).toContain("Channel Settings");
-      expect(html).toContain("Active on device");
-      expect(html).toContain("Disable on Device");
+      expect(html).toContain("Web Push Notifications");
+      expect(html).toContain("On for this device");
+      expect(html).toContain("Turn off on this device");
 
       // Notification types
       expect(html).toContain("Notification Types");
@@ -61,8 +77,8 @@ describe("Notification UI Components", () => {
       expect(html).toContain("Upcoming Appointment Reminders");
       expect(html).toContain("Auto-Expiry &amp; Status Updates");
 
-      // Test notification card
-      expect(html).toContain("Send a Test Notification");
+      // Test notification card is hidden for now.
+      expect(html).not.toContain("Send a Test Notification");
     });
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Image as ImageIcon, Plus, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,13 @@ import {
   updateServiceAddon,
 } from "../actions";
 
-type ServicePhoto = {
+export type ServicePhoto = {
   id: string;
   path: string;
   sortOrder: number;
 };
 
-type ServiceAddon = {
+export type ServiceAddon = {
   id: string;
   serviceId: string;
   name: string;
@@ -31,22 +32,44 @@ type ServiceAddon = {
   active: boolean;
 };
 
-type ServiceOption = {
+export type ServiceOption = {
   id: string;
   name: string;
   photos: ServicePhoto[];
   addons: ServiceAddon[];
 };
 
-type ServicePhotosAddonsProps = {
+export type ServicePhotosAddonsProps = {
   shopId: string;
   services: ServiceOption[];
-  onRefresh: () => void;
+  onRefresh?: () => void;
+  onUpdateService?: (serviceId: string, updater: (prev: ServiceOption) => ServiceOption) => void;
 };
 
-export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhotosAddonsProps) {
-  const [selectedServiceId, setSelectedServiceId] = React.useState<string>(services[0]?.id || "");
-  const selectedService = services.find((s) => s.id === selectedServiceId) || services[0];
+export function ServicePhotosAddons({
+  shopId,
+  services: initialServices,
+  onRefresh,
+  onUpdateService,
+}: ServicePhotosAddonsProps) {
+  const router = useRouter();
+  const [localServices, setLocalServices] = React.useState<ServiceOption[]>(initialServices);
+
+  React.useEffect(() => {
+    setLocalServices(initialServices);
+  }, [initialServices]);
+
+  const [selectedServiceId, setSelectedServiceId] = React.useState<string>(
+    initialServices[0]?.id || "",
+  );
+
+  React.useEffect(() => {
+    if (!localServices.some((s) => s.id === selectedServiceId) && localServices[0]) {
+      setSelectedServiceId(localServices[0].id);
+    }
+  }, [localServices, selectedServiceId]);
+
+  const selectedService = localServices.find((s) => s.id === selectedServiceId) || localServices[0];
 
   // Add-on Form state
   const [isAddingAddon, setIsAddingAddon] = React.useState(false);
@@ -57,10 +80,21 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
 
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = React.useState<string | null>(null);
+  const [deletingAddonId, setDeletingAddonId] = React.useState<string | null>(null);
+  const [togglingAddonId, setTogglingAddonId] = React.useState<string | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  if (services.length === 0) {
+  const updateCurrentService = (updater: (prev: ServiceOption) => ServiceOption) => {
+    if (!selectedService) return;
+    const targetId = selectedService.id;
+    setLocalServices((prev) => prev.map((s) => (s.id === targetId ? updater(s) : s)));
+    onUpdateService?.(targetId, updater);
+    router.refresh();
+  };
+
+  if (localServices.length === 0) {
     return (
       <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-neutral-500">
         <p className="font-semibold text-neutral-800">No services yet.</p>
@@ -77,6 +111,13 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
 
     if (file.size > 8 * 1024 * 1024) {
       setError("File exceeds 8 MB maximum size.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Please select a JPEG, PNG, or WebP photo.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
@@ -84,18 +125,37 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
     setError(null);
 
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `services/${selectedService.id}/photo-${Date.now()}.${ext}`;
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const res = reader.result as string;
+          const b64 = res.split(",")[1];
+          if (b64) resolve(b64);
+          else reject(new Error("Failed to read image data"));
+        };
+        reader.onerror = () => reject(reader.error);
+      });
+      reader.readAsDataURL(file);
+
+      const imageBase64 = await base64Promise;
 
       const res = await addServicePhoto({
         serviceId: selectedService.id,
         shopId,
-        path,
+        imageBase64,
         sortOrder: selectedService.photos.length,
       });
 
       if (res.ok) {
-        onRefresh();
+        const newPhoto: ServicePhoto = {
+          id: res.data.mediaId,
+          path: res.data.path,
+          sortOrder: selectedService.photos.length,
+        };
+        updateCurrentService((s) => ({
+          ...s,
+          photos: [...s.photos, newPhoto],
+        }));
       } else {
         setError(res.message);
       }
@@ -109,15 +169,26 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
 
   const handlePhotoDelete = async (mediaId: string) => {
     if (!selectedService) return;
+    setDeletingPhotoId(mediaId);
+    setError(null);
     try {
       const res = await removeServicePhoto({
         serviceId: selectedService.id,
         shopId,
         mediaId,
       });
-      if (res.ok) onRefresh();
+      if (res.ok) {
+        updateCurrentService((s) => ({
+          ...s,
+          photos: s.photos.filter((p) => p.id !== mediaId),
+        }));
+      } else {
+        setError(res.message);
+      }
     } catch {
       setError("Failed to delete photo.");
+    } finally {
+      setDeletingPhotoId(null);
     }
   };
 
@@ -143,12 +214,24 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
       });
 
       if (res.ok) {
+        const newAddon: ServiceAddon = {
+          id: res.data.addonId,
+          serviceId: selectedService.id,
+          name: addonName.trim(),
+          description: addonDesc.trim() || null,
+          priceCentavos,
+          durationMin,
+          active: true,
+        };
+        updateCurrentService((s) => ({
+          ...s,
+          addons: [...s.addons, newAddon],
+        }));
         setIsAddingAddon(false);
         setAddonName("");
         setAddonDesc("");
         setAddonPrice("50");
         setAddonDuration("10");
-        onRefresh();
       } else {
         setError(res.message);
       }
@@ -160,15 +243,31 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
   };
 
   const handleDeleteAddon = async (addonId: string) => {
+    if (!selectedService) return;
+    setDeletingAddonId(addonId);
+    setError(null);
     try {
       const res = await deleteServiceAddon({ addonId, shopId });
-      if (res.ok) onRefresh();
+      if (res.ok) {
+        updateCurrentService((s) => ({
+          ...s,
+          addons: s.addons.filter((a) => a.id !== addonId),
+        }));
+      } else {
+        setError(res.message);
+      }
     } catch {
       setError("Could not delete add-on.");
+    } finally {
+      setDeletingAddonId(null);
     }
   };
 
   const handleToggleAddon = async (addon: ServiceAddon) => {
+    if (!selectedService) return;
+    setTogglingAddonId(addon.id);
+    setError(null);
+    const newActive = !addon.active;
     try {
       const res = await updateServiceAddon({
         addonId: addon.id,
@@ -176,11 +275,20 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
         name: addon.name,
         priceCentavos: addon.priceCentavos,
         durationMin: addon.durationMin,
-        active: !addon.active,
+        active: newActive,
       });
-      if (res.ok) onRefresh();
+      if (res.ok) {
+        updateCurrentService((s) => ({
+          ...s,
+          addons: s.addons.map((a) => (a.id === addon.id ? { ...a, active: newActive } : a)),
+        }));
+      } else {
+        setError(res.message);
+      }
     } catch {
       setError("Could not update add-on status.");
+    } finally {
+      setTogglingAddonId(null);
     }
   };
 
@@ -196,7 +304,7 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
           onChange={(e) => setSelectedServiceId(e.target.value)}
           className="mt-1.5 h-11 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none"
         >
-          {services.map((s) => (
+          {localServices.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name} ({s.photos.length} photos, {s.addons.length} add-ons)
             </option>
@@ -256,12 +364,22 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
                       className="size-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = "none";
+                        const parent = (e.target as HTMLElement).parentElement;
+                        const fallback = parent?.querySelector(".photo-fallback");
+                        if (fallback) {
+                          (fallback as HTMLElement).style.display = "flex";
+                        }
                       }}
                     />
+                    <div className="photo-fallback hidden size-full flex-col items-center justify-center p-2 text-center text-neutral-400">
+                      <ImageIcon className="mb-1 size-5 text-neutral-300" />
+                      <span className="text-[10px] text-neutral-400">Failed to load</span>
+                    </div>
                     <button
                       type="button"
+                      disabled={deletingPhotoId === p.id}
                       onClick={() => handlePhotoDelete(p.id)}
-                      className="absolute top-1 right-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+                      className="absolute top-1 right-1 rounded bg-black/60 p-1 text-white opacity-90 transition-opacity hover:bg-red-600 hover:opacity-100 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
                       title="Delete photo"
                     >
                       <Trash2 className="size-3" />
@@ -388,8 +506,11 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        disabled={togglingAddonId === a.id}
                         onClick={() => handleToggleAddon(a)}
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity ${
+                          togglingAddonId === a.id ? "opacity-50" : ""
+                        } ${
                           a.active
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-neutral-200 text-neutral-600"
@@ -399,8 +520,9 @@ export function ServicePhotosAddons({ shopId, services, onRefresh }: ServicePhot
                       </button>
                       <button
                         type="button"
+                        disabled={deletingAddonId === a.id}
                         onClick={() => handleDeleteAddon(a.id)}
-                        className="p-1 text-red-600 hover:text-red-800"
+                        className="p-1 text-red-600 hover:text-red-800 disabled:opacity-50"
                         title="Delete add-on"
                       >
                         <Trash2 className="size-3.5" />

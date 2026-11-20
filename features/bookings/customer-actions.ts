@@ -111,9 +111,10 @@ async function findByIdempotencyKey(tx: DbExecutor, customerId: string, key: str
 
 /** Plan: 10 bookings a day per customer, and a limit on unanswered requests. */
 async function assertWithinLimits(tx: DbExecutor, customerId: string, now: Date) {
+  const since = new Date(now.getTime() - 86_400_000).toISOString();
   const [counts] = await tx
     .select({
-      today: sql<number>`count(*) filter (where ${bookings.createdAt} >= ${new Date(now.getTime() - 86_400_000)})::int`,
+      today: sql<number>`count(*) filter (where ${bookings.createdAt} >= ${since}::timestamptz)::int`,
       open: sql<number>`count(*) filter (where ${bookings.status} in ('requested', 'quoted'))::int`,
     })
     .from(bookings)
@@ -205,7 +206,7 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
         .innerJoin(shops, eq(shops.id, services.shopId))
         .where(eq(services.id, service.id))
         .limit(1);
-      if (!priced) throw new AppError("INTERNAL");
+      if (!priced) throw new AppError("INTERNAL", "Service pricing could not be loaded.");
       // A quote has no price until the shop sends one.
       const total =
         service.bookingType === "quote" || priced.priceType === "quote"
@@ -234,7 +235,7 @@ export async function createBooking(input: unknown): Promise<ActionResult<Create
           idempotencyKey: data.idempotencyKey,
         })
         .returning({ id: bookings.id, refCode: bookings.refCode, expiresAt: bookings.expiresAt });
-      if (!created) throw new AppError("INTERNAL");
+      if (!created) throw new AppError("INTERNAL", "Booking record could not be created.");
 
       await tx
         .insert(bookingEvents)
@@ -492,7 +493,7 @@ export async function getRescheduleSlots(
 ): Promise<ActionResult<{ days: SlotDay[] }>> {
   return runAction(async () => {
     const user = await requireUser();
-    const { bookingId, date, days } = parseInput(rescheduleSlotsSchema, input);
+    const { bookingId, date, days, staffId } = parseInput(rescheduleSlotsSchema, input);
     const booking = await loadOwnBooking(db, bookingId, user.id);
     assertCan(user, "booking:reschedule_own", { customerId: booking.customerId });
 
@@ -500,11 +501,13 @@ export async function getRescheduleSlots(
     if (!service) throw new AppError("NOT_FOUND");
     const now = new Date();
     const today = manilaDate(now);
+    const fromDate = !date || date < today ? today : date;
     return {
       days: await computeOpenSlots({
         service,
-        fromDate: date < today ? today : date,
-        days,
+        fromDate,
+        days: days ?? 14,
+        staffId: staffId || null,
         now,
         ignoreBookingId: bookingId,
       }),

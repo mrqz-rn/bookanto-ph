@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +13,13 @@ import { formatPhone } from "@/lib/phone";
 type AddressModalProps = {
   open: boolean;
   onClose: () => void;
+  /** Called after a successful save, before the modal closes. */
+  onSaved?: (mode: "created" | "updated") => void;
   addressToEdit?: SavedAddressItem | null;
   cities: CityOption[];
 };
 
-export function AddressModal({ open, onClose, addressToEdit, cities }: AddressModalProps) {
+export function AddressModal({ open, onClose, onSaved, addressToEdit, cities }: AddressModalProps) {
   const isEditing = Boolean(addressToEdit);
 
   const [label, setLabel] = React.useState(addressToEdit?.label ?? "Home");
@@ -56,6 +59,16 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
     setError(null);
   }, [addressToEdit, open]);
 
+  // Escape closes the modal unless a save is in flight.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, loading, onClose]);
+
   // Available barangays based on selected city
   const selectedCity = cities.find((c) => c.id === cityId);
   const availableBarangays = selectedCity?.barangays ?? [];
@@ -88,6 +101,7 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
           ...payload,
         });
         if (result.ok) {
+          onSaved?.("updated");
           onClose();
         } else {
           setError(result.message);
@@ -95,6 +109,7 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
       } else {
         const result = await createSavedAddress(payload);
         if (result.ok) {
+          onSaved?.("created");
           onClose();
         } else {
           setError(result.message);
@@ -124,10 +139,11 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            disabled={loading}
+            className="-mr-2 flex size-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-navy-900 disabled:opacity-50"
             aria-label="Close"
           >
-            ✕
+            <X className="size-5" aria-hidden />
           </button>
         </div>
 
@@ -143,18 +159,22 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           {/* Label preset selector */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold tracking-wider text-slate-700 uppercase">
+            <p
+              id="addr-label-heading"
+              className="mb-1.5 block text-xs font-semibold tracking-wider text-slate-700 uppercase"
+            >
               Address Label <span className="text-danger">*</span>
-            </label>
-            <div className="flex flex-wrap gap-2">
+            </p>
+            <div role="group" aria-labelledby="addr-label-heading" className="flex flex-wrap gap-2">
               {ADDRESS_LABELS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setLabel(preset)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  aria-pressed={label === preset}
+                  className={`min-h-11 rounded-full px-4 text-sm font-semibold transition-colors active:scale-[0.98] ${
                     label === preset
-                      ? "bg-navy-900 text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "bg-muted text-slate-700 hover:bg-accent"
                   }`}
                 >
@@ -299,7 +319,7 @@ export function AddressModal({ open, onClose, addressToEdit, cities }: AddressMo
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+          <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end">
             <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>

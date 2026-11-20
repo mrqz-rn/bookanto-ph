@@ -250,7 +250,7 @@ describe("TodayView", () => {
     await act(async () => {
       fireEvent.click(screen.getAllByRole("button", { name: "Add walk-in" })[0]!);
     });
-    expect(screen.getByText("Record Walk-in Client")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add walk-in" })).toBeInTheDocument();
   });
 
   it("filters the schedule and draws the Now line between past and upcoming", async () => {

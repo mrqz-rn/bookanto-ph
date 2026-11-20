@@ -44,11 +44,24 @@ export const rescheduleBookingSchema = z.strictObject({
   startAt: instant,
 });
 
-export const rescheduleSlotsSchema = z.strictObject({
-  bookingId: z.uuid(),
-  date: z.iso.date(),
-  days: z.number().int().min(1).max(14).default(14),
-});
+export const rescheduleSlotsSchema = z
+  .strictObject({
+    bookingId: z.uuid(),
+    /** First Manila date to return (YYYY-MM-DD). Defaults to today if omitted. */
+    date: z.iso.date().optional(),
+    /** Compatibility alias for date. */
+    fromDate: z.iso.date().optional(),
+    /** Compatibility field if passed from date range pickers. */
+    toDate: z.iso.date().optional(),
+    days: z.number().int().min(1).max(14).default(14),
+    staffId: z.uuid().nullish(),
+  })
+  .transform((data) => ({
+    bookingId: data.bookingId,
+    date: data.date ?? data.fromDate,
+    days: data.days,
+    staffId: data.staffId ?? null,
+  }));
 
 export const sendQuoteSchema = z.strictObject({
   bookingId: z.uuid(),

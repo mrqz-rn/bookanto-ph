@@ -36,17 +36,27 @@ export async function uploadPhoto(
   buffer: Uint8Array,
   contentType: string,
 ): Promise<{ path: string; url: string }> {
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, buffer, {
-    contentType,
-    upsert: true,
-  });
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, buffer, {
+      contentType,
+      upsert: true,
+    });
 
-  if (error) {
-    console.warn("Storage upload photo warning:", error.message);
+    if (error) {
+      console.warn("Storage upload photo warning:", error.message);
+      const base64 = Buffer.from(buffer).toString("base64");
+      const dataUrl = `data:${contentType};base64,${base64}`;
+      return { path: dataUrl, url: dataUrl };
+    }
+
+    return { path, url: mediaUrl(path) };
+  } catch (err) {
+    console.warn("Storage upload photo error:", err);
+    const base64 = Buffer.from(buffer).toString("base64");
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    return { path: dataUrl, url: dataUrl };
   }
-
-  return { path, url: mediaUrl(path) };
 }
 
 /**

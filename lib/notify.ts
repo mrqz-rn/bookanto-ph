@@ -324,7 +324,7 @@ export class WebPushProvider implements PushProvider {
     subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
     payload: { title: string; body: string; url?: string; tag?: string };
   }): Promise<{ success: boolean; statusCode?: number }> {
-    const publicKey = env.VAPID_PUBLIC_KEY;
+    const publicKey = vapidPublicKey();
     const privateKey = env.VAPID_PRIVATE_KEY;
 
     // In dev / test when VAPID keys are absent, simulate delivery
@@ -339,7 +339,7 @@ export class WebPushProvider implements PushProvider {
       const vapidToken = createVapidToken({
         audience,
         subject: env.VAPID_SUBJECT ?? "mailto:admin@bookanto.ph",
-        privateKey,
+        privateKey: vapidSigningKey(privateKey, publicKey),
       });
 
       const encryptedPayload = encryptWebPushPayload({
@@ -375,6 +375,47 @@ export class WebPushProvider implements PushProvider {
   }
 }
 
+/**
+ * The VAPID public key (base64url, uncompressed P-256 point) browsers subscribe
+ * with, or null when web push isn't set up. VAPID_PUBLIC_KEY wins over the
+ * older NEXT_PUBLIC_ copy, so one variable is enough.
+ */
+export function vapidPublicKey(): string | null {
+  return env.VAPID_PUBLIC_KEY || publicEnv.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null;
+}
+
+/**
+ * The private key as a KeyObject. Accepts the raw 32-byte base64url key that
+ * `web-push generate-vapid-keys` prints, a PEM, or a base64 PKCS8 body.
+ */
+function vapidSigningKey(privateKey: string, publicKey: string): crypto.KeyObject {
+  const trimmed = privateKey.trim();
+  if (trimmed.includes("-----BEGIN")) return crypto.createPrivateKey(trimmed);
+
+  const raw = Buffer.from(trimmed, "base64url");
+  if (raw.length === 32) {
+    const point = Buffer.from(publicKey, "base64url");
+    if (point.length !== 65 || point[0] !== 0x04) {
+      throw new Error("VAPID_PUBLIC_KEY must be an uncompressed P-256 public key.");
+    }
+    return crypto.createPrivateKey({
+      format: "jwk",
+      key: {
+        kty: "EC",
+        crv: "P-256",
+        d: raw.toString("base64url"),
+        x: point.subarray(1, 33).toString("base64url"),
+        y: point.subarray(33).toString("base64url"),
+      },
+    });
+  }
+  return crypto.createPrivateKey({
+    key: Buffer.from(trimmed, "base64"),
+    format: "der",
+    type: "pkcs8",
+  });
+}
+
 // Helper: VAPID token generation using ES256
 function createVapidToken({
   audience,
@@ -383,7 +424,7 @@ function createVapidToken({
 }: {
   audience: string;
   subject: string;
-  privateKey: string;
+  privateKey: crypto.KeyObject;
 }): string {
   const header = { typ: "JWT", alg: "ES256" };
   const now = Math.floor(Date.now() / 1000);
@@ -397,16 +438,10 @@ function createVapidToken({
   const b64Claims = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const data = `${b64Header}.${b64Claims}`;
 
-  // Handle PKCS8 PEM or Base64 raw key
-  let pem = privateKey;
-  if (!pem.includes("-----BEGIN")) {
-    pem = `-----BEGIN PRIVATE KEY-----\n${privateKey}\n-----END PRIVATE KEY-----`;
-  }
-
   const sign = crypto.createSign("SHA256");
   sign.update(data);
   sign.end();
-  const signature = sign.sign({ key: pem, dsaEncoding: "ieee-p1363" }, "base64url");
+  const signature = sign.sign({ key: privateKey, dsaEncoding: "ieee-p1363" }, "base64url");
 
   return `${data}.${signature}`;
 }

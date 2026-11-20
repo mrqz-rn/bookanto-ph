@@ -18,6 +18,8 @@ type ReviewFormDialogProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (reviewId: string) => void;
+  /** Stars already picked before the dialog opened (1 to 5). */
+  initialRating?: number;
 };
 
 export function ReviewFormDialog({
@@ -27,8 +29,9 @@ export function ReviewFormDialog({
   isOpen,
   onClose,
   onSuccess,
+  initialRating = 0,
 }: ReviewFormDialogProps) {
-  const [rating, setRating] = React.useState<number>(0);
+  const [rating, setRating] = React.useState<number>(initialRating);
   const [comment, setComment] = React.useState("");
   const [photos, setPhotos] = React.useState<StagedPhoto[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -38,13 +41,13 @@ export function ReviewFormDialog({
   // Reset when dialog opens
   React.useEffect(() => {
     if (isOpen) {
-      setRating(0);
+      setRating(initialRating);
       setComment("");
       setPhotos([]);
       setErrorMessage(null);
       setSuccessReviewId(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialRating]);
 
   // Handle ESC key
   React.useEffect(() => {

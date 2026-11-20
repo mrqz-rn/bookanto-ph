@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { userAddresses, users, type UserAddress } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
 
+import { MAX_SAVED_ADDRESSES } from "./constants";
 import {
   deleteAccountSchema,
   deleteSavedAddressSchema,
@@ -20,7 +21,8 @@ import {
 } from "./schema";
 
 /**
- * Updates the signed-in customer's profile (name, email, phone).
+ * Updates the signed-in customer's name and mobile number. The email can't
+ * be changed here: it is the sign-in identity held by the auth provider.
  */
 export async function updateProfile(input: unknown): Promise<ActionResult<{ success: true }>> {
   return runAction(async () => {
@@ -43,22 +45,8 @@ export async function updateProfile(input: unknown): Promise<ActionResult<{ succ
           .limit(1);
 
         if (existingPhone) {
-          throw new AppError("CONFLICT", "That phone number is already linked to another account.");
-        }
-      }
-
-      if (data.email) {
-        const [existingEmail] = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.email, data.email), ne(users.id, user.id), isNull(users.deletedAt)))
-          .limit(1);
-
-        if (existingEmail) {
-          throw new AppError(
-            "CONFLICT",
-            "That email address is already linked to another account.",
-          );
+          const message = "That mobile number is already linked to another account.";
+          throw new AppError("CONFLICT", message, { phone: [message] });
         }
       }
 
@@ -66,7 +54,6 @@ export async function updateProfile(input: unknown): Promise<ActionResult<{ succ
         .update(users)
         .set({
           name: data.name,
-          email: data.email ?? null,
           phone: data.phone ?? null,
           updatedAt: sql`now()`,
         })
@@ -81,7 +68,6 @@ export async function updateProfile(input: unknown): Promise<ActionResult<{ succ
           targetId: user.id,
           data: {
             hasName: !!data.name,
-            hasEmail: !!data.email,
             hasPhone: !!data.phone,
           },
         },
@@ -165,13 +151,24 @@ export async function createSavedAddress(input: unknown): Promise<ActionResult<U
 
     // 4. Transaction
     const address = await db.transaction(async (tx) => {
+      // Lock the user's row so two saves at once can't both pass the limit.
+      await tx.execute(sql`select 1 from ${users} where ${users.id} = ${user.id} for update`);
+
       // Check existing count; if first address, automatically set as default
       const [countResult] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(userAddresses)
         .where(eq(userAddresses.userId, user.id));
 
-      const isFirst = (countResult?.count ?? 0) === 0;
+      const count = countResult?.count ?? 0;
+      if (count >= MAX_SAVED_ADDRESSES) {
+        throw new AppError(
+          "CONFLICT",
+          `You can save up to ${MAX_SAVED_ADDRESSES} addresses. Delete one to add another.`,
+        );
+      }
+
+      const isFirst = count === 0;
       const shouldBeDefault = data.isDefault || isFirst;
 
       if (shouldBeDefault) {

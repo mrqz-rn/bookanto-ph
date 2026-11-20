@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createECDH, createPublicKey, randomUUID, verify } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import {
   CloudWhatsAppProvider,
   renderNotificationTemplate,
@@ -209,6 +210,65 @@ describe("Notifications", () => {
       expect(result.statusCode).toBe(201);
     });
 
+    it("WebPushProvider signs with a raw base64url VAPID key, as web-push prints it", async () => {
+      const server = createECDH("prime256v1");
+      server.generateKeys();
+      const publicKey = server.getPublicKey().toString("base64url");
+      const browser = createECDH("prime256v1");
+      browser.generateKeys();
+
+      const saved = { pub: env.VAPID_PUBLIC_KEY, priv: env.VAPID_PRIVATE_KEY };
+      Object.assign(env, {
+        VAPID_PUBLIC_KEY: publicKey,
+        VAPID_PRIVATE_KEY: server.getPrivateKey().toString("base64url"),
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response(null, { status: 201 }));
+
+      try {
+        const result = await new WebPushProvider().sendPush({
+          subscription: {
+            endpoint: "https://fcm.googleapis.com/fcm/send/test-endpoint",
+            keys: {
+              p256dh: browser.getPublicKey().toString("base64url"),
+              auth: "tBHItJI5svbpez7KI4CCXg",
+            },
+          },
+          payload: { title: "Test Push", body: "Hello from BooKanto" },
+        });
+        expect(result).toEqual({ success: true, statusCode: 201 });
+
+        const headers = fetchMock.mock.calls[0]![1]!.headers as Record<string, string>;
+        const [, token, key] = headers.Authorization!.match(/^vapid t=([^,]+), k=(.+)$/)!;
+        expect(key).toBe(publicKey);
+        const [header, claims, signature] = token!.split(".");
+        const point = Buffer.from(publicKey, "base64url");
+        const verifier = createPublicKey({
+          format: "jwk",
+          key: {
+            kty: "EC",
+            crv: "P-256",
+            x: point.subarray(1, 33).toString("base64url"),
+            y: point.subarray(33).toString("base64url"),
+          },
+        });
+        const valid = verify(
+          "sha256",
+          Buffer.from(`${header}.${claims}`),
+          { key: verifier, dsaEncoding: "ieee-p1363" },
+          Buffer.from(signature!, "base64url"),
+        );
+        expect(valid).toBe(true);
+        expect(JSON.parse(Buffer.from(claims!, "base64url").toString()).aud).toBe(
+          "https://fcm.googleapis.com",
+        );
+      } finally {
+        Object.assign(env, { VAPID_PUBLIC_KEY: saved.pub, VAPID_PRIVATE_KEY: saved.priv });
+        fetchMock.mockRestore();
+      }
+    });
+
     it("sendOtpSms dispatches verification code cleanly", async () => {
       const sent = await sendOtpSms("09189876543", "654321");
       expect(sent).toBe(true);
@@ -271,7 +331,7 @@ describe("Notifications", () => {
       expect(result.error).toContain("Confirmations disabled");
     });
 
-    it("dispatches via WhatsApp when enabled and preferred", async () => {
+    it("falls back to email for a stored WhatsApp preference while WhatsApp is off", async () => {
       let selectCount = 0;
       vi.spyOn(db, "select").mockImplementation((() => ({
         from: vi.fn().mockReturnValue({
@@ -321,20 +381,19 @@ describe("Notifications", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.channel).toBe("whatsapp");
-      expect(result.messageId).toMatch(/^sim_wa_/);
+      expect(result.channel).toBe("email");
 
       expect(insertValuesSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           userId,
-          channel: "whatsapp",
+          channel: "email",
           template: "booking_reminder",
           status: "sent",
         }),
       );
     });
 
-    it("dispatches via Viber when enabled and preferred", async () => {
+    it("falls back to email for a stored Viber preference while Viber is off", async () => {
       let selectCount = 0;
       vi.spyOn(db, "select").mockImplementation((() => ({
         from: vi.fn().mockReturnValue({
@@ -384,8 +443,7 @@ describe("Notifications", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.channel).toBe("viber");
-      expect(result.messageId).toMatch(/^sim_viber_/);
+      expect(result.channel).toBe("email");
     });
   });
 });

@@ -42,13 +42,15 @@ export function DeleteAccountDialog() {
 
   return (
     <div>
-      <div className="rounded-xl border border-red-200 bg-red-50/50 p-6">
-        <h3 className="font-semibold text-danger">Danger Zone</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Once you delete your account, your profile and saved addresses will be removed. This
-          action cannot be undone.
-        </p>
-        <div className="mt-4">
+      <div className="flex flex-col gap-4 rounded-2xl border border-red-200 bg-red-50/50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <h2 className="font-display text-lg font-bold text-danger">Delete your account</h2>
+          <p className="mt-1 max-w-prose text-sm text-slate-600">
+            Your profile and saved addresses are removed and you&apos;re logged out. This can&apos;t
+            be undone.
+          </p>
+        </div>
+        <div className="shrink-0">
           <Button
             type="button"
             variant="destructive"

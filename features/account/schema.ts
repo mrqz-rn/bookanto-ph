@@ -2,15 +2,12 @@ import { z } from "zod";
 
 import { isValidPhilippinePhone, normalizePhone } from "@/lib/phone";
 
+/**
+ * Name and mobile number. The email is the sign-in identity, so it is not
+ * editable here; strictObject rejects a request that sends one.
+ */
 export const updateProfileSchema = z.strictObject({
   name: z.string().trim().min(1, "Name is required.").max(100, "Name is too long."),
-  email: z
-    .string()
-    .trim()
-    .email("Please enter a valid email address.")
-    .optional()
-    .nullable()
-    .or(z.literal("").transform(() => null)),
   phone: z
     .string()
     .trim()

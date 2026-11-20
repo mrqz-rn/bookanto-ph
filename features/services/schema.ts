@@ -71,7 +71,8 @@ export const archiveServiceSchema = z.strictObject({
 export const addServicePhotoSchema = z.strictObject({
   serviceId: z.string().uuid("Invalid service ID."),
   shopId: z.string().uuid("Invalid shop ID."),
-  path: z.string().min(1, "Photo storage path is required."),
+  path: z.string().min(1, "Photo storage path is required.").optional(),
+  imageBase64: z.string().optional(),
   sortOrder: z.number().int().min(0).default(0),
 });
 

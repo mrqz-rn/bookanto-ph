@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 
 import { setHolidayRules } from "../actions";
 import { HOLIDAY_KIND_LABELS, HOLIDAY_TEMPLATES, type HolidayKind } from "../holidays";
-import { FormMessage, selectClass, type FormState } from "./panel";
+import { DateTile, FormMessage, Segmented, type FormState } from "./panel";
 
 export type HolidayRow = {
   key: string;
@@ -15,12 +15,20 @@ export type HolidayRow = {
   kind: HolidayKind;
   /** "Fri, Dec 25, 2026", or null when this year's date isn't announced yet. */
   dateLabel: string | null;
+  /** The date as a calendar tile ("DEC", "25"), or null when not announced. */
+  tile: { month: string; day: string } | null;
   movable: boolean;
 };
 
 type Mode = "normal" | "closed" | "special";
 type RuleDraft = { mode: Mode; opens: string; closes: string };
 type SavedRule = { holidayKey: string; opens: string | null; closes: string | null };
+
+const MODES = [
+  { value: "normal", label: "Normal" },
+  { value: "closed", label: "Closed" },
+  { value: "special", label: "Special" },
+] as const;
 
 const NORMAL: RuleDraft = { mode: "normal", opens: "10:00", closes: "15:00" };
 
@@ -93,61 +101,95 @@ export function HolidayRulesForm({
       });
     });
 
+  const counts = Object.values(draft).reduce(
+    (total, rule) => ({
+      closed: total.closed + (rule.mode === "closed" ? 1 : 0),
+      special: total.special + (rule.mode === "special" ? 1 : 0),
+    }),
+    { closed: 0, special: 0 },
+  );
+
   return (
     <div>
       {canEdit && (
         <fieldset>
-          <legend className="text-sm font-semibold text-navy-900">Start from a template</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <legend className="text-base font-semibold text-navy-900">Start from a template</legend>
+          <p className="mt-0.5 text-sm text-slate-600">
+            It fills in the list below. Nothing changes until you save.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {HOLIDAY_TEMPLATES.map((template) => (
               <button
                 key={template.id}
                 type="button"
                 onClick={() => applyTemplate(template.closedOn)}
-                className="min-h-11 rounded-lg border border-border bg-background p-3 text-left hover:border-green-700 hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                className="min-h-11 rounded-xl border border-border bg-white p-3 text-left transition-[border-color,background-color,transform] hover:border-green-700 hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-safe:hover:-translate-y-0.5"
               >
                 <span className="block text-sm font-semibold text-navy-900">{template.label}</span>
-                <span className="mt-0.5 block text-xs text-slate-600">{template.description}</span>
+                <span className="mt-0.5 block text-sm text-slate-600">{template.description}</span>
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-slate-600">
-            A template fills in the list below. Nothing changes until you save.
-          </p>
         </fieldset>
       )}
 
-      <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
+      <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-base font-semibold text-navy-900">Coming up</h3>
+        <p className="text-sm text-slate-600">
+          {counts.closed + counts.special === 0
+            ? "Normal hours on every holiday"
+            : [
+                counts.closed > 0 && `Closed on ${counts.closed}`,
+                counts.special > 0 && `special hours on ${counts.special}`,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+        </p>
+      </div>
+
+      <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
         {holidays.map((holiday) => {
           const rule = ruleFor(holiday.key);
           const id = `holiday-${holiday.key}`;
           return (
-            <li key={holiday.key} className="gap-3 p-3 sm:flex sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <label htmlFor={`${id}-mode`} className="font-medium text-navy-900">
-                  {holiday.name}
-                </label>
-                <p className="text-xs text-slate-600">
-                  {holiday.dateLabel ?? "Date not announced yet"}
-                  {holiday.movable && holiday.dateLabel && " (estimate; may move by proclamation)"}
-                  {" · "}
-                  {HOLIDAY_KIND_LABELS[holiday.kind]}
-                </p>
+            <li
+              key={holiday.key}
+              className={`grid gap-3 p-3 sm:p-4 md:grid-cols-[1fr_auto] md:items-center ${
+                rule.mode === "closed" ? "bg-neutral-50" : ""
+              }`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <DateTile
+                  month={holiday.tile?.month ?? null}
+                  day={holiday.tile?.day ?? null}
+                  muted={!holiday.tile}
+                />
+                <div className="min-w-0">
+                  <p id={`${id}-name`} className="font-semibold text-navy-900">
+                    {holiday.name}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {holiday.dateLabel ?? "Date not announced yet"}
+                    {holiday.movable && holiday.dateLabel && " (may move by proclamation)"}
+                    <span className="hidden sm:inline">
+                      {" · "}
+                      {HOLIDAY_KIND_LABELS[holiday.kind]}
+                    </span>
+                  </p>
+                </div>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:flex-nowrap">
-                <select
-                  id={`${id}-mode`}
+
+              <div className="space-y-2 md:w-80">
+                <Segmented
+                  name={`${id}-mode`}
+                  legend={`${holiday.name} hours`}
+                  options={MODES}
                   value={rule.mode}
+                  onChange={(mode) => update(holiday.key, { mode })}
                   disabled={!canEdit || pending}
-                  onChange={(event) => update(holiday.key, { mode: event.target.value as Mode })}
-                  className={`${selectClass} sm:w-44`}
-                >
-                  <option value="normal">Normal hours</option>
-                  <option value="closed">Closed</option>
-                  <option value="special">Special hours</option>
-                </select>
+                />
                 {rule.mode === "special" && (
-                  <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <div className="flex items-center gap-2">
                     <label htmlFor={`${id}-opens`} className="sr-only">
                       {holiday.name} opens
                     </label>
@@ -158,7 +200,7 @@ export function HolidayRulesForm({
                       value={rule.opens}
                       disabled={!canEdit || pending}
                       onChange={(event) => update(holiday.key, { opens: event.target.value })}
-                      className="sm:w-32"
+                      className="h-11 min-w-0 flex-1 tabular-nums"
                     />
                     <span aria-hidden="true" className="text-slate-600">
                       to
@@ -174,7 +216,7 @@ export function HolidayRulesForm({
                       disabled={!canEdit || pending}
                       aria-invalid={!(rule.closes > rule.opens)}
                       onChange={(event) => update(holiday.key, { closes: event.target.value })}
-                      className="sm:w-32"
+                      className="h-11 min-w-0 flex-1 tabular-nums"
                     />
                   </div>
                 )}
@@ -185,22 +227,27 @@ export function HolidayRulesForm({
       </ul>
 
       {canEdit ? (
-        <>
-          {invalid && (
-            <p className="mt-3 text-sm text-danger">
-              Special hours need a closing time after the opening time.
-            </p>
-          )}
-          <Button type="button" onClick={save} disabled={pending || invalid} className="mt-4">
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className={`text-sm ${invalid ? "font-medium text-danger" : "text-slate-600"}`}>
+            {invalid
+              ? "Special hours need a closing time after the opening time."
+              : "Your choices repeat every year."}
+          </p>
+          <Button
+            type="button"
+            onClick={save}
+            disabled={pending || invalid}
+            className="motion-safe:hover:-translate-y-px motion-safe:active:scale-[0.98]"
+          >
             {pending ? "Saving…" : "Save holidays"}
           </Button>
-          <FormMessage state={state} />
-        </>
+        </div>
       ) : (
         <p className="mt-3 text-sm text-slate-600">
           Only the owner or a manager can change holiday hours.
         </p>
       )}
+      <FormMessage state={state} />
     </div>
   );
 }

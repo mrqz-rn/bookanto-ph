@@ -51,6 +51,7 @@ export default async function WalkInsPage() {
       initialWalkIns={walkIns}
       activeServices={activeServices}
       shopStaff={shopStaff}
+      nowIso={new Date().toISOString()}
     />
   );
 }

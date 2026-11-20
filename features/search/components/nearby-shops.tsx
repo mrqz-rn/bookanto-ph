@@ -97,7 +97,7 @@ export function NearbyShops({ cities }: { cities: CityOption[] }) {
     <section aria-labelledby="nearby-heading" className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-2">
         <div>
-          <h2 id="nearby-heading" className="font-display text-2xl font-semibold">
+          <h2 id="nearby-heading" className="font-display text-2xl font-bold">
             Popular near you
           </h2>
           {place && !picking && (

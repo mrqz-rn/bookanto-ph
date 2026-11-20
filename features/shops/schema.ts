@@ -119,7 +119,8 @@ export const updateShopHoursSchema = z.strictObject({
 
 export const addShopPhotoSchema = z.strictObject({
   shopId: z.string().uuid("Invalid shop ID."),
-  path: z.string().min(1, "Photo storage path is required."),
+  path: z.string().min(1, "Photo storage path is required.").optional(),
+  imageBase64: z.string().optional(),
   sortOrder: z.number().int().min(0).default(0),
 });
 

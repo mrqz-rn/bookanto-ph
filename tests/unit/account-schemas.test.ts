@@ -14,23 +14,22 @@ describe("account schemas", () => {
     it("accepts valid profile updates and normalizes phone", () => {
       const parsed = updateProfileSchema.parse({
         name: "Maria Santos",
-        email: "maria@example.com",
         phone: "0917 123 4567",
       });
       expect(parsed.name).toBe("Maria Santos");
-      expect(parsed.email).toBe("maria@example.com");
       expect(parsed.phone).toBe("+639171234567");
     });
 
-    it("allows empty email and phone as null", () => {
-      const parsed = updateProfileSchema.parse({
-        name: "Maria Santos",
-        email: "",
-        phone: "",
-      });
+    it("allows an empty phone as null", () => {
+      const parsed = updateProfileSchema.parse({ name: "Maria Santos", phone: "" });
       expect(parsed.name).toBe("Maria Santos");
-      expect(parsed.email).toBeNull();
       expect(parsed.phone).toBeNull();
+    });
+
+    it("rejects an email change", () => {
+      expect(() =>
+        updateProfileSchema.parse({ name: "Maria Santos", email: "new@example.com" }),
+      ).toThrow();
     });
 
     it("rejects empty name", () => {

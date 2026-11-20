@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import type { NotificationChannel, NotificationPreference } from "@/lib/db/schema";
-import { effectiveChannel, SMS_NOTIFICATIONS_ENABLED } from "@/lib/notification-channels";
-import { publicEnv } from "@/lib/public-env";
+import {
+  EMAIL_NOTIFICATIONS_REQUIRED,
+  effectiveChannel,
+  MESSAGING_APP_NOTIFICATIONS_ENABLED,
+  SMS_NOTIFICATIONS_ENABLED,
+} from "@/lib/notification-channels";
 
 import {
   deletePushSubscriptionAction,
@@ -13,13 +17,15 @@ import {
   sendTestNotificationAction,
   updateNotificationPreferencesAction,
 } from "../actions";
-import { CHANNELS, NOTIFICATION_CHANNELS_LIST } from "../constants";
+import { CHANNELS, NOTIFICATION_CHANNELS_LIST, TEST_NOTIFICATION_ENABLED } from "../constants";
 
 type NotificationSettingsFormProps = {
   initialPreferences: NotificationPreference;
   userPhone?: string | null;
   userEmail?: string | null;
   hasActivePushSubscription?: boolean;
+  /** The VAPID public key (base64url), or null when web push isn't set up on the server. */
+  vapidPublicKey: string | null;
 };
 
 export function NotificationSettingsForm({
@@ -27,6 +33,7 @@ export function NotificationSettingsForm({
   userPhone,
   userEmail,
   hasActivePushSubscription = false,
+  vapidPublicKey,
 }: NotificationSettingsFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -35,7 +42,9 @@ export function NotificationSettingsForm({
     effectiveChannel(initialPreferences.preferredChannel),
   );
   const [smsEnabled, setSmsEnabled] = useState(initialPreferences.smsEnabled);
-  const [emailEnabled, setEmailEnabled] = useState(initialPreferences.emailEnabled);
+  const [emailEnabled, setEmailEnabled] = useState(
+    EMAIL_NOTIFICATIONS_REQUIRED || initialPreferences.emailEnabled,
+  );
   const [pushEnabled, setPushEnabled] = useState(initialPreferences.pushEnabled);
   const [whatsappEnabled, setWhatsappEnabled] = useState(initialPreferences.whatsappEnabled);
   const [viberEnabled, setViberEnabled] = useState(initialPreferences.viberEnabled);
@@ -55,6 +64,42 @@ export function NotificationSettingsForm({
   const [isPushSubscribed, setIsPushSubscribed] = useState(hasActivePushSubscription);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [pushSupport, setPushSupport] = useState<
+    "checking" | "supported" | "unsupported" | "blocked" | "unconfigured"
+  >(vapidPublicKey ? "checking" : "unconfigured");
+
+  // The server only knows the account has a subscription somewhere; check this browser.
+  useEffect(() => {
+    let cancelled = false;
+    async function checkPush() {
+      if (!vapidPublicKey) return;
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        if (!cancelled) setPushSupport("unsupported");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        if (!cancelled) {
+          setPushSupport("blocked");
+          setIsPushSubscribed(false);
+        }
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (!cancelled) {
+          setIsPushSubscribed(Boolean(subscription));
+          setPushSupport("supported");
+        }
+      } catch {
+        if (!cancelled) setPushSupport("supported");
+      }
+    }
+    void checkPush();
+    return () => {
+      cancelled = true;
+    };
+  }, [vapidPublicKey]);
 
   const [testChannel, setTestChannel] = useState<NotificationChannel>(preferredChannel);
   const [testResult, setTestResult] = useState<{
@@ -122,28 +167,40 @@ export function NotificationSettingsForm({
           await deletePushSubscriptionAction({ endpoint: subscription.endpoint });
         }
         setIsPushSubscribed(false);
-        setPushMessage("Web push notifications disabled for this device.");
+        setPushEnabled(false);
+        setPushMessage("Web push notifications turned off on this device.");
+        router.refresh();
       } else {
         // Request permission and subscribe
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-          setPushMessage("Notification permission was denied in your browser settings.");
-          setPushLoading(false);
+          if (permission === "denied") setPushSupport("blocked");
+          setPushMessage("Notifications are blocked. Allow them in your browser settings.");
           return;
         }
 
-        const registration = await navigator.serviceWorker.register("/sw.js");
-        await navigator.serviceWorker.ready;
+        // Without the server's key the browser falls back to the legacy
+        // gcm_sender_id and fails, so never subscribe without one.
+        if (!vapidPublicKey) {
+          setPushSupport("unconfigured");
+          return;
+        }
+        const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-        const vapidPublicKey = publicEnv.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        const subOptions: PushSubscriptionOptionsInit = {
+        await navigator.serviceWorker.register("/sw.js");
+        const registration = await navigator.serviceWorker.ready;
+
+        // A subscription made with another key (or none) can't be reused:
+        // subscribe() throws InvalidStateError until it is removed.
+        const existing = await registration.pushManager.getSubscription();
+        if (existing && !sameKey(existing.options.applicationServerKey, applicationServerKey)) {
+          await existing.unsubscribe();
+        }
+
+        const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: vapidPublicKey
-            ? (urlBase64ToUint8Array(vapidPublicKey).buffer as ArrayBuffer)
-            : undefined,
-        };
-
-        const subscription = await registration.pushManager.subscribe(subOptions);
+          applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+        });
         const subJson = subscription.toJSON();
 
         if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
@@ -159,7 +216,8 @@ export function NotificationSettingsForm({
           if (res.ok) {
             setIsPushSubscribed(true);
             setPushEnabled(true);
-            setPushMessage("Web push notifications enabled for this device!");
+            setPushMessage("Web push notifications are on for this device.");
+            router.refresh();
           } else {
             setPushMessage("Failed to register push subscription on server.");
           }
@@ -221,7 +279,7 @@ export function NotificationSettingsForm({
             appointment alerts.
           </p>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {NOTIFICATION_CHANNELS_LIST.map((channelKey) => {
               const ch = CHANNELS[channelKey];
               const isSelected = preferredChannel === channelKey;
@@ -297,149 +355,168 @@ export function NotificationSettingsForm({
                     ? `Confirmations, reminders and receipts go to: ${userEmail}`
                     : "Add an email address in your Profile to get booking confirmations."}
                 </p>
+                {EMAIL_NOTIFICATIONS_REQUIRED && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Email can&apos;t be turned off, so you never miss a booking update.
+                  </p>
+                )}
               </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  checked={emailEnabled}
-                  onChange={(e) => setEmailEnabled(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-              </label>
+              {EMAIL_NOTIFICATIONS_REQUIRED ? (
+                <span className="inline-flex min-h-11 items-center self-start rounded-full bg-green-100 px-3 text-xs font-bold text-green-700 sm:self-auto">
+                  Always on
+                </span>
+              ) : (
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={emailEnabled}
+                    onChange={(e) => setEmailEnabled(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                </label>
+              )}
             </div>
 
             {/* Web Push */}
             <div className="flex flex-col justify-between gap-3 pt-6 sm:flex-row sm:items-center">
               <div className="max-w-md">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xl">🔔</span>
                   <span className="font-semibold text-navy-900">Web Push Notifications</span>
                   {isPushSubscribed && (
                     <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-700">
-                      Active on device
+                      On for this device
                     </span>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Get instant real-time browser popups for appointment reminders and shop responses.
+                  {pushSupport === "unconfigured"
+                    ? "Web push isn't available yet. Booking updates still reach you by email."
+                    : pushSupport === "unsupported"
+                      ? "This browser doesn't support web push. Try Chrome, Edge, Firefox or Safari on a phone added to your home screen."
+                      : pushSupport === "blocked"
+                        ? "Notifications are blocked for BooKanto. Allow them in your browser's site settings, then come back here."
+                        : "Optional. Get instant browser alerts for booking updates and reminders, alongside your emails."}
                 </p>
                 {pushMessage && (
-                  <p className="text-navy-800 mt-1 text-xs font-semibold">{pushMessage}</p>
+                  <p role="status" className="text-navy-800 mt-1 text-xs font-semibold">
+                    {pushMessage}
+                  </p>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleTogglePushSubscription}
-                  disabled={pushLoading}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    isPushSubscribed
-                      ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                >
-                  {pushLoading
-                    ? "Updating..."
-                    : isPushSubscribed
-                      ? "Disable on Device"
-                      : "Enable on Device"}
-                </button>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    checked={pushEnabled}
-                    onChange={(e) => setPushEnabled(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                </label>
-              </div>
+              <button
+                type="button"
+                onClick={handleTogglePushSubscription}
+                disabled={
+                  pushLoading ||
+                  pushSupport === "checking" ||
+                  pushSupport === "unsupported" ||
+                  (pushSupport === "unconfigured" && !isPushSubscribed) ||
+                  (pushSupport === "blocked" && !isPushSubscribed)
+                }
+                className={`min-h-11 shrink-0 rounded-lg px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isPushSubscribed
+                    ? "border border-border bg-background text-navy-900 hover:bg-slate-50"
+                    : "bg-primary text-primary-foreground hover:bg-primary/90"
+                }`}
+              >
+                {pushLoading
+                  ? "Updating..."
+                  : isPushSubscribed
+                    ? "Turn off on this device"
+                    : "Allow web push"}
+              </button>
             </div>
 
-            {/* WhatsApp */}
-            <div className="space-y-3 pt-6">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">💬</span>
-                    <span className="font-semibold text-navy-900">WhatsApp Channel</span>
+            {/* WhatsApp and Viber (switched off for now; see lib/notification-channels.ts) */}
+            {MESSAGING_APP_NOTIFICATIONS_ENABLED && (
+              <>
+                {/* WhatsApp */}
+                <div className="space-y-3 pt-6">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">💬</span>
+                        <span className="font-semibold text-navy-900">WhatsApp Channel</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Receive rich booking details and reminders directly on WhatsApp.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={whatsappEnabled}
+                        onChange={(e) => setWhatsappEnabled(e.target.checked)}
+                        className="peer sr-only"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                    </label>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Receive rich booking details and reminders directly on WhatsApp.
-                  </p>
+                  {whatsappEnabled && (
+                    <div className="max-w-sm pt-2">
+                      <label
+                        htmlFor="whatsapp-phone"
+                        className="block text-xs font-semibold text-slate-700"
+                      >
+                        WhatsApp Mobile Number
+                      </label>
+                      <input
+                        id="whatsapp-phone"
+                        type="tel"
+                        value={whatsappPhone}
+                        onChange={(e) => setWhatsappPhone(e.target.value)}
+                        placeholder="+63 9XX XXX XXXX"
+                        className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-green-600 focus:outline-hidden"
+                      />
+                    </div>
+                  )}
                 </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    checked={whatsappEnabled}
-                    onChange={(e) => setWhatsappEnabled(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                </label>
-              </div>
-              {whatsappEnabled && (
-                <div className="max-w-sm pt-2">
-                  <label
-                    htmlFor="whatsapp-phone"
-                    className="block text-xs font-semibold text-slate-700"
-                  >
-                    WhatsApp Mobile Number
-                  </label>
-                  <input
-                    id="whatsapp-phone"
-                    type="tel"
-                    value={whatsappPhone}
-                    onChange={(e) => setWhatsappPhone(e.target.value)}
-                    placeholder="+63 9XX XXX XXXX"
-                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-green-600 focus:outline-hidden"
-                  />
-                </div>
-              )}
-            </div>
 
-            {/* Viber */}
-            <div className="space-y-3 pt-6">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🟣</span>
-                    <span className="font-semibold text-navy-900">Viber Channel</span>
+                {/* Viber */}
+                <div className="space-y-3 pt-6">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🟣</span>
+                        <span className="font-semibold text-navy-900">Viber Channel</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Receive service updates via Viber messaging.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={viberEnabled}
+                        onChange={(e) => setViberEnabled(e.target.checked)}
+                        className="peer sr-only"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                    </label>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Receive service updates via Viber messaging.
-                  </p>
+                  {viberEnabled && (
+                    <div className="max-w-sm pt-2">
+                      <label
+                        htmlFor="viber-phone"
+                        className="block text-xs font-semibold text-slate-700"
+                      >
+                        Viber Mobile Number
+                      </label>
+                      <input
+                        id="viber-phone"
+                        type="tel"
+                        value={viberPhone}
+                        onChange={(e) => setViberPhone(e.target.value)}
+                        placeholder="+63 9XX XXX XXXX"
+                        className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-green-600 focus:outline-hidden"
+                      />
+                    </div>
+                  )}
                 </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    checked={viberEnabled}
-                    onChange={(e) => setViberEnabled(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="peer h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-green-600 peer-focus:outline-hidden after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                </label>
-              </div>
-              {viberEnabled && (
-                <div className="max-w-sm pt-2">
-                  <label
-                    htmlFor="viber-phone"
-                    className="block text-xs font-semibold text-slate-700"
-                  >
-                    Viber Mobile Number
-                  </label>
-                  <input
-                    id="viber-phone"
-                    type="tel"
-                    value={viberPhone}
-                    onChange={(e) => setViberPhone(e.target.value)}
-                    placeholder="+63 9XX XXX XXXX"
-                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-green-600 focus:outline-hidden"
-                  />
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -527,51 +604,60 @@ export function NotificationSettingsForm({
         </div>
       </form>
 
-      {/* Test Notification Card */}
-      <section className="rounded-xl border border-dashed border-border bg-card p-5 shadow-2xs sm:p-6">
-        <h2 className="font-display text-lg font-bold text-navy-900">Send a Test Notification</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Verify your notification delivery by dispatching a test message to your selected channel.
-        </p>
+      {/* Test Notification Card (hidden for now; see TEST_NOTIFICATION_ENABLED) */}
+      {TEST_NOTIFICATION_ENABLED && (
+        <section className="rounded-xl border border-dashed border-border bg-card p-5 shadow-2xs sm:p-6">
+          <h2 className="font-display text-lg font-bold text-navy-900">Send a Test Notification</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Verify your notification delivery by dispatching a test message to your selected
+            channel.
+          </p>
 
-        {testResult && (
-          <div
-            role="alert"
-            className={`mt-4 rounded-lg p-3 text-xs font-semibold ${
-              testResult.success
-                ? "border border-green-200 bg-green-50 text-green-800"
-                : "border border-red-200 bg-red-50 text-red-800"
-            }`}
-          >
-            {testResult.message}
+          {testResult && (
+            <div
+              role="alert"
+              className={`mt-4 rounded-lg p-3 text-xs font-semibold ${
+                testResult.success
+                  ? "border border-green-200 bg-green-50 text-green-800"
+                  : "border border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {testResult.message}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select
+              value={testChannel}
+              onChange={(e) => setTestChannel(e.target.value as NotificationChannel)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-navy-900 focus:border-green-600 focus:outline-hidden"
+            >
+              {NOTIFICATION_CHANNELS_LIST.map((c) => (
+                <option key={c} value={c}>
+                  {CHANNELS[c].label} ({CHANNELS[c].icon})
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleSendTestNotification}
+              disabled={isPending}
+              className="rounded-lg border border-green-600 bg-white px-4 py-2 text-xs font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+            >
+              {isPending ? "Sending..." : `Send Test to ${CHANNELS[testChannel].label}`}
+            </button>
           </div>
-        )}
-
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <select
-            value={testChannel}
-            onChange={(e) => setTestChannel(e.target.value as NotificationChannel)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-navy-900 focus:border-green-600 focus:outline-hidden"
-          >
-            {NOTIFICATION_CHANNELS_LIST.map((c) => (
-              <option key={c} value={c}>
-                {CHANNELS[c].label} ({CHANNELS[c].icon})
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={handleSendTestNotification}
-            disabled={isPending}
-            className="rounded-lg border border-green-600 bg-white px-4 py-2 text-xs font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
-          >
-            {isPending ? "Sending..." : `Send Test to ${CHANNELS[testChannel].label}`}
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
+}
+
+function sameKey(current: ArrayBuffer | null, wanted: Uint8Array): boolean {
+  if (!current || current.byteLength !== wanted.byteLength) return false;
+  const bytes = new Uint8Array(current);
+  return bytes.every((byte, i) => byte === wanted[i]);
 }
 
 // Utility to convert Base64 URL string to Uint8Array for VAPID applicationServerKey

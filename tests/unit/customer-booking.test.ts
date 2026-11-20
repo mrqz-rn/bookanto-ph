@@ -5,7 +5,9 @@ import {
   acceptQuote,
   cancelMyBooking,
   createBooking,
+  getRescheduleSlots,
   joinQueue,
+  rescheduleBooking,
   setBookingRules,
   startPayment,
 } from "@/features/bookings/customer-actions";
@@ -14,6 +16,7 @@ import {
   createBookingSchema,
   joinQueueSchema,
   rescheduleBookingSchema,
+  rescheduleSlotsSchema,
   sendQuoteSchema,
   setBookingRulesSchema,
 } from "@/features/bookings/customer-schema";
@@ -104,6 +107,60 @@ describe("customer booking feature", () => {
         startAt: "2026-11-22T14:30:00Z",
       });
       expect(parsed.bookingId).toBe(bId);
+    });
+
+    it("validates rescheduleSlotsSchema with standard inputs", () => {
+      const bId = randomUUID();
+      const parsed = rescheduleSlotsSchema.parse({
+        bookingId: bId,
+        date: "2026-12-01",
+        days: 7,
+      });
+      expect(parsed).toEqual({
+        bookingId: bId,
+        date: "2026-12-01",
+        days: 7,
+        staffId: null,
+      });
+    });
+
+    it("validates rescheduleSlotsSchema when date is omitted", () => {
+      const bId = randomUUID();
+      const parsed = rescheduleSlotsSchema.parse({
+        bookingId: bId,
+      });
+      expect(parsed).toEqual({
+        bookingId: bId,
+        date: undefined,
+        days: 14,
+        staffId: null,
+      });
+    });
+
+    it("validates rescheduleSlotsSchema with compat fields fromDate and toDate", () => {
+      const bId = randomUUID();
+      const sId = randomUUID();
+      const parsed = rescheduleSlotsSchema.parse({
+        bookingId: bId,
+        fromDate: "2026-12-05",
+        toDate: "2026-12-19",
+        staffId: sId,
+      });
+      expect(parsed).toEqual({
+        bookingId: bId,
+        date: "2026-12-05",
+        days: 14,
+        staffId: sId,
+      });
+    });
+
+    it("rejects rescheduleSlotsSchema with invalid date", () => {
+      expect(() =>
+        rescheduleSlotsSchema.parse({
+          bookingId: randomUUID(),
+          date: "not-a-date",
+        }),
+      ).toThrow();
     });
 
     it("validates sendQuoteSchema", () => {
@@ -210,6 +267,26 @@ describe("customer booking feature", () => {
       vi.spyOn(authModule, "requireUser").mockRejectedValue(new AppError("UNAUTHENTICATED"));
 
       const res = await startPayment({ bookingId });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("UNAUTHENTICATED");
+      }
+    });
+
+    it("fails getRescheduleSlots when unauthenticated", async () => {
+      vi.spyOn(authModule, "requireUser").mockRejectedValue(new AppError("UNAUTHENTICATED"));
+
+      const res = await getRescheduleSlots({ bookingId });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("UNAUTHENTICATED");
+      }
+    });
+
+    it("fails rescheduleBooking when unauthenticated", async () => {
+      vi.spyOn(authModule, "requireUser").mockRejectedValue(new AppError("UNAUTHENTICATED"));
+
+      const res = await rescheduleBooking({ bookingId, startAt: "2026-12-01T10:00:00Z" });
       expect(res.ok).toBe(false);
       if (!res.ok) {
         expect(res.code).toBe("UNAUTHENTICATED");

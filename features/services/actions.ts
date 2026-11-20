@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -17,6 +18,8 @@ import {
   services,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { MAX_FILE_SIZE_BYTES, validateImageBytes } from "@/lib/media";
+import { uploadPhoto } from "@/lib/storage";
 
 import {
   addServicePhotoSchema,
@@ -249,18 +252,45 @@ export async function deleteService(input: unknown): Promise<ActionResult<{ succ
 /**
  * Associates a photo with a service.
  */
-export async function addServicePhoto(input: unknown): Promise<ActionResult<{ mediaId: string }>> {
+export async function addServicePhoto(
+  input: unknown,
+): Promise<ActionResult<{ mediaId: string; path: string }>> {
   return runAction(async () => {
     const user = await requireUser();
     const data = parseInput(addServicePhotoSchema, input);
     assertCan(user, "service:manage", { shopId: data.shopId });
+
+    let finalPath = data.path;
+
+    if (data.imageBase64) {
+      const buffer = Buffer.from(data.imageBase64, "base64");
+      if (buffer.length > MAX_FILE_SIZE_BYTES) {
+        throw new AppError("VALIDATION", "Photo exceeds 8 MB size limit.");
+      }
+
+      const imgCheck = validateImageBytes(buffer);
+      if (!imgCheck.valid || !imgCheck.format || !imgCheck.mimeType) {
+        throw new AppError(
+          "VALIDATION",
+          "Invalid photo format. Only genuine JPEG, PNG, and WebP images are allowed.",
+        );
+      }
+
+      const filename = `services/${data.serviceId}/${Date.now()}-${randomUUID()}.${imgCheck.format}`;
+      const uploadRes = await uploadPhoto(filename, buffer, imgCheck.mimeType);
+      finalPath = uploadRes.path;
+    }
+
+    if (!finalPath) {
+      throw new AppError("VALIDATION", "Photo path or image data is required.");
+    }
 
     const [created] = await db
       .insert(media)
       .values({
         ownerType: "service",
         ownerId: data.serviceId,
-        path: data.path,
+        path: finalPath,
         kind: "photo",
         sortOrder: data.sortOrder,
       })
@@ -271,7 +301,8 @@ export async function addServicePhoto(input: unknown): Promise<ActionResult<{ me
     }
 
     revalidateTag(CACHE_TAGS.shops);
-    return { mediaId: created.id };
+    revalidatePath("/dashboard/services");
+    return { mediaId: created.id, path: created.path };
   });
 }
 
@@ -295,6 +326,7 @@ export async function removeServicePhoto(input: unknown): Promise<ActionResult<{
       );
 
     revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/services");
     return { success: true };
   });
 }
@@ -328,6 +360,7 @@ export async function createServiceAddon(
     }
 
     revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/services");
     return { addonId: created.id };
   });
 }
@@ -355,6 +388,7 @@ export async function updateServiceAddon(input: unknown): Promise<ActionResult<{
       .where(eq(serviceAddons.id, data.addonId));
 
     revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/services");
     return { success: true };
   });
 }
@@ -371,6 +405,7 @@ export async function deleteServiceAddon(input: unknown): Promise<ActionResult<{
     await db.delete(serviceAddons).where(eq(serviceAddons.id, data.addonId));
 
     revalidateTag(CACHE_TAGS.shops);
+    revalidatePath("/dashboard/services");
     return { success: true };
   });
 }

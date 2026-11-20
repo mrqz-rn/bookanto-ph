@@ -156,49 +156,57 @@ export function InboxDashboardSkeleton() {
 export function CalendarDashboardSkeleton() {
   return (
     <div role="status" aria-busy="true" aria-label="Loading booking calendar" className="space-y-6">
-      {/* Top Header & Controls */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header: title, summary line, Add walk-in */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-52 rounded-lg" />
-          <Skeleton className="h-4 w-72 max-w-full rounded-md" />
+          <Skeleton className="h-9 w-44 rounded-lg sm:h-10" />
+          <Skeleton className="h-5 w-64 max-w-full rounded-md" />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Skeleton className="h-9 w-36 rounded-lg" />
-          <Skeleton className="h-9 w-28 rounded-lg" />
-          <Skeleton className="h-9 w-36 rounded-lg" />
-        </div>
+        <Skeleton className="h-11 w-full rounded-md md:w-40" />
       </div>
 
-      {/* Calendar Navigation & Grid */}
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs sm:p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <Skeleton className="h-7 w-44 rounded-md" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="size-9 rounded-lg" />
-            <Skeleton className="h-9 w-16 rounded-lg" />
-            <Skeleton className="size-9 rounded-lg" />
+      {/* Toolbar and legend */}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-11 w-44 rounded-full" />
+            <Skeleton className="h-7 w-40 rounded-md" />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Skeleton className="h-11 w-full rounded-full sm:w-44" />
+            <Skeleton className="h-11 w-full rounded-full sm:w-40" />
           </div>
         </div>
+        <Skeleton className="h-5 w-80 max-w-full rounded-md" />
+      </div>
 
-        {/* Weekday Headers */}
-        <div className="grid grid-cols-7 gap-2 border-b border-neutral-100 pb-2">
+      {/* Week grid: day headers and hour rows */}
+      <div className="overflow-hidden rounded-2xl border border-border bg-white">
+        <div className="grid grid-cols-7 gap-1 border-b border-border p-2 md:ml-16 md:gap-0 md:p-0">
           {Array.from({ length: 7 }).map((_, i) => (
-            <Skeleton key={i} className="mx-auto h-4 w-10 rounded-sm" />
-          ))}
-        </div>
-
-        {/* Calendar Cells */}
-        <div className="mt-2 grid grid-cols-7 gap-2">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <div
-              key={i}
-              className="min-h-[84px] space-y-1.5 rounded-xl border border-neutral-100 p-2"
-            >
-              <Skeleton className="h-4 w-6 rounded-sm" />
-              {i % 3 === 0 && <Skeleton className="h-5 w-full rounded-md" />}
-              {i % 5 === 0 && <Skeleton className="h-5 w-4/5 rounded-md" />}
+            <div key={i} className="flex flex-col items-center gap-1.5 py-2 md:py-3">
+              <Skeleton className="h-3 w-6 rounded-sm" />
+              <Skeleton className="size-8 rounded-full" />
             </div>
           ))}
+        </div>
+        <div className="flex">
+          <div className="w-16 shrink-0 space-y-[46px] px-2 pt-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="ml-auto h-3 w-10 rounded-sm" />
+            ))}
+          </div>
+          <div className="relative grid h-[512px] flex-1 grid-cols-1 md:grid-cols-7">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div
+                key={i}
+                className={`relative border-l border-border ${i > 0 ? "hidden md:block" : ""}`}
+              >
+                {i % 2 === 0 && <Skeleton className="absolute inset-x-1 top-16 h-14 rounded-md" />}
+                {i % 3 === 1 && <Skeleton className="absolute inset-x-1 top-52 h-20 rounded-md" />}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -212,59 +220,59 @@ export function CalendarDashboardSkeleton() {
  */
 export function WalkInsDashboardSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label="Loading walk-in clients" className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading walk-ins"
+      className="flex flex-col gap-8"
+    >
+      {/* Header: title, one line, Add walk-in */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-48 rounded-lg" />
-          <Skeleton className="h-4 w-80 max-w-full rounded-md" />
+          <Skeleton className="h-10 w-44 rounded-lg" />
+          <Skeleton className="h-5 w-96 max-w-full rounded-md" />
         </div>
-        <Skeleton className="h-9 w-40 rounded-lg" />
+        <Skeleton className="h-11 w-full rounded-md md:w-40" />
       </div>
 
-      {/* 3 KPI Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Today: three numbers in one band */}
+      <div className="grid grid-cols-3 divide-x rounded-2xl border bg-white">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs">
-            <Skeleton className="size-9 rounded-xl" />
-            <Skeleton className="mt-3 h-3 w-28 rounded-sm" />
-            <Skeleton className="mt-2 h-7 w-24 rounded-md" />
+          <div key={i} className="space-y-2 p-4 sm:p-5">
+            <Skeleton className="h-4 w-24 max-w-full rounded-sm" />
+            <Skeleton className="h-8 w-16 rounded-md" />
           </div>
         ))}
       </div>
 
-      {/* Search Bar */}
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs">
-        <Skeleton className="h-10 w-full rounded-md" />
-      </div>
-
-      {/* Walk-in List */}
-      <div className="divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white shadow-2xs">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-24 rounded-sm" />
+      {/* All walk-ins: heading, filters, one day of rows */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Skeleton className="h-7 w-36 rounded-md" />
+          <Skeleton className="h-11 w-full rounded-full lg:w-[36rem]" />
+        </div>
+        <Skeleton className="h-4 w-20 rounded-sm" />
+        <div className="divide-y rounded-2xl border bg-white">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3 px-4 py-3.5"
+            >
+              <Skeleton className="h-4 w-14 rounded-sm" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40 max-w-full rounded-sm" />
+                <Skeleton className="h-4 w-56 max-w-full rounded-sm" />
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <Skeleton className="h-4 w-12 rounded-sm" />
                 <Skeleton className="h-5 w-20 rounded-full" />
-                <Skeleton className="h-4 w-32 rounded-sm" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-28 rounded-sm" />
-                <Skeleton className="h-4 w-32 rounded-sm" />
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-5 w-16 rounded-sm" />
-              <Skeleton className="h-8 w-20 rounded-md" />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      <span className="sr-only">Loading walk-in clients…</span>
+      <span className="sr-only">Loading walk-ins…</span>
     </div>
   );
 }
@@ -527,27 +535,51 @@ export function AvailabilityDashboardSkeleton() {
       role="status"
       aria-busy="true"
       aria-label="Loading shop availability"
-      className="mx-auto max-w-4xl space-y-6"
+      className="mx-auto max-w-5xl space-y-6"
     >
       <div className="space-y-2">
-        <Skeleton className="h-8 w-48 rounded-lg" />
-        <Skeleton className="h-4 w-72 max-w-full rounded-md" />
+        <Skeleton className="h-9 w-52 rounded-lg sm:h-10" />
+        <Skeleton className="h-5 w-80 max-w-full rounded-md" />
       </div>
 
-      <Skeleton className="h-12 w-full rounded-full" />
-
-      {Array.from({ length: 3 }).map((_, section) => (
-        <div
-          key={section}
-          className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs sm:p-6"
-        >
-          <div className="space-y-1.5">
-            <Skeleton className="h-6 w-40 rounded-md" />
-            <Skeleton className="h-4 w-full max-w-md rounded-md" />
+      {/* Your week, beside what comes next */}
+      <div className="grid overflow-hidden rounded-2xl border border-border bg-white lg:grid-cols-[1.35fr_1fr]">
+        <div className="space-y-4 p-4 sm:p-6">
+          <Skeleton className="h-7 w-36 rounded-md" />
+          <div className="space-y-3.5">
+            {Array.from({ length: 7 }).map((_, row) => (
+              <div key={row} className="grid grid-cols-[2.75rem_1fr_6.5rem] items-center gap-3">
+                <Skeleton className="h-4 w-8 rounded-sm" />
+                <Skeleton className="h-2.5 w-full rounded-full" />
+                <Skeleton className="ml-auto h-4 w-20 rounded-sm" />
+              </div>
+            ))}
           </div>
-          <div className="space-y-2.5">
+        </div>
+        <div className="divide-y divide-border border-t border-border bg-neutral-50 lg:border-t-0 lg:border-l">
+          {Array.from({ length: 3 }).map((_, row) => (
+            <div key={row} className="flex items-center gap-3 px-4 py-5 sm:px-6">
+              <Skeleton className="size-10 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-24 rounded-sm" />
+                <Skeleton className="h-4 w-44 max-w-full rounded-sm" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Skeleton className="h-14 w-full rounded-full" />
+
+      {Array.from({ length: 2 }).map((_, section) => (
+        <div key={section} className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="space-y-2 border-b border-border p-4 sm:p-6">
+            <Skeleton className="h-7 w-44 rounded-md" />
+            <Skeleton className="h-4 w-full max-w-lg rounded-md" />
+          </div>
+          <div className="space-y-2.5 p-4 sm:p-6">
             {Array.from({ length: 4 }).map((_, row) => (
-              <Skeleton key={row} className="h-11 w-full rounded-lg" />
+              <Skeleton key={row} className="h-16 w-full rounded-xl" />
             ))}
           </div>
         </div>

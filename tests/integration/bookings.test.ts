@@ -219,6 +219,9 @@ describe("slot bookings", () => {
 
   it("moves to another open time and frees the old one", async () => {
     as(ana());
+    const slotsResult = expectOk(await customer.getRescheduleSlots({ bookingId: first }));
+    expect(slotsResult.days.length).toBe(14);
+
     expectOk(await customer.rescheduleBooking({ bookingId: first, startAt: at("13:00") }));
     const row = await bookingRow(first);
     expect(row).toMatchObject({ status: "confirmed", rescheduleCount: 1 });

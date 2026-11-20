@@ -51,3 +51,9 @@ export const CHANNELS: Record<NotificationChannel, ChannelInfo> = {
 export const NOTIFICATION_CHANNELS_LIST: NotificationChannel[] = (
   ["sms", "email", "push", "whatsapp", "viber"] as const
 ).filter((channel) => AVAILABLE_NOTIFICATION_CHANNELS.includes(channel));
+
+/**
+ * The "Send a test notification" card on the settings screen is hidden for now.
+ * The card and sendTestNotificationAction stay in the code; flip this to bring it back.
+ */
+export const TEST_NOTIFICATION_ENABLED = false;

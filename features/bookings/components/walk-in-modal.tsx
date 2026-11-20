@@ -1,11 +1,16 @@
 "use client";
 
+import { AlertCircle, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { Dialog } from "radix-ui";
 import * as React from "react";
-import { AlertCircle, Loader2, Scissors, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPeso, pesosToCentavos } from "@/lib/money";
+import { formatManila, manilaToUtc } from "@/lib/time";
+import { cn } from "@/lib/utils";
+
 import { addWalkIn } from "../actions";
 
 type WalkInModalProps = {
@@ -17,6 +22,11 @@ type WalkInModalProps = {
   initialTime?: string;
   onSuccess?: () => void;
 };
+
+const FIELD = "flex flex-col gap-1.5";
+const LABEL = "text-sm font-semibold text-navy-900";
+const SELECT =
+  "h-11 w-full rounded-md border border-input bg-white px-3 text-base text-navy-900 shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function WalkInModal({
   isOpen,
@@ -41,25 +51,34 @@ export function WalkInModal({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Each opening starts from a clean form, so one guest's details never carry
+  // over to the next. Only on opening: the Today view refreshes its data in the
+  // background, and a reset then would wipe what the staff is typing.
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (isOpen) {
-      if (services.length > 0 && !serviceId && services[0]) {
-        setServiceId(services[0].id);
-      }
-      if (initialTime) {
-        setUseCurrentTime(false);
-        const d = new Date(initialTime);
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        setCustomDateTime(formatted);
-      } else {
-        setUseCurrentTime(true);
-      }
-      setError(null);
+    const opening = isOpen && !wasOpen.current;
+    wasOpen.current = isOpen;
+    if (!opening) return;
+    setServiceId((current) =>
+      services.some((s) => s.id === current) ? current : (services[0]?.id ?? ""),
+    );
+    setStaffId("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setOverridePrice(false);
+    setCustomPricePesos("");
+    setStatus("confirmed");
+    setNotes("");
+    if (initialTime) {
+      setUseCurrentTime(false);
+      // The field shows Manila wall-clock time, whatever the device's zone.
+      setCustomDateTime(formatManila(initialTime, "yyyy-MM-dd'T'HH:mm"));
+    } else {
+      setUseCurrentTime(true);
+      setCustomDateTime("");
     }
-  }, [isOpen, services, serviceId, initialTime]);
-
-  if (!isOpen) return null;
+    setError(null);
+  }, [isOpen, services, initialTime]);
 
   const selectedService = services.find((s) => s.id === serviceId) || services[0];
 
@@ -80,7 +99,8 @@ export function WalkInModal({
         setError("Please choose a date and time.");
         return;
       }
-      startIso = new Date(customDateTime).toISOString();
+      const [day = "", time = ""] = customDateTime.split("T");
+      startIso = manilaToUtc(day, time).toISOString();
     }
 
     let priceCentavos: number | null = null;
@@ -88,7 +108,7 @@ export function WalkInModal({
       try {
         priceCentavos = pesosToCentavos(customPricePesos);
       } catch {
-        setError("Invalid price amount.");
+        setError("Enter the price in pesos, like 150 or 150.50.");
         return;
       }
     }
@@ -109,239 +129,300 @@ export function WalkInModal({
 
       if (!res.ok) {
         setError(res.message);
-        setLoading(false);
         return;
       }
 
       onSuccess?.();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to record walk-in booking.");
+      setError(err instanceof Error ? err.message : "Couldn't add the walk-in. Try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  const defaultPrice =
+    selectedService?.priceCentavos !== null && selectedService?.priceCentavos !== undefined
+      ? formatPeso(selectedService.priceCentavos)
+      : "Quote";
+
   return (
-    <div className="backdrop-blur-2xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="relative w-full max-w-lg rounded-2xl border border-neutral-200 bg-white shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-              <Scissors className="size-4" />
-            </div>
-            <div>
-              <h2 className="font-display text-lg font-bold text-neutral-900">
-                Record Walk-in Client
-              </h2>
-              <p className="text-xs text-neutral-500">
-                Record in-shop client appointment or serviced visit
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          {error && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600" />
-              <span>{error}</span>
-            </div>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && !loading && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-navy-900/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <Dialog.Content
+          className={cn(
+            "fixed z-50 flex max-h-[92dvh] w-full flex-col bg-white shadow-xl outline-none",
+            // A sheet from the bottom on phones, a centred dialog from 640px.
+            "inset-x-0 bottom-0 rounded-t-2xl data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-8",
+            "sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=open]:zoom-in-95",
           )}
-
-          {/* Service Picker */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-900">
-              Service <span className="text-red-600">*</span>
-            </label>
-            <select
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none"
-              required
-            >
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.durationMin} mins ·{" "}
-                  {s.priceCentavos !== null ? formatPeso(s.priceCentavos) : "Quote"})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Staff Member Picker */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-900">
-              Assign Staff Member (Optional)
-            </label>
-            <select
-              value={staffId}
-              onChange={(e) => setStaffId(e.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none"
-            >
-              <option value="">Any Available Staff / Unassigned</option>
-              {staff.map((member) => (
-                <option key={member.userId} value={member.userId}>
-                  {member.name} ({member.role})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Customer Details */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        >
+          <div className="flex items-start justify-between gap-4 border-b px-5 pt-5 pb-4 sm:px-6">
             <div>
-              <label className="block text-xs font-semibold text-neutral-900">
-                Guest Name (Optional)
-              </label>
-              <Input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="e.g. Juan or Kuya Joe"
-                maxLength={100}
-                className="mt-1 h-10 text-sm"
-              />
+              <Dialog.Title className="font-display text-2xl font-bold text-navy-900">
+                Add walk-in
+              </Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-sm text-slate-600">
+                A customer who came in without booking online.
+              </Dialog.Description>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-neutral-900">
-                Mobile Phone (Optional)
-              </label>
-              <Input
-                type="tel"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="0917 123 4567"
-                className="mt-1 h-10 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Time Selection */}
-          <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-neutral-900">Appointment Start Time</span>
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setUseCurrentTime(true)}
-                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                    useCurrentTime
-                      ? "text-navy-950 bg-white font-bold shadow-2xs"
-                      : "text-neutral-500 hover:text-neutral-800"
-                  }`}
-                >
-                  Right Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUseCurrentTime(false)}
-                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                    !useCurrentTime
-                      ? "text-navy-950 bg-white font-bold shadow-2xs"
-                      : "text-neutral-500 hover:text-neutral-800"
-                  }`}
-                >
-                  Custom Time
-                </button>
-              </div>
-            </div>
-
-            {!useCurrentTime && (
-              <Input
-                type="datetime-local"
-                value={customDateTime}
-                onChange={(e) => setCustomDateTime(e.target.value)}
-                className="h-10 bg-white text-sm"
-                required={!useCurrentTime}
-              />
-            )}
-          </div>
-
-          {/* Status & Price Override */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-semibold text-neutral-900">Initial Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "confirmed" | "completed")}
-                className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none"
-              >
-                <option value="confirmed">Confirmed (In progress / Queued)</option>
-                <option value="completed">Completed (Already finished)</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-neutral-900">Price (₱)</label>
-                <button
-                  type="button"
-                  onClick={() => setOverridePrice(!overridePrice)}
-                  className="text-[11px] text-orange-600 hover:underline"
-                >
-                  {overridePrice ? "Use Default" : "Custom Price"}
-                </button>
-              </div>
-              {overridePrice ? (
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={customPricePesos}
-                  onChange={(e) => setCustomPricePesos(e.target.value)}
-                  placeholder="Enter amount"
-                  className="mt-1 h-10 text-sm"
-                />
-              ) : (
-                <div className="mt-1 flex h-10 items-center rounded-md border border-neutral-200 bg-neutral-100 px-3 text-sm font-semibold text-neutral-700">
-                  {selectedService?.priceCentavos !== null &&
-                  selectedService?.priceCentavos !== undefined
-                    ? formatPeso(selectedService.priceCentavos)
-                    : "Quote upon request"}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-900">Notes (Optional)</label>
-            <Input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Requested short taper fade"
-              maxLength={200}
-              className="mt-1 h-10 text-sm"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 border-t border-neutral-200 pt-3">
-            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
+            <Dialog.Close
+              aria-label="Close"
               disabled={loading}
-              className="bg-green-600 font-bold text-white hover:bg-green-500"
+              className="-mt-1 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-full text-slate-600 outline-none hover:bg-muted hover:text-navy-900 focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Save Walk-in
-            </Button>
+              <X aria-hidden className="size-5" />
+            </Dialog.Close>
           </div>
-        </form>
+
+          {services.length === 0 ? (
+            <div className="flex flex-col items-start gap-4 p-5 sm:p-6">
+              <p className="text-slate-600">
+                Add at least one active service first. A walk-in needs a service and a price.
+              </p>
+              <Button asChild>
+                <Link href="/dashboard/services">Add a service</Link>
+              </Button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSubmit}
+              noValidate
+              className="flex min-h-0 flex-1 flex-col [&_input::placeholder]:text-slate-500"
+            >
+              <div className="flex flex-col gap-5 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className={FIELD}>
+                    <label htmlFor="walk-in-name" className={LABEL}>
+                      Customer name <span className="font-normal text-slate-600">(optional)</span>
+                    </label>
+                    <Input
+                      id="walk-in-name"
+                      type="text"
+                      autoComplete="off"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      maxLength={100}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className={FIELD}>
+                    <label htmlFor="walk-in-phone" className={LABEL}>
+                      Mobile <span className="font-normal text-slate-600">(optional)</span>
+                    </label>
+                    <Input
+                      id="walk-in-phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="0917 123 4567"
+                      className="h-11"
+                    />
+                  </div>
+                </div>
+
+                <div className={FIELD}>
+                  <label htmlFor="walk-in-service" className={LABEL}>
+                    Service
+                  </label>
+                  <select
+                    id="walk-in-service"
+                    value={serviceId}
+                    onChange={(e) => setServiceId(e.target.value)}
+                    className={SELECT}
+                    required
+                  >
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} · {s.durationMin} min ·{" "}
+                        {s.priceCentavos !== null ? formatPeso(s.priceCentavos) : "Quote"}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex min-h-11 items-center justify-between gap-3 rounded-md bg-muted/60 px-3">
+                    {overridePrice ? (
+                      <>
+                        <label htmlFor="walk-in-price" className="text-sm text-slate-600">
+                          Price (₱)
+                        </label>
+                        <Input
+                          id="walk-in-price"
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          value={customPricePesos}
+                          onChange={(e) => setCustomPricePesos(e.target.value)}
+                          placeholder={defaultPrice.replace("₱", "")}
+                          autoFocus
+                          className="h-9 max-w-32 bg-white text-right"
+                        />
+                      </>
+                    ) : (
+                      <span className="text-sm text-slate-600">
+                        Price{" "}
+                        <span className="font-semibold text-navy-900 tabular-nums">
+                          {defaultPrice}
+                        </span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverridePrice(!overridePrice);
+                        setCustomPricePesos("");
+                      }}
+                      className="min-h-11 shrink-0 rounded-md px-1 text-sm font-semibold text-green-700 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      {overridePrice ? "Use list price" : "Change price"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={FIELD}>
+                  <label htmlFor="walk-in-staff" className={LABEL}>
+                    Served by <span className="font-normal text-slate-600">(optional)</span>
+                  </label>
+                  <select
+                    id="walk-in-staff"
+                    value={staffId}
+                    onChange={(e) => setStaffId(e.target.value)}
+                    className={SELECT}
+                  >
+                    <option value="">Anyone</option>
+                    {staff.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Segmented
+                    label="Started"
+                    value={useCurrentTime ? "now" : "custom"}
+                    onChange={(v) => setUseCurrentTime(v === "now")}
+                    options={[
+                      { value: "now", label: "Just now" },
+                      { value: "custom", label: "Pick a time" },
+                    ]}
+                  />
+                  <Segmented
+                    label="Status"
+                    value={status}
+                    onChange={(v) => setStatus(v)}
+                    options={[
+                      { value: "confirmed", label: "Being served" },
+                      { value: "completed", label: "Done" },
+                    ]}
+                  />
+                </div>
+
+                {!useCurrentTime && (
+                  <div className={FIELD}>
+                    <label htmlFor="walk-in-time" className={LABEL}>
+                      Date and time
+                    </label>
+                    <Input
+                      id="walk-in-time"
+                      type="datetime-local"
+                      value={customDateTime}
+                      onChange={(e) => setCustomDateTime(e.target.value)}
+                      className="h-11"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div className={FIELD}>
+                  <label htmlFor="walk-in-notes" className={LABEL}>
+                    Notes <span className="font-normal text-slate-600">(optional)</span>
+                  </label>
+                  <Input
+                    id="walk-in-notes"
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g. short taper fade"
+                    maxLength={200}
+                    className="h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+                {error && (
+                  <p role="alert" className="flex items-start gap-2 text-sm text-danger">
+                    <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+                    {error}
+                  </p>
+                )}
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Dialog.Close asChild>
+                    <Button type="button" variant="outline" disabled={loading}>
+                      Cancel
+                    </Button>
+                  </Dialog.Close>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="transition-transform active:scale-[0.98]"
+                  >
+                    {loading && <Loader2 aria-hidden className="animate-spin" />}
+                    {loading ? "Adding…" : "Add walk-in"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function Segmented<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: string }>;
+}) {
+  const id = React.useId();
+  return (
+    <div className={FIELD}>
+      <span id={id} className={LABEL}>
+        {label}
+      </span>
+      <div
+        role="group"
+        aria-labelledby={id}
+        className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+      >
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "min-h-11 rounded-md px-2 text-sm font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              value === option.value
+                ? "bg-white text-navy-900 shadow-xs"
+                : "text-slate-600 hover:text-navy-900",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
     </div>
   );

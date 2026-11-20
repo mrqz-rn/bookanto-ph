@@ -8,11 +8,12 @@ import {
   getUserPushSubscriptionsQuery,
 } from "@/features/notifications/queries";
 import { requireUser } from "@/lib/auth";
+import { vapidPublicKey } from "@/lib/notify";
 
 export const metadata: Metadata = {
   title: "Notification Settings",
   description:
-    "Manage how BooKanto reaches you: email confirmations and reminders, web push, and messaging channels.",
+    "Manage how BooKanto reaches you: email confirmations and reminders, plus optional web push.",
 };
 
 export default async function NotificationsPage() {
@@ -41,6 +42,7 @@ export default async function NotificationsPage() {
         userPhone={user.phone}
         userEmail={user.email}
         hasActivePushSubscription={pushSubs.length > 0}
+        vapidPublicKey={vapidPublicKey()}
       />
 
       <NotificationHistoryList notifications={recentNotifications} />

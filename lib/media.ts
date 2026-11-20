@@ -11,6 +11,15 @@ export const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
 /** The public URL of a photo stored at `path` in the media bucket. */
 export function mediaUrl(path: string): string {
+  if (
+    path.startsWith("data:") ||
+    path.startsWith("http://") ||
+    path.startsWith("https://") ||
+    path.startsWith("/") ||
+    path.startsWith("blob:")
+  ) {
+    return path;
+  }
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   return `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${encodedPath}`;
 }

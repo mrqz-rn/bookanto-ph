@@ -64,7 +64,21 @@ export function toErrorResult(error: unknown): ActionResult<never> {
   }
   // Details go to the server log (Sentry once monitoring ships), never to the user.
   console.error(error);
-  return { ok: false, code: "INTERNAL", message: DEFAULT_MESSAGES.INTERNAL };
+  const cause = error instanceof Error && error.cause;
+  const causeMsg = cause instanceof Error ? cause.message : cause ? String(cause) : "";
+  const detail = causeMsg
+    ? `${error instanceof Error ? error.message : String(error)} [${causeMsg}]`
+    : error instanceof Error
+      ? error.message
+      : String(error);
+  return {
+    ok: false,
+    code: "INTERNAL",
+    message:
+      process.env.NODE_ENV === "development"
+        ? `${DEFAULT_MESSAGES.INTERNAL} (${detail})`
+        : DEFAULT_MESSAGES.INTERNAL,
+  };
 }
 
 /**

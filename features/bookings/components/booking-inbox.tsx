@@ -114,7 +114,7 @@ export function BookingInbox({
   const elsewhereView = INBOX_VIEWS.find((v) => v.id !== view && counts[v.id] > 0)?.id;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-8xl space-y-6">
       <InboxHeader summary={summaryLine(initialBookings, nowMs)} />
 
       {error && <ActionError message={error} onDismiss={() => setError(null)} />}

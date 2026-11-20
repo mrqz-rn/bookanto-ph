@@ -292,11 +292,39 @@ export async function getPublicShopBySlug(slug: string) {
       .orderBy(asc(services.sortOrder), asc(services.name)),
   ]);
 
+  const serviceIds = activeServices.map((s) => s.id);
+  const servicePhotos =
+    serviceIds.length > 0
+      ? await db
+          .select({
+            id: media.id,
+            ownerId: media.ownerId,
+            path: media.path,
+            sortOrder: media.sortOrder,
+          })
+          .from(media)
+          .where(
+            and(
+              eq(media.ownerType, "service"),
+              inArray(media.ownerId, serviceIds),
+              eq(media.kind, "photo"),
+            ),
+          )
+          .orderBy(asc(media.sortOrder))
+      : [];
+
   return {
     shop,
     categories: shopCats,
     hours,
     photos: photos.map((p) => ({ ...p, url: mediaUrl(p.path) })),
-    services: activeServices,
+    services: activeServices.map((svc) => {
+      const photosForSvc = servicePhotos.filter((p) => p.ownerId === svc.id);
+      return {
+        ...svc,
+        photos: photosForSvc.map((p) => ({ id: p.id, path: p.path, url: mediaUrl(p.path) })),
+        coverPhotoUrl: photosForSvc[0]?.path ? mediaUrl(photosForSvc[0].path) : null,
+      };
+    }),
   };
 }

@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { formatManila, manilaDate, manilaToUtc, manilaWeekday, startOfManilaDay } from "@/lib/time";
 
+import type { CalendarClosure, WeekdayHours } from "./calendar";
 import type {
   BookingDetail,
   BookingEventItem,
@@ -29,6 +30,7 @@ import type {
   TodayHours,
   TodayStats,
 } from "./constants";
+import { parseWalkInGuest } from "./walk-in-notes";
 
 /**
  * Maps raw database joins into a clean BookingListItem object.
@@ -45,14 +47,9 @@ function mapBookingListItem(row: {
 
   if (isWalkIn) {
     customerName = "Walk-in Guest";
-    // Check if notes contains guest info
-    if (row.booking.notes?.startsWith("Walk-in:")) {
-      const match = /^Walk-in:\s*([^·\n]+)(?:\s*·\s*([^·\n]+))?/.exec(row.booking.notes);
-      if (match) {
-        if (match[1]?.trim()) customerName = match[1].trim();
-        if (match[2]?.trim()) customerPhone = match[2].trim();
-      }
-    }
+    const guest = parseWalkInGuest(row.booking.notes);
+    if (guest?.name) customerName = guest.name;
+    if (guest?.phone) customerPhone = guest.phone;
   }
 
   return {
@@ -289,6 +286,8 @@ export async function getShopBookings(params: {
   search?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** Only bookings the shop added without a customer account. */
+  walkInsOnly?: boolean;
   limit?: number;
 }): Promise<BookingListItem[]> {
   const staffUsers = db
@@ -307,6 +306,10 @@ export async function getShopBookings(params: {
 
   if (params.staffId) {
     conditions.push(eq(bookings.staffId, params.staffId));
+  }
+
+  if (params.walkInsOnly) {
+    conditions.push(isNull(bookings.customerId));
   }
 
   if (params.dateFrom) {
@@ -720,9 +723,54 @@ export async function getShopRevenueStats(
 /**
  * Retrieves walk-in bookings specifically.
  */
-export async function getShopWalkIns(shopId: string, limit = 50): Promise<BookingListItem[]> {
-  return getShopBookings({
-    shopId,
-    limit,
-  }).then((items) => items.filter((b) => b.isWalkIn));
+/**
+ * The shop's latest walk-ins, newest first. Filtered in SQL: filtering after
+ * the limit dropped walk-ins whenever online bookings filled the page.
+ */
+export async function getShopWalkIns(shopId: string, limit = 100): Promise<BookingListItem[]> {
+  return getShopBookings({ shopId, walkInsOnly: true, limit });
+}
+
+/**
+ * The shop's weekly opening hours and the closures that touch a window, for the
+ * calendar's shading. Hours are Manila wall-clock times ("09:00:00").
+ */
+export async function getCalendarSchedule(
+  shopId: string,
+  startIso: string,
+  endIso: string,
+): Promise<{ hours: WeekdayHours[]; closures: CalendarClosure[] }> {
+  const [hours, closureRows] = await Promise.all([
+    db
+      .select({
+        weekday: businessHours.weekday,
+        opens: businessHours.opens,
+        closes: businessHours.closes,
+        breakStart: businessHours.breakStart,
+        breakEnd: businessHours.breakEnd,
+      })
+      .from(businessHours)
+      .where(eq(businessHours.shopId, shopId))
+      .orderBy(asc(businessHours.weekday)),
+    db
+      .select({ startsAt: closures.startsAt, endsAt: closures.endsAt, reason: closures.reason })
+      .from(closures)
+      .where(
+        and(
+          eq(closures.shopId, shopId),
+          lt(closures.startsAt, new Date(endIso)),
+          gt(closures.endsAt, new Date(startIso)),
+        ),
+      )
+      .orderBy(asc(closures.startsAt)),
+  ]);
+
+  return {
+    hours,
+    closures: closureRows.map((c) => ({
+      startsAt: c.startsAt.toISOString(),
+      endsAt: c.endsAt.toISOString(),
+      reason: c.reason?.trim() || null,
+    })),
+  };
 }

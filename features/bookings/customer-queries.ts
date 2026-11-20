@@ -7,6 +7,7 @@ import {
   bookingEvents,
   bookingPolicies,
   bookings,
+  media,
   payments,
   services,
   shopMembers,
@@ -18,6 +19,7 @@ import {
   type PriceType,
   type ShopStatus,
 } from "@/lib/db/schema";
+import { mediaUrl } from "@/lib/media";
 import { manilaDate, manilaToUtc } from "@/lib/time";
 
 import { DEFAULT_RULES, FINAL_STATUSES, type BookingRules } from "./rules";
@@ -77,6 +79,12 @@ export async function countWaiting(
   return row?.count ?? 0;
 }
 
+export type BookableServicePhoto = {
+  id: string;
+  path: string;
+  url: string;
+};
+
 export type BookableService = {
   id: string;
   name: string;
@@ -86,6 +94,7 @@ export type BookableService = {
   durationMin: number;
   bookingType: BookingType;
   active: boolean;
+  photos: BookableServicePhoto[];
   shop: {
     id: string;
     name: string;
@@ -130,7 +139,7 @@ export async function getBookableService(
     .limit(1);
   if (!row) return null;
 
-  const [staff, rules, waiting] = await Promise.all([
+  const [staff, rules, waiting, servicePhotos] = await Promise.all([
     db
       .select({ userId: staffSchedules.userId, name: users.name })
       .from(staffSchedules)
@@ -146,6 +155,17 @@ export async function getBookableService(
       .orderBy(asc(users.name)),
     getBookingRules(row.shopId),
     row.bookingType === "queue" ? countWaiting(row.id, now) : 0,
+    db
+      .select({
+        id: media.id,
+        path: media.path,
+        sortOrder: media.sortOrder,
+      })
+      .from(media)
+      .where(
+        and(eq(media.ownerType, "service"), eq(media.ownerId, row.id), eq(media.kind, "photo")),
+      )
+      .orderBy(asc(media.sortOrder)),
   ]);
 
   return {
@@ -157,6 +177,11 @@ export async function getBookableService(
     durationMin: row.durationMin,
     bookingType: row.bookingType,
     active: row.active,
+    photos: servicePhotos.map((p) => ({
+      id: p.id,
+      path: p.path,
+      url: mediaUrl(p.path),
+    })),
     shop: {
       id: row.shopId,
       name: row.shopName,

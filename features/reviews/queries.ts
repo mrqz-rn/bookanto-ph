@@ -346,6 +346,78 @@ export async function getBookingReview(bookingId: string): Promise<PublicReviewI
   };
 }
 
+/**
+ * Reviews for a set of the customer's bookings, keyed by booking id, in two
+ * queries (reviews, then their photos) instead of two per booking.
+ */
+export async function getReviewsForBookings(
+  bookingIds: string[],
+): Promise<Record<string, PublicReviewItem>> {
+  if (bookingIds.length === 0) return {};
+
+  const rows = await db
+    .select({
+      id: reviews.id,
+      bookingId: reviews.bookingId,
+      customerId: reviews.customerId,
+      customerName: users.name,
+      rating: reviews.rating,
+      comment: reviews.comment,
+      reply: reviews.reply,
+      serviceName: services.name,
+      createdAt: reviews.createdAt,
+      updatedAt: reviews.updatedAt,
+    })
+    .from(reviews)
+    .innerJoin(users, eq(users.id, reviews.customerId))
+    .innerJoin(bookings, eq(bookings.id, reviews.bookingId))
+    .leftJoin(services, eq(services.id, bookings.serviceId))
+    .where(inArray(reviews.bookingId, bookingIds));
+
+  if (rows.length === 0) return {};
+
+  const photos = await db
+    .select({
+      id: media.id,
+      ownerId: media.ownerId,
+      path: media.path,
+      sortOrder: media.sortOrder,
+    })
+    .from(media)
+    .where(
+      and(
+        eq(media.ownerType, "review"),
+        inArray(
+          media.ownerId,
+          rows.map((r) => r.id),
+        ),
+        eq(media.kind, "photo"),
+      ),
+    )
+    .orderBy(asc(media.sortOrder));
+
+  const result: Record<string, PublicReviewItem> = {};
+  for (const row of rows) {
+    result[row.bookingId] = {
+      id: row.id,
+      bookingId: row.bookingId,
+      customerId: row.customerId,
+      customerName: row.customerName || "Customer",
+      rating: row.rating,
+      comment: row.comment,
+      reply: row.reply,
+      serviceName: row.serviceName,
+      photos: photos
+        .filter((p) => p.ownerId === row.id)
+        .map((p) => ({ id: p.id, path: p.path, sortOrder: p.sortOrder, url: mediaUrl(p.path) })),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      matchedHighlights: [],
+    };
+  }
+  return result;
+}
+
 export type DashboardReviewItem = PublicReviewItem & {
   hasReply: boolean;
   reportsCount: number;

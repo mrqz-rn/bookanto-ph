@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Clock, FileSpreadsheet, Plus, Scissors, Sparkles, Trash2, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -92,13 +93,28 @@ export function ServicesManager({
   initialMemberships,
   shopCategories,
 }: ServicesManagerProps) {
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = React.useState<
     "services" | "photos_addons" | "packages" | "memberships"
   >("services");
 
   const [services, setServices] = React.useState<ServiceItem[]>(initialServices);
-  const [packagesList] = React.useState<PackageItem[]>(initialPackages);
-  const [membershipsList] = React.useState<MembershipItem[]>(initialMemberships);
+  const [packagesList, setPackagesList] = React.useState<PackageItem[]>(initialPackages);
+  const [membershipsList, setMembershipsList] =
+    React.useState<MembershipItem[]>(initialMemberships);
+
+  React.useEffect(() => {
+    setServices(initialServices);
+  }, [initialServices]);
+
+  React.useEffect(() => {
+    setPackagesList(initialPackages);
+  }, [initialPackages]);
+
+  React.useEffect(() => {
+    setMembershipsList(initialMemberships);
+  }, [initialMemberships]);
 
   const [isServiceModalOpen, setIsServiceModalOpen] = React.useState(false);
   const [editingService, setEditingService] = React.useState<ServiceItem | null>(null);
@@ -107,8 +123,54 @@ export function ServicesManager({
   const [isBulkImportOpen, setIsBulkImportOpen] = React.useState(false);
 
   const refreshPage = () => {
-    window.location.reload();
+    router.refresh();
   };
+
+  const handleUpdateService = React.useCallback(
+    (
+      serviceId: string,
+      updater: (prev: {
+        id: string;
+        name: string;
+        photos: Array<{ id: string; path: string; sortOrder: number }>;
+        addons: Array<{
+          id: string;
+          serviceId: string;
+          name: string;
+          description: string | null;
+          priceCentavos: number;
+          durationMin: number;
+          active: boolean;
+        }>;
+      }) => {
+        id: string;
+        name: string;
+        photos: Array<{ id: string; path: string; sortOrder: number }>;
+        addons: Array<{
+          id: string;
+          serviceId: string;
+          name: string;
+          description: string | null;
+          priceCentavos: number;
+          durationMin: number;
+          active: boolean;
+        }>;
+      },
+    ) => {
+      setServices((prev) =>
+        prev.map((s) => {
+          if (s.id !== serviceId) return s;
+          const updated = updater(s);
+          return {
+            ...s,
+            photos: updated.photos,
+            addons: updated.addons,
+          };
+        }),
+      );
+    },
+    [],
+  );
 
   const handleCreateService = () => {
     setEditingService(null);
@@ -375,7 +437,12 @@ export function ServicesManager({
 
       {/* Tab 2: Photos & Add-ons */}
       {activeTab === "photos_addons" && (
-        <ServicePhotosAddons shopId={shopId} services={services} onRefresh={refreshPage} />
+        <ServicePhotosAddons
+          shopId={shopId}
+          services={services}
+          onRefresh={refreshPage}
+          onUpdateService={handleUpdateService}
+        />
       )}
 
       {/* Tab 3: Packages */}

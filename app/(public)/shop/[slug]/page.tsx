@@ -213,6 +213,19 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
                 const showDuration = svc.bookingType !== "quote" && svc.bookingType !== "queue";
                 return (
                   <li key={svc.id} className="relative flex items-center gap-4 py-4">
+                    {svc.coverPhotoUrl && (
+                      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-slate-100 sm:size-20">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={svc.coverPhotoUrl}
+                          alt={svc.name}
+                          className="size-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold text-navy-900">{svc.name}</h3>
                       {svc.description && (

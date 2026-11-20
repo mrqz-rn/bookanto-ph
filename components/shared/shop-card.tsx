@@ -33,15 +33,15 @@ export function ShopCard({ shop }: { shop: ShopCardData }) {
   const details = [shop.categoryName, shop.place].filter(Boolean).join(" · ");
 
   return (
-    <article className="relative flex h-full flex-col overflow-hidden rounded-lg border bg-card shadow-xs transition-shadow hover:shadow-md">
-      <div className="relative aspect-[4/3] bg-accent">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border bg-card shadow-xs transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md has-[a:active]:translate-y-0">
+      <div className="relative aspect-[4/3] overflow-hidden bg-accent">
         {shop.photoUrl ? (
           <Image
             src={shop.photoUrl}
             alt=""
             fill
             sizes="(min-width: 1024px) 280px, (min-width: 640px) 33vw, 70vw"
-            className="object-cover"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
           />
         ) : (
           <div className="flex size-full items-center justify-center">

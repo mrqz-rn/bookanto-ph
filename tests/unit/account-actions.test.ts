@@ -9,6 +9,7 @@ import {
   updateProfile,
   updateSavedAddress,
 } from "@/features/account/actions";
+import { MAX_SAVED_ADDRESSES } from "@/features/account/constants";
 import * as authModule from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -89,7 +90,8 @@ describe("account server actions", () => {
       expect(result).toMatchObject({
         ok: false,
         code: "CONFLICT",
-        message: expect.stringContaining("phone number is already linked"),
+        message: expect.stringContaining("mobile number is already linked"),
+        fieldErrors: { phone: [expect.any(String)] },
       });
     });
 
@@ -111,11 +113,15 @@ describe("account server actions", () => {
 
       const result = await updateProfile({
         name: "Juan Updated",
-        email: "juan.updated@example.com",
         phone: "09171234567",
       });
 
       expect(result).toEqual({ ok: true, data: { success: true } });
+    });
+
+    it("refuses to change the email", async () => {
+      const result = await updateProfile({ name: "Juan", email: "juan.updated@example.com" });
+      expect(result).toMatchObject({ ok: false, code: "VALIDATION" });
     });
   });
 
@@ -174,6 +180,7 @@ describe("account server actions", () => {
       };
 
       mockTx({
+        execute: vi.fn().mockResolvedValue([]),
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockResolvedValue([{ count: 0 }]),
@@ -197,6 +204,28 @@ describe("account server actions", () => {
       });
 
       expect(result).toEqual({ ok: true, data: createdAddress });
+    });
+
+    it(`refuses a new address once ${MAX_SAVED_ADDRESSES} are saved`, async () => {
+      const insert = vi.fn();
+      mockTx({
+        execute: vi.fn().mockResolvedValue([]),
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([{ count: MAX_SAVED_ADDRESSES }]),
+          }),
+        }),
+        insert,
+      });
+
+      const result = await createSavedAddress({
+        label: "Other",
+        streetAddress: "789 Mabini St.",
+      });
+
+      expect(result).toMatchObject({ ok: false, code: "CONFLICT" });
+      if (!result.ok) expect(result.message).toContain(`up to ${MAX_SAVED_ADDRESSES}`);
+      expect(insert).not.toHaveBeenCalled();
     });
   });
 

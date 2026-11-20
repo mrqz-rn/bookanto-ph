@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { completeBooking } from "@/features/bookings/actions";
 import { WalkInsManager } from "@/features/bookings/components/walk-ins-manager";
@@ -18,9 +18,15 @@ vi.mock("@/features/bookings/actions", () => ({
   addWalkIn: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
+beforeEach(() => {
+  // Only Date: the clock hook reads Date.now(); real timers keep the dialogs working.
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-15T04:00:00Z") });
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe("WalkInsManager component", () => {
@@ -75,81 +81,114 @@ describe("WalkInsManager component", () => {
     },
   ];
 
-  it("renders KPI totals correctly", () => {
+  // Noon in Manila on the day of both walk-ins.
+  const nowIso = "2026-11-15T04:00:00Z";
+  const renderManager = (walkIns = mockWalkIns) =>
     render(
       <WalkInsManager
         shopId={shopId}
-        initialWalkIns={mockWalkIns}
+        initialWalkIns={walkIns}
         activeServices={services}
         shopStaff={staff}
+        nowIso={nowIso}
       />,
     );
 
-    expect(screen.getByText("Total Walk-in Visits")).toBeInTheDocument();
-    expect(screen.getByText("Completed Visits")).toBeInTheDocument();
-    expect(screen.getByText("Walk-in Revenue")).toBeInTheDocument();
+  it("sums today's walk-ins, who is being served and what was earned", () => {
+    renderManager();
 
-    // 2 total, 1 completed, 150 revenue
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getAllByText("₱150").length).toBeGreaterThanOrEqual(1);
+    const stat = (label: string) =>
+      screen.getByText(label, { selector: "dt" }).nextElementSibling?.textContent;
+    expect(stat("Walk-ins today")).toBe("2");
+    expect(stat("Being served")).toBe("1");
+    expect(stat("Earned today")).toBe("₱150");
   });
 
-  it("filters walk-ins using search input", async () => {
-    render(
-      <WalkInsManager
-        shopId={shopId}
-        initialWalkIns={mockWalkIns}
-        activeServices={services}
-        shopStaff={staff}
-      />,
-    );
+  it("lists the guest being served with how long they've been in", () => {
+    renderManager();
 
-    expect(screen.getByText("Mang Tomas")).toBeInTheDocument();
-    expect(screen.getByText("Kuya Cardo")).toBeInTheDocument();
+    const serving = screen.getByRole("region", { name: "Being served" });
+    expect(within(serving).getByText("Mang Tomas")).toBeInTheDocument();
+    expect(within(serving).getByText(/2 h/)).toBeInTheDocument();
+    expect(within(serving).queryByText("Kuya Cardo")).not.toBeInTheDocument();
+  });
 
-    const searchInput = screen.getByPlaceholderText(/Search walk-in guest name/i);
+  it("never shows the packed guest text from the notes", () => {
+    renderManager();
+    expect(screen.queryByText(/Walk-in: Mang Tomas/)).not.toBeInTheDocument();
+  });
+
+  it("filters the history by search and by status", async () => {
+    renderManager();
+    const history = screen.getByRole("region", { name: "All walk-ins" });
+    expect(within(history).getByText("Mang Tomas")).toBeInTheDocument();
+    expect(within(history).getByText("Kuya Cardo")).toBeInTheDocument();
+
     await act(async () => {
-      fireEvent.change(searchInput, { target: { value: "Cardo" } });
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search walk-ins" }), {
+        target: { value: "Cardo" },
+      });
     });
+    expect(within(history).queryByText("Mang Tomas")).not.toBeInTheDocument();
+    expect(within(history).getByText("Kuya Cardo")).toBeInTheDocument();
 
-    expect(screen.queryByText("Mang Tomas")).not.toBeInTheDocument();
-    expect(screen.getByText("Kuya Cardo")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+      fireEvent.click(within(history).getByRole("button", { name: /^Done/ }));
+    });
+    expect(within(history).queryByText("Mang Tomas")).not.toBeInTheDocument();
+    expect(within(history).getByText("Kuya Cardo")).toBeInTheDocument();
   });
 
-  it("completes a walk-in when clicking Done", async () => {
-    render(
-      <WalkInsManager
-        shopId={shopId}
-        initialWalkIns={mockWalkIns}
-        activeServices={services}
-        shopStaff={staff}
-      />,
-    );
+  it("marks a walk-in done", async () => {
+    renderManager();
 
-    const doneButton = screen.getByRole("button", { name: /Done/i });
     await act(async () => {
-      fireEvent.click(doneButton);
+      fireEvent.click(screen.getByRole("button", { name: "Mark done" }));
     });
 
     expect(completeBooking).toHaveBeenCalledWith({ bookingId: "w-1" });
   });
 
-  it("opens modal when clicking + New Walk-in Client", async () => {
-    render(
-      <WalkInsManager
-        shopId={shopId}
-        initialWalkIns={mockWalkIns}
-        activeServices={services}
-        shopStaff={staff}
-      />,
-    );
+  it("says so when marking done fails", async () => {
+    vi.mocked(completeBooking).mockResolvedValueOnce({
+      ok: false,
+      code: "CONFLICT",
+      message: "This booking just changed. Please refresh and try again.",
+    });
+    renderManager();
 
-    const newBtn = screen.getByRole("button", { name: /\+ New Walk-in Client/i });
     await act(async () => {
-      fireEvent.click(newBtn);
+      fireEvent.click(screen.getByRole("button", { name: "Mark done" }));
     });
 
-    expect(screen.getByText("Record Walk-in Client")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("This booking just changed");
+  });
+
+  it("opens a clean Add walk-in form every time", async () => {
+    renderManager();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Add walk-in" }));
+    });
+    const dialog = screen.getByRole("dialog", { name: "Add walk-in" });
+    await act(async () => {
+      fireEvent.change(within(dialog).getByLabelText(/Customer name/), {
+        target: { value: "Aling Nena" },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Add walk-in" }));
+    });
+    expect(screen.getByLabelText(/Customer name/)).toHaveValue("");
+  });
+
+  it("invites the shop to add the first walk-in", () => {
+    renderManager([]);
+    expect(screen.getByText("No walk-ins yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add walk-in" })).toHaveLength(2);
   });
 });

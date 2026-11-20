@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type * as React from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -75,88 +76,87 @@ describe("BookingCalendar component", () => {
     },
   ];
 
-  it("renders Month view by default and displays weekday headers", () => {
+  const renderCalendar = (props: Partial<React.ComponentProps<typeof BookingCalendar>> = {}) =>
     render(
       <BookingCalendar
         shopId={shopId}
         initialBookings={mockBookings}
         activeServices={services}
         shopStaff={[staff1, staff2]}
+        {...props}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Month" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Week" })).toBeInTheDocument();
-    expect(screen.getByText("Sun")).toBeInTheDocument();
-    expect(screen.getByText("Mon")).toBeInTheDocument();
-    expect(screen.getByText("Sat")).toBeInTheDocument();
+  it("opens on the week and switches to the month", async () => {
+    renderCalendar();
+
+    expect(screen.getByRole("button", { name: "Week", pressed: true })).toBeInTheDocument();
+    // The week grid and the phone's day column both draw the booking.
+    expect(screen.getAllByRole("button", { name: /Haircut for Juan Dela Cruz/ }).length).toBe(2);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Month" }));
+    });
+
+    expect(screen.getByRole("button", { name: "Month", pressed: true })).toBeInTheDocument();
+    // The chosen day (today) lists its bookings beside the month.
+    expect(screen.getByRole("heading", { name: /Today/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Haircut\s*Juan Dela Cruz/ })).toBeInTheDocument();
   });
 
-  it("switches to Week view when clicking the Week button", async () => {
-    render(
-      <BookingCalendar
-        shopId={shopId}
-        initialBookings={mockBookings}
-        activeServices={services}
-        shopStaff={[staff1, staff2]}
-      />,
-    );
+  it("filters bookings by team member", async () => {
+    renderCalendar();
 
-    const weekBtn = screen.getByRole("button", { name: "Week" });
+    expect(screen.getAllByRole("button", { name: /Walk-in Guest/ }).length).toBeGreaterThan(0);
+
     await act(async () => {
-      fireEvent.click(weekBtn);
+      fireEvent.change(screen.getByRole("combobox", { name: "Show bookings for" }), {
+        target: { value: "staff-1" },
+      });
     });
 
-    // In week view, appointments appear as detailed cards
-    expect(screen.getAllByText("Haircut").length).toBeGreaterThan(0);
-    expect(screen.getByText("Juan Dela Cruz")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Juan Dela Cruz/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Walk-in Guest/ })).not.toBeInTheDocument();
   });
 
-  it("filters appointments by assigned team member", async () => {
-    render(
-      <BookingCalendar
-        shopId={shopId}
-        initialBookings={mockBookings}
-        activeServices={services}
-        shopStaff={[staff1, staff2]}
-      />,
+  it("hides cancelled bookings until asked", async () => {
+    const cancelled = {
+      ...mockBookings[0]!,
+      id: "b-3",
+      customerName: "Ana Reyes",
+      status: "cancelled" as const,
+    };
+    renderCalendar({ initialBookings: [...mockBookings, cancelled] });
+
+    expect(screen.queryByRole("button", { name: /Ana Reyes/ })).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Show cancelled/ }));
+    });
+    expect(screen.getAllByRole("button", { name: /Ana Reyes.*Cancelled/ }).length).toBeGreaterThan(
+      0,
     );
-
-    // Switch to Week view to inspect items clearly
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Week" }));
-    });
-
-    expect(screen.getByText("Juan Dela Cruz")).toBeInTheDocument();
-    expect(screen.getByText("Walk-in Guest")).toBeInTheDocument();
-
-    // Select Staff Maria only
-    const select = screen.getByRole("combobox");
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "staff-1" } });
-    });
-
-    // Juan is assigned to staff-1 (Maria)
-    expect(screen.getByText("Juan Dela Cruz")).toBeInTheDocument();
-    // Walk-in Guest is assigned to staff-2 (Carlo), so filtered out
-    expect(screen.queryByText("Walk-in Guest")).not.toBeInTheDocument();
   });
 
-  it("opens walk-in modal when clicking Record Walk-in button", async () => {
-    render(
-      <BookingCalendar
-        shopId={shopId}
-        initialBookings={mockBookings}
-        activeServices={services}
-        shopStaff={[staff1, staff2]}
-      />,
+  it("says how many requests wait for an answer", () => {
+    renderCalendar();
+    expect(screen.getByRole("link", { name: "1 waiting for your answer" })).toHaveAttribute(
+      "href",
+      "/dashboard/inbox",
     );
+  });
 
-    const recordBtn = screen.getByRole("button", { name: /\+ Record Walk-in/i });
+  it("shows the empty state for a week without bookings", () => {
+    renderCalendar({ initialBookings: [] });
+    expect(screen.getByText(/No bookings this week yet/)).toBeInTheDocument();
+  });
+
+  it("opens the walk-in form from Add walk-in", async () => {
+    renderCalendar();
+
     await act(async () => {
-      fireEvent.click(recordBtn);
+      fireEvent.click(screen.getByRole("button", { name: "Add walk-in" }));
     });
 
-    expect(screen.getByText("Record Walk-in Client")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add walk-in" })).toBeInTheDocument();
   });
 });

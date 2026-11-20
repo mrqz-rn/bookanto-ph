@@ -8,6 +8,7 @@ import {
   BookingFlow,
   type FlowService,
 } from "@/features/bookings/components/customer/booking-flow";
+import { ServicePhotosGallery } from "@/features/bookings/components/customer/service-photos-gallery";
 import { CUSTOMER_BOOKING_MODES } from "@/features/bookings/booking-modes";
 import { getBookableService } from "@/features/bookings/customer-queries";
 import { getCurrentUser } from "@/lib/auth";
@@ -73,6 +74,7 @@ export default async function BookServicePage({ params }: Props) {
     waiting: service.waiting,
     depositLabel,
     cancelNote,
+    photos: service.photos,
   };
 
   let savedAddresses: Array<{ id: string; label: string; text: string }> = [];
@@ -132,6 +134,13 @@ export default async function BookServicePage({ params }: Props) {
               confirms.
             </span>
           </p>
+        )}
+
+        {/* Uploaded Service Photos Gallery */}
+        {service.photos.length > 0 && (
+          <div className="mt-4">
+            <ServicePhotosGallery photos={service.photos} serviceName={service.name} />
+          </div>
         )}
       </header>
 

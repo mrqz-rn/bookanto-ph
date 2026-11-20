@@ -57,6 +57,7 @@ export function CustomerBookingView({ booking, isNew }: Props) {
     startAt: string;
     label: string;
   } | null>(null);
+  const [rescheduleError, setRescheduleError] = React.useState<string | null>(null);
 
   const copyRefCode = () => {
     navigator.clipboard.writeText(booking.refCode);
@@ -114,6 +115,7 @@ export function CustomerBookingView({ booking, isNew }: Props) {
   const handleReschedule = () => {
     if (!rescheduleSlot) return;
     setError(null);
+    setRescheduleError(null);
     startTransition(async () => {
       const res = await rescheduleBooking({
         bookingId: booking.id,
@@ -124,6 +126,7 @@ export function CustomerBookingView({ booking, isNew }: Props) {
         setSuccess("Appointment rescheduled successfully!");
         router.refresh();
       } else {
+        setRescheduleError(res.message);
         setError(res.message);
       }
     });
@@ -363,7 +366,11 @@ export function CustomerBookingView({ booking, isNew }: Props) {
           {canReschedule && (
             <Button
               variant="outline"
-              onClick={() => setShowRescheduleDialog(true)}
+              onClick={() => {
+                setRescheduleError(null);
+                setRescheduleSlot(null);
+                setShowRescheduleDialog(true);
+              }}
               className="flex-1"
             >
               <RefreshCw className="mr-1.5 size-4" />
@@ -469,19 +476,27 @@ export function CustomerBookingView({ booking, isNew }: Props) {
               Pick a new day and available time slot for your service.
             </p>
 
+            {rescheduleError && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-800">
+                <AlertCircle className="size-4 shrink-0 text-red-600" />
+                <span>{rescheduleError}</span>
+              </div>
+            )}
+
             <div className="mt-4">
               <SlotPicker
+                today={manilaDate(new Date())}
                 load={() =>
                   getRescheduleSlots({
                     bookingId: booking.id,
-                    fromDate: manilaDate(new Date()),
-                    toDate: manilaDate(new Date(Date.now() + 14 * 86_400_000)),
-                    staffId: null,
+                    date: manilaDate(new Date()),
+                    days: 14,
                   })
                 }
                 reloadKey={booking.id}
                 value={rescheduleSlot?.startAt ?? null}
                 onChange={(startAt, label) => {
+                  setRescheduleError(null);
                   setRescheduleSlot(startAt && label ? { startAt, label } : null);
                 }}
               />

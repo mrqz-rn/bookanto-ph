@@ -51,18 +51,31 @@ export function StepPhotos({ shopId, initialPhotos = [], onBack, onComplete }: S
           continue;
         }
 
-        // Mock upload or path generation
-        const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const path = `shops/${shopId}/photo-${Date.now()}-${i}.${ext}`;
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const res = reader.result as string;
+            const b64 = res.split(",")[1];
+            if (b64) resolve(b64);
+            else reject(new Error("Failed to read image data"));
+          };
+          reader.onerror = () => reject(reader.error);
+        });
+        reader.readAsDataURL(file);
+
+        const imageBase64 = await base64Promise;
 
         const result = await addShopPhoto({
           shopId,
-          path,
+          imageBase64,
           sortOrder: photos.length + i,
         });
 
         if (result.ok) {
-          setPhotos((prev) => [...prev, { id: result.data.mediaId, path, sortOrder: prev.length }]);
+          setPhotos((prev) => [
+            ...prev,
+            { id: result.data.mediaId, path: result.data.path, sortOrder: prev.length },
+          ]);
         } else {
           setError(result.message);
         }

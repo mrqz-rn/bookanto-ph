@@ -4,10 +4,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ClosuresPanel, type ClosureItem } from "@/features/availability/components/closures-panel";
 import { HolidayRulesForm } from "@/features/availability/components/holiday-rules-form";
+import { AvailabilityOverview } from "@/features/availability/components/availability-overview";
 import { Panel } from "@/features/availability/components/panel";
+import { SectionNav } from "@/features/availability/components/section-nav";
 import { ShopHoursForm } from "@/features/availability/components/shop-hours-form";
 import { SlotPreview } from "@/features/availability/components/slot-preview";
 import { StaffSchedulesPanel } from "@/features/availability/components/staff-schedules-panel";
+import { formatClock } from "@/features/availability/constants";
 import { upcomingHolidays } from "@/features/availability/holidays";
 import { getAvailabilityDashboard, getMemberShops } from "@/features/availability/queries";
 import { requireUser } from "@/lib/auth";
@@ -70,7 +73,17 @@ export default async function AvailabilityPage({
     ),
   ]
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-    .map(({ id, kind, who, when, reason }) => ({ id, kind, who, when, reason }));
+    .map(({ id, kind, who, when, reason, startsAt }) => ({
+      id,
+      kind,
+      who,
+      when,
+      reason,
+      tile: {
+        month: formatManila(startsAt, "MMM"),
+        day: formatManila(startsAt, "d"),
+      },
+    }));
 
   const holidays = upcomingHolidays(today)
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"))
@@ -82,7 +95,29 @@ export default async function AvailabilityPage({
       dateLabel: holiday.date
         ? formatManila(manilaToUtc(holiday.date, "12:00"), "EEE, MMM d, yyyy")
         : null,
+      tile: holiday.date
+        ? {
+            month: formatManila(manilaToUtc(holiday.date, "12:00"), "MMM"),
+            day: formatManila(manilaToUtc(holiday.date, "12:00"), "d"),
+          }
+        : null,
     }));
+
+  const nextHolidayRow = holidays.find((holiday) => holiday.tile);
+  const nextHolidayRule = nextHolidayRow
+    ? data.holidayRules.find((rule) => rule.holidayKey === nextHolidayRow.key)
+    : undefined;
+  const nextHoliday = nextHolidayRow
+    ? {
+        name: nextHolidayRow.name,
+        dateLabel: `${nextHolidayRow.tile!.month} ${nextHolidayRow.tile!.day}`,
+        plan: !nextHolidayRule
+          ? "Normal hours"
+          : nextHolidayRule.opens && nextHolidayRule.closes
+            ? `Special hours, ${formatClock(nextHolidayRule.opens)} – ${formatClock(nextHolidayRule.closes)}`
+            : "Closed",
+      }
+    : null;
 
   const previewServices = data.services
     .filter((service) => service.active && service.bookingType !== "queue")
@@ -99,12 +134,12 @@ export default async function AvailabilityPage({
     }));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold text-navy-900">Availability</h1>
-        <p className="mt-1 text-slate-600">
-          When customers can book <span className="font-semibold">{shop.name}</span>. Times are
-          Philippine time.
+        <h1 className="font-display text-3xl font-bold text-navy-900 sm:text-4xl">Availability</h1>
+        <p className="mt-1 text-base text-slate-600">
+          When customers can book <span className="font-semibold text-navy-900">{shop.name}</span>.
+          All times are Philippine time.
         </p>
         {shops.length > 1 && (
           <nav aria-label="Your shops" className="mt-3 flex flex-wrap gap-2">
@@ -126,23 +161,17 @@ export default async function AvailabilityPage({
         )}
       </div>
 
-      <nav
-        aria-label="Availability sections"
-        className="sticky top-28 z-30 -mx-4 overflow-x-auto border-y border-border bg-background/95 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-full sm:border sm:px-2"
-      >
-        <ul className="flex gap-1">
-          {SECTIONS.map((section) => (
-            <li key={section.id}>
-              <a
-                href={`#${section.id}`}
-                className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold text-navy-900 hover:bg-accent"
-              >
-                {section.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <AvailabilityOverview
+        hours={data.hours}
+        nextClosure={
+          closureItems[0] ? { when: closureItems[0].when, who: closureItems[0].who } : null
+        }
+        nextHoliday={nextHoliday}
+        bookableStaff={data.staff.filter((member) => member.takesBookings).length}
+        staffCount={data.staff.length}
+      />
+
+      <SectionNav sections={SECTIONS} />
 
       <Panel
         id="hours"

@@ -138,15 +138,54 @@ describe("notification server actions", () => {
         }),
       );
     });
+
+    it("keeps email on and WhatsApp/Viber off whatever the input says", async () => {
+      vi.spyOn(notifyModule, "getOrCreateNotificationPreferences").mockResolvedValue({} as never);
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ preferredChannel: "email" }]),
+        }),
+      });
+      vi.spyOn(db, "update").mockReturnValue({ set } as never);
+
+      const result = await updateNotificationPreferencesAction({
+        preferredChannel: "viber",
+        smsEnabled: false,
+        emailEnabled: false,
+        pushEnabled: true,
+        whatsappEnabled: true,
+        viberEnabled: true,
+        bookingConfirmations: true,
+        bookingReminders: true,
+        bookingAutoExpiry: true,
+        marketingPromos: false,
+        whatsappPhone: null,
+        viberPhone: null,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preferredChannel: "email",
+          emailEnabled: true,
+          pushEnabled: true,
+          whatsappEnabled: false,
+          viberEnabled: false,
+        }),
+      );
+    });
   });
 
   describe("savePushSubscriptionAction", () => {
-    it("successfully registers web push subscription", async () => {
+    it("successfully registers web push subscription and turns push on", async () => {
       vi.spyOn(db, "insert").mockReturnValue({
         values: vi.fn().mockReturnValue({
           onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
         }),
       } as never);
+      vi.spyOn(notifyModule, "getOrCreateNotificationPreferences").mockResolvedValue({} as never);
+      const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+      vi.spyOn(db, "update").mockReturnValue({ set } as never);
 
       const result = await savePushSubscriptionAction({
         endpoint: "https://fcm.googleapis.com/fcm/send/device-xyz",
@@ -158,6 +197,7 @@ describe("notification server actions", () => {
       });
 
       expect(result.ok).toBe(true);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ pushEnabled: true }));
       expect(auditModule.writeAudit).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "user.push_subscription.saved",
@@ -168,16 +208,24 @@ describe("notification server actions", () => {
   });
 
   describe("deletePushSubscriptionAction", () => {
-    it("deletes web push subscription", async () => {
+    it("deletes web push subscription and turns push off on the last device", async () => {
       vi.spyOn(db, "delete").mockReturnValue({
         where: vi.fn().mockResolvedValue(undefined),
       } as never);
+      vi.spyOn(db, "select").mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+        }),
+      } as never);
+      const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+      vi.spyOn(db, "update").mockReturnValue({ set } as never);
 
       const result = await deletePushSubscriptionAction({
         endpoint: "https://fcm.googleapis.com/fcm/send/device-xyz",
       });
 
       expect(result.ok).toBe(true);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ pushEnabled: false }));
       expect(auditModule.writeAudit).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "user.push_subscription.deleted",

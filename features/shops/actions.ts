@@ -20,6 +20,8 @@ import {
   users,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { MAX_FILE_SIZE_BYTES, validateImageBytes } from "@/lib/media";
+import { uploadPhoto } from "@/lib/storage";
 
 import {
   addShopPhotoSchema,
@@ -313,18 +315,45 @@ export async function setShopHours(input: unknown): Promise<ActionResult<{ succe
 /**
  * Adds a photo record to the media table for the shop.
  */
-export async function addShopPhoto(input: unknown): Promise<ActionResult<{ mediaId: string }>> {
+export async function addShopPhoto(
+  input: unknown,
+): Promise<ActionResult<{ mediaId: string; path: string }>> {
   return runAction(async () => {
     const user = await requireUser();
     const data = parseInput(addShopPhotoSchema, input);
     assertCan(user, "shop:update", { shopId: data.shopId });
+
+    let finalPath = data.path;
+
+    if (data.imageBase64) {
+      const buffer = Buffer.from(data.imageBase64, "base64");
+      if (buffer.length > MAX_FILE_SIZE_BYTES) {
+        throw new AppError("VALIDATION", "Photo exceeds 8 MB size limit.");
+      }
+
+      const imgCheck = validateImageBytes(buffer);
+      if (!imgCheck.valid || !imgCheck.format || !imgCheck.mimeType) {
+        throw new AppError(
+          "VALIDATION",
+          "Invalid photo format. Only genuine JPEG, PNG, and WebP images are allowed.",
+        );
+      }
+
+      const filename = `shops/${data.shopId}/${Date.now()}-${randomUUID()}.${imgCheck.format}`;
+      const uploadRes = await uploadPhoto(filename, buffer, imgCheck.mimeType);
+      finalPath = uploadRes.path;
+    }
+
+    if (!finalPath) {
+      throw new AppError("VALIDATION", "Photo path or image data is required.");
+    }
 
     const [created] = await db
       .insert(media)
       .values({
         ownerType: "shop",
         ownerId: data.shopId,
-        path: data.path,
+        path: finalPath,
         kind: "photo",
         sortOrder: data.sortOrder,
       })
@@ -335,7 +364,7 @@ export async function addShopPhoto(input: unknown): Promise<ActionResult<{ media
     }
 
     revalidateTag(CACHE_TAGS.shops);
-    return { mediaId: created.id };
+    return { mediaId: created.id, path: created.path };
   });
 }
 
