@@ -81,70 +81,69 @@ export function TodayDashboardSkeleton() {
 }
 
 /**
- * Skeleton loader for the "Booking Inbox" tab (/dashboard/inbox)
+ * Skeleton loader for the "Booking Inbox" tab (/dashboard/inbox): the header,
+ * the three views, search, then two days of bookings.
  */
 export function InboxDashboardSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label="Loading booking inbox" className="space-y-6">
-      {/* Top Header */}
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading booking inbox"
+      className="max-w-5xl space-y-6"
+    >
+      {/* Header: title and the one line of counts */}
       <div className="space-y-2">
-        <Skeleton className="h-8 w-48 rounded-lg" />
-        <Skeleton className="h-4 w-96 max-w-full rounded-md" />
+        <Skeleton className="h-9 w-56 rounded-lg sm:h-10" />
+        <Skeleton className="h-5 w-80 max-w-full rounded-md" />
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Skeleton className="h-10 w-full rounded-md" />
-          <Skeleton className="h-10 w-full rounded-md" />
-          <Skeleton className="h-10 w-full rounded-md" />
+      {/* Views and search */}
+      <div className="space-y-4">
+        <div className="flex gap-2 border-b border-border pb-3">
+          <Skeleton className="h-7 flex-1 rounded-lg sm:w-32 sm:flex-none" />
+          <Skeleton className="h-7 flex-1 rounded-lg sm:w-32 sm:flex-none" />
+          <Skeleton className="h-7 flex-1 rounded-lg sm:w-24 sm:flex-none" />
         </div>
-
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto border-t border-neutral-100 pt-2">
-          <Skeleton className="h-7 w-16 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-36 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-24 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-24 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-20 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-20 shrink-0 rounded-lg" />
-          <Skeleton className="h-7 w-20 shrink-0 rounded-lg" />
-        </div>
+        <Skeleton className="h-11 w-full rounded-md" />
       </div>
 
-      {/* Bookings List */}
-      <div className="divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white shadow-2xs">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Skeleton className="h-4 w-24 rounded-sm" />
-                <Skeleton className="h-5 w-20 rounded-full" />
-                <Skeleton className="h-4 w-32 rounded-sm" />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Skeleton className="h-4 w-20 rounded-sm" />
-                <Skeleton className="h-4 w-28 rounded-sm" />
-                <Skeleton className="h-4 w-28 rounded-sm" />
-              </div>
-              <Skeleton className="h-3.5 w-44 rounded-sm" />
-            </div>
-
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <Skeleton className="h-5 w-14 rounded-sm" />
-              <div className="flex items-center gap-1.5">
-                <Skeleton className="h-8 w-16 rounded-md" />
-                <Skeleton className="h-8 w-16 rounded-md" />
-                <Skeleton className="h-8 w-16 rounded-md" />
-                <Skeleton className="h-8 w-12 rounded-md" />
-              </div>
-            </div>
+      {/* Two days of bookings */}
+      {[3, 2].map((rows, group) => (
+        <div key={group} className="space-y-3">
+          <div className="flex items-baseline justify-between px-1">
+            <Skeleton className="h-6 w-40 rounded-md" />
+            <Skeleton className="h-4 w-20 rounded-sm" />
           </div>
-        ))}
-      </div>
+          <div className="divide-y divide-border rounded-2xl border border-border bg-white">
+            {Array.from({ length: rows }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:gap-4 md:px-5"
+              >
+                <div className="flex flex-1 items-start gap-4">
+                  <div className="w-[5.25rem] shrink-0 space-y-1.5">
+                    <Skeleton className="h-5 w-16 rounded-sm" />
+                    <Skeleton className="h-4 w-12 rounded-sm" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex justify-between gap-3">
+                      <Skeleton className="h-5 w-36 rounded-sm" />
+                      <Skeleton className="h-5 w-14 rounded-sm" />
+                    </div>
+                    <Skeleton className="h-4 w-52 max-w-full rounded-sm" />
+                  </div>
+                </div>
+                <div className="flex gap-2 md:w-72 md:justify-end">
+                  <Skeleton className="h-11 flex-1 rounded-md md:w-24 md:flex-none" />
+                  <Skeleton className="h-11 flex-1 rounded-md md:w-24 md:flex-none" />
+                  <Skeleton className="size-11 shrink-0 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
 
       <span className="sr-only">Loading booking inbox…</span>
     </div>

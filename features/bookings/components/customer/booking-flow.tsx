@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -10,6 +11,7 @@ import { useBookingFunnelTracker } from "@/features/analytics/hooks";
 import { getOpenSlots } from "@/features/availability/actions";
 import type { BookingType } from "@/lib/db/schema/enums";
 
+import { CUSTOMER_BOOKING_MODES } from "../../booking-modes";
 import { createBooking, joinQueue } from "../../customer-actions";
 import { ADDRESS_MAX, NOTES_MAX } from "../../rules";
 import { SlotPicker } from "./slot-picker";
@@ -41,10 +43,26 @@ type Props = {
 const fieldLabel = "mb-1 block text-sm font-medium text-navy-900";
 const selectClass =
   "h-11 w-full rounded-md border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
-const card = "rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-6";
+// Keeps a focused field clear of the sticky action bar.
+const clearOfBar = "scroll-mb-32";
 
 /** A key per booking attempt, so a double tap or a retry makes one booking. */
 const newKey = () => crypto.randomUUID().replaceAll("-", "");
+
+/** What still blocks sending, in the words the action bar shows; null when ready. */
+export function missingStep(input: {
+  bookingType: BookingType;
+  hasSlot: boolean;
+  address: string;
+  notes: string;
+}): string | null {
+  const { bookingType, hasSlot, address, notes } = input;
+  if (bookingType === "queue") return null;
+  if (!hasSlot) return bookingType === "quote" ? "Pick a preferred time" : "Pick a time";
+  if (bookingType === "home" && address.trim().length === 0) return "Add your address";
+  if (bookingType === "quote" && notes.trim().length === 0) return "Describe the job";
+  return null;
+}
 
 export function BookingFlow({ service, today, signedIn, savedAddresses }: Props) {
   const router = useRouter();
@@ -65,6 +83,7 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
   });
 
   const loginHref = `/login?next=${encodeURIComponent(`/book/${service.id}`)}`;
+  const mode = CUSTOMER_BOOKING_MODES[service.bookingType];
   const isQueue = service.bookingType === "queue";
   const isHome = service.bookingType === "home";
   const isQuote = service.bookingType === "quote";
@@ -80,8 +99,16 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
     if (result.code === "UNAUTHENTICATED") router.push(loginHref);
   };
 
+  const missing = missingStep({
+    bookingType: service.bookingType,
+    hasSlot: !!slot,
+    address,
+    notes,
+  });
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (missing || pending) return;
     setError(null);
     setFieldErrors({});
     trackStep("submit_booking", "booking_submitted", {
@@ -115,32 +142,39 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
     });
   };
 
-  const ready =
-    isQueue ||
-    (!!slot && (!isHome || address.trim().length > 0) && (!isQuote || notes.trim().length > 0));
+  const when = isQueue ? "Today, in turn" : (slot?.label ?? null);
+  // "Sat, Nov 21 · 10:30 AM" splits over the bar's two lines.
+  const [whenDay, whenTime] = (when ?? "").split(" · ");
+  const detailsDone =
+    (!isHome || address.trim().length > 0) && (!isQuote || notes.trim().length > 0);
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} noValidate>
       {isQueue ? (
-        <section className={card} aria-labelledby="queue-title">
-          <h2 id="queue-title" className="font-display text-xl font-bold text-navy-900">
-            Today&apos;s queue
-          </h2>
-          <p className="mt-2 text-slate-600">
+        <Step number={1} title="Today's queue" id="queue-title" done>
+          <p className="flex items-baseline gap-2">
+            <span className="font-display text-5xl leading-none font-bold text-navy-900 tabular-nums">
+              {service.waiting}
+            </span>
+            <span className="font-semibold text-navy-900">
+              {service.waiting === 1 ? "person" : "people"} waiting now
+            </span>
+          </p>
+          <p className="mt-3 text-slate-600">
             {service.waiting === 0
-              ? "No one is waiting right now. Next ka na!"
-              : `${service.waiting} ${service.waiting === 1 ? "person is" : "people are"} waiting right now.`}
+              ? "No one is in line. Next ka na!"
+              : "Get a number now and head to the shop when your turn is near."}{" "}
+            The shop confirms your number within 30 minutes.
           </p>
-          <p className="mt-1 text-sm text-slate-600">
-            Get a number now and head to the shop. The shop confirms your number within 30 minutes.
-          </p>
-        </section>
+        </Step>
       ) : (
-        <section className={card} aria-labelledby="time-title">
-          <h2 id="time-title" className="font-display text-xl font-bold text-navy-900">
-            {isQuote ? "When would you like it done?" : "Pick a day and time"}
-          </h2>
-          <p className="mt-1 mb-4 text-sm text-slate-600">Times are Philippine time.</p>
+        <Step
+          number={1}
+          title={isQuote ? "When would you like it done?" : "Pick a day and time"}
+          id="time-title"
+          done={!!slot}
+        >
+          <p className="-mt-2 mb-4 text-sm text-slate-600">All times are Philippine time.</p>
           {service.staff.length > 0 && (
             <div className="mb-4">
               <label htmlFor="book-staff" className={fieldLabel}>
@@ -166,6 +200,7 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
             </div>
           )}
           <SlotPicker
+            today={today}
             load={() =>
               getOpenSlots({
                 serviceId: service.id,
@@ -185,14 +220,11 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
               }
             }}
           />
-        </section>
+        </Step>
       )}
 
-      <section className={card} aria-labelledby="details-title">
-        <h2 id="details-title" className="font-display text-xl font-bold text-navy-900">
-          Details
-        </h2>
-        <div className="mt-4 space-y-4">
+      <Step number={2} title="Details" id="details-title" done={detailsDone && !!when}>
+        <div className="space-y-4">
           {isHome && (
             <div>
               <label htmlFor="book-address" className={fieldLabel}>
@@ -226,8 +258,12 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
                 placeholder="House no., street, barangay, city, and a landmark"
                 aria-invalid={!!fieldErrors.address}
                 aria-describedby="book-address-help"
+                className={clearOfBar}
               />
-              <p id="book-address-help" className="mt-1 text-xs text-slate-600">
+              <p
+                id="book-address-help"
+                className={`mt-1 text-sm ${fieldErrors.address ? "text-danger" : "text-slate-600"}`}
+              >
                 {fieldErrors.address?.[0] ??
                   "The shop sees your exact address only after it accepts your booking."}
               </p>
@@ -251,25 +287,31 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
                   : "Anything the shop should know"
               }
               aria-invalid={!!fieldErrors.notes}
+              aria-describedby={fieldErrors.notes ? "book-notes-error" : undefined}
+              className={clearOfBar}
             />
+            {isQuote && !fieldErrors.notes && (
+              <p className="mt-1 text-sm text-slate-600">
+                The more detail you give, the closer the quote.
+              </p>
+            )}
             {fieldErrors.notes?.[0] && (
-              <p className="mt-1 text-xs text-danger">{fieldErrors.notes[0]}</p>
+              <p id="book-notes-error" className="mt-1 text-sm text-danger">
+                {fieldErrors.notes[0]}
+              </p>
             )}
           </div>
         </div>
-      </section>
+      </Step>
 
-      <section className={card} aria-labelledby="review-title">
-        <h2 id="review-title" className="font-display text-xl font-bold text-navy-900">
-          Review
-        </h2>
-        <dl className="mt-3 divide-y divide-border text-sm">
-          <Row term="Service" value={`${service.name} · ${service.durationMin} min`} />
-          <Row term="Shop" value={service.shopName} />
+      <Step number={3} title="Review" id="review-title" done={!missing}>
+        <dl className="divide-y divide-border text-sm">
           <Row
-            term="When"
-            value={isQueue ? "Today, in turn" : (slot?.label ?? "Pick a time above")}
+            term="Service"
+            value={isQuote ? service.name : `${service.name} · ${service.durationMin} min`}
           />
+          <Row term="Shop" value={service.shopName} />
+          <Row term="When" value={when ?? "Pick a time above"} muted={!when} />
           <Row term="Price" value={isQuote ? "The shop will send a quote" : service.priceLabel} />
           {service.depositLabel && !isQueue && (
             <Row term="Pay online" value={`${service.depositLabel} after the shop confirms`} />
@@ -278,43 +320,99 @@ export function BookingFlow({ service, today, signedIn, savedAddresses }: Props)
         <p className="mt-3 text-sm text-slate-600">
           {isQueue
             ? "You can give up your number anytime."
-            : `The shop confirms your request, usually within 2 hours. ${service.cancelNote}`}
+            : isQuote
+              ? `Nothing is booked until you accept the shop's quote. ${service.cancelNote}`
+              : `This is a request: the shop confirms it, usually within 2 hours. ${service.cancelNote}`}
         </p>
+      </Step>
 
+      {/* Always in reach of the thumb: what's chosen, what's missing, and the one action. */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6">
         {error && (
           <p
             role="alert"
-            className="mt-3 rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm text-danger"
+            className="mb-3 rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm text-danger"
           >
             {error}
           </p>
         )}
-
-        {signedIn ? (
-          <Button type="submit" size="lg" disabled={pending || !ready} className="mt-4 w-full">
-            {pending
-              ? "Sending…"
-              : isQueue
-                ? "Get a queue number"
-                : isQuote
-                  ? "Ask for a quote"
-                  : "Book na"}
-          </Button>
-        ) : (
-          <Button asChild size="lg" className="mt-4 w-full">
-            <Link href={loginHref}>Log in to book</Link>
-          </Button>
-        )}
-      </section>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1 text-sm" aria-live="polite">
+            <p className={missing ? "text-slate-600" : "font-semibold text-navy-900"}>
+              {missing ?? whenDay}
+            </p>
+            <p className="font-semibold text-navy-900">
+              {!missing && whenTime && <>{whenTime} · </>}
+              {isQuote ? "Price by quote" : service.priceLabel}
+            </p>
+          </div>
+          {signedIn ? (
+            <Button
+              type="submit"
+              disabled={pending || !!missing}
+              aria-busy={pending || undefined}
+              className="shrink-0"
+            >
+              {pending ? "Sending…" : mode.submit}
+            </Button>
+          ) : (
+            <Button asChild className="shrink-0">
+              <Link href={loginHref}>Log in to book</Link>
+            </Button>
+          )}
+        </div>
+      </div>
     </form>
   );
 }
 
-function Row({ term, value }: { term: string; value: string }) {
+function Step({
+  number,
+  title,
+  id,
+  done,
+  children,
+}: {
+  number: number;
+  title: string;
+  id: string;
+  done: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex justify-between gap-4 py-2">
+    <section
+      aria-labelledby={id}
+      className="border-t border-border py-6 first:border-t-0 first:pt-2"
+    >
+      <h2
+        id={id}
+        className="mb-4 flex items-center gap-3 font-display text-xl font-bold text-navy-900"
+      >
+        <span
+          aria-hidden="true"
+          className={`flex size-7 shrink-0 items-center justify-center rounded-full font-sans text-sm font-bold ${
+            done ? "bg-green-700 text-white" : "bg-navy-900 text-white"
+          }`}
+        >
+          {done ? <Check className="size-4" /> : number}
+        </span>
+        <span>
+          <span className="sr-only">Step {number}: </span>
+          {title}
+        </span>
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Row({ term, value, muted }: { term: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex justify-between gap-4 py-2.5">
       <dt className="text-slate-600">{term}</dt>
-      <dd className="text-right font-medium text-navy-900">{value}</dd>
+      <dd className={`text-right font-medium ${muted ? "text-slate-600" : "text-navy-900"}`}>
+        {value}
+      </dd>
     </div>
   );
 }

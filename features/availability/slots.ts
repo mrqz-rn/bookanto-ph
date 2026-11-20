@@ -69,7 +69,8 @@ export type SlotDay = {
   date: string;
   /** "Mon, Dec 1" */
   label: string;
-  slots: Array<OpenSlot & { label: string }>;
+  /** `label` is "9:30 AM"; `hour` is the Manila hour (0-23), for grouping by part of day. */
+  slots: Array<OpenSlot & { label: string; hour: number }>;
 };
 
 export type SlotOptions = {

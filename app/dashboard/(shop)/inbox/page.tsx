@@ -35,5 +35,13 @@ export default async function InboxPage() {
     role: s.role,
   }));
 
-  return <BookingInbox shopId={shop.id} initialBookings={bookings} shopStaff={shopStaff} />;
+  return (
+    <BookingInbox
+      shopId={shop.id}
+      initialBookings={bookings}
+      shopStaff={shopStaff}
+      shopSlug={shop.status === "active" ? (shop.slug ?? null) : null}
+      renderedAt={new Date().toISOString()}
+    />
+  );
 }

@@ -86,7 +86,15 @@ export type BookableService = {
   durationMin: number;
   bookingType: BookingType;
   active: boolean;
-  shop: { id: string; name: string; slug: string; address: string | null; status: ShopStatus };
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    address: string | null;
+    status: ShopStatus;
+    /** An admin checked the shop's documents. */
+    verified: boolean;
+  };
   /** Staff the customer can ask for; empty when the shop doesn't schedule by staff. */
   staff: Array<{ userId: string; name: string }>;
   rules: BookingRules;
@@ -114,6 +122,7 @@ export async function getBookableService(
       shopSlug: shops.slug,
       shopAddress: shops.address,
       shopStatus: shops.status,
+      shopVerifiedAt: shops.verifiedAt,
     })
     .from(services)
     .innerJoin(shops, eq(shops.id, services.shopId))
@@ -154,6 +163,7 @@ export async function getBookableService(
       slug: row.shopSlug,
       address: row.shopAddress,
       status: row.shopStatus,
+      verified: row.shopVerifiedAt !== null,
     },
     // First names only: these are shown to anyone browsing.
     staff: staff.map((member) => ({

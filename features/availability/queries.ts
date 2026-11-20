@@ -251,7 +251,11 @@ export async function computeOpenSlots(params: {
     return {
       date,
       label: formatManila(manilaToUtc(date, "12:00"), "EEE, MMM d"),
-      slots: slots.map((slot) => ({ ...slot, label: formatManila(slot.startAt, "h:mm a") })),
+      slots: slots.map((slot) => ({
+        ...slot,
+        label: formatManila(slot.startAt, "h:mm a"),
+        hour: Number(formatManila(slot.startAt, "H")),
+      })),
     };
   });
 }

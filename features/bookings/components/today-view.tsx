@@ -12,8 +12,8 @@ import type { BookingListItem, TodayDashboardData, TodayHours } from "../constan
 import { hoursLine, pickUpNext, type TodayFilter } from "../today";
 import { BookingDetailModal } from "./booking-detail-modal";
 import { DeclineDialog } from "./decline-dialog";
+import { ActionError } from "./booking-ui";
 import {
-  ActionError,
   DaySummary,
   OfflineNotice,
   RequestsPanel,
@@ -22,6 +22,7 @@ import {
   UpNextCard,
   type RowActions,
 } from "./today-parts";
+import { useNow } from "./use-now";
 import { WalkInModal } from "./walk-in-modal";
 
 // The shop's Today screen: requests waiting for an answer, who's up next,
@@ -36,19 +37,6 @@ const FAILED: Record<QuickAction, string> = {
 };
 
 type QuickAction = "accept" | "complete" | "no_show";
-
-/** The current time, ticking every 30 seconds. Starts at the server's time so both renders agree. */
-function useNow(initialIso?: string) {
-  const [now, setNow] = React.useState(() =>
-    initialIso ? new Date(initialIso).getTime() : Date.now(),
-  );
-  React.useEffect(() => {
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
-}
 
 function useOnline(onReconnect: () => void) {
   const [online, setOnline] = React.useState(true);

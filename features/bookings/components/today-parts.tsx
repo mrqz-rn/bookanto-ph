@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, Phone, Plus, Store, Timer, TriangleAlert, WifiOff, X } from "lucide-react";
+import { Loader2, Phone, Plus, Store, Timer, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/money";
@@ -25,13 +25,10 @@ import {
   type UpNext,
 } from "../today";
 import { BookingStatusBadge } from "./booking-status-badge";
+import { Busy, PRESS } from "./booking-ui";
 
 // The pieces of the shop's Today screen. State and server calls live in
 // today-view.tsx; these only draw.
-
-/** Buttons step up on hover and press on click (reduced motion: they stay put). */
-export const PRESS =
-  "motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98]";
 
 const CARD = "rounded-2xl border border-border bg-white";
 
@@ -41,10 +38,6 @@ function priceLabel(booking: BookingListItem) {
 
 function timeRange(booking: BookingListItem) {
   return `${formatManilaTime(booking.startAt)} to ${formatManilaTime(new Date(bookingEndMs(booking)))}`;
-}
-
-function Busy({ busy, children }: { busy: boolean; children: React.ReactNode }) {
-  return busy ? <Loader2 aria-label="Working" className="size-4 animate-spin" /> : children;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,26 +141,6 @@ export function OfflineNotice() {
         this phone. You can still call clients; accepting and marking bookings works again once
         you&apos;re back online.
       </p>
-    </div>
-  );
-}
-
-export function ActionError({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  return (
-    <div
-      role="alert"
-      className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger"
-    >
-      <TriangleAlert aria-hidden className="mt-0.5 size-5 shrink-0" />
-      <p className="flex-1 font-medium">{message}</p>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss message"
-        className="-m-2 grid size-11 shrink-0 place-items-center rounded-full hover:bg-red-100"
-      >
-        <X aria-hidden className="size-4" />
-      </button>
     </div>
   );
 }

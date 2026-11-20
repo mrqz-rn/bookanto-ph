@@ -217,7 +217,9 @@ export function ReviewList({
             </div>
           )}
         </div>
-      ) : (
+      ) : reviewsList.length > 0 ? (
+        // Only when filters hide every review; with no reviews at all, the
+        // highlights block above already shows the "No reviews yet" state.
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-slate-50/50 py-10 text-center">
           <div className="flex size-10 items-center justify-center rounded-full bg-slate-200 text-slate-600">
             <Star className="size-5 text-slate-500" />
@@ -241,7 +243,7 @@ export function ReviewList({
             Clear Filters
           </Button>
         </div>
-      )}
+      ) : null}
 
       {/* Review Dialog */}
       {canReview && eligibleBookingId && (

@@ -1,436 +1,198 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Inbox, Loader2, MessageSquare, Search, UserCheck } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { formatPeso } from "@/lib/money";
-import { formatManila } from "@/lib/time";
+import { formatManila, formatManilaTime } from "@/lib/time";
 import { acceptBooking, completeBooking, markNoShow } from "../actions";
 import type { BookingListItem } from "../constants";
+import {
+  countByView,
+  groupByDay,
+  INBOX_VIEWS,
+  initialView,
+  matchesFilters,
+  summaryLine,
+  type InboxView,
+} from "../inbox";
 import { BookingDetailModal } from "./booking-detail-modal";
-import { BookingStatusBadge } from "./booking-status-badge";
-import { CancelDialog } from "./cancel-dialog";
+import { ActionError, SuccessNotice } from "./booking-ui";
 import { DeclineDialog } from "./decline-dialog";
+import {
+  DayGroupList,
+  InboxEmpty,
+  InboxHeader,
+  InboxNoBookings,
+  InboxTabs,
+  InboxToolbar,
+  type InboxActions,
+} from "./inbox-parts";
+import { useNow } from "./use-now";
+
+// The shop's booking inbox: requests to answer, confirmed bookings coming up
+// and everything that's finished, each grouped by the day it happens.
+
+type QuickAction = "accept" | "complete" | "no_show";
+
+const FAILED: Record<QuickAction, string> = {
+  accept: "Couldn't accept the booking. Try again.",
+  complete: "Couldn't mark the booking done. Try again.",
+  no_show: "Couldn't mark the no-show. Try again.",
+};
+
+const CALLS = { accept: acceptBooking, complete: completeBooking, no_show: markNoShow };
+
+function doneMessage(action: QuickAction, booking: BookingListItem): string {
+  const when = `${formatManila(booking.startAt, "EEE, MMM d")} at ${formatManilaTime(booking.startAt)}`;
+  if (action === "accept") return `Accepted. ${booking.customerName} is booked for ${when}.`;
+  if (action === "complete") return `Marked ${booking.customerName}'s ${booking.serviceName} done.`;
+  return `Marked ${booking.customerName} as a no-show.`;
+}
 
 type BookingInboxProps = {
   shopId?: string;
   initialBookings: BookingListItem[];
   shopStaff: Array<{ userId: string; name: string; role: string }>;
+  /** The public shop page, for the empty state; null while the shop isn't live. */
+  shopSlug?: string | null;
+  /** The server's render time, so the first client render matches it. */
+  renderedAt?: string;
 };
 
-export function BookingInbox({ initialBookings, shopStaff }: BookingInboxProps) {
+export function BookingInbox({
+  initialBookings,
+  shopStaff,
+  shopSlug = null,
+  renderedAt,
+}: BookingInboxProps) {
   const router = useRouter();
+  const nowMs = useNow(renderedAt);
+
+  const [view, setView] = React.useState<InboxView>(() => initialView(initialBookings));
   const [search, setSearch] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState<string>("all");
-  const [staffFilter, setStaffFilter] = React.useState<string>("all");
-  const [dateFilter, setDateFilter] = React.useState<string>("all");
+  const [staffId, setStaffId] = React.useState("all");
+  const [selected, setSelected] = React.useState<BookingListItem | null>(null);
+  const [declining, setDeclining] = React.useState<BookingListItem | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
 
-  const [selectedBooking, setSelectedBooking] = React.useState<BookingListItem | null>(null);
-  const [declineBookingId, setDeclineBookingId] = React.useState<{
-    id: string;
-    refCode: string;
-  } | null>(null);
-  const [cancelBookingId, setCancelBookingId] = React.useState<{
-    id: string;
-    refCode: string;
-  } | null>(null);
-  const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-  const handleQuickAccept = async (bookingId: string) => {
-    setActionLoadingId(bookingId);
-    const res = await acceptBooking({ bookingId });
-    setActionLoadingId(null);
-    if (res.ok) router.refresh();
-  };
-
-  const handleQuickComplete = async (bookingId: string) => {
-    setActionLoadingId(bookingId);
-    const res = await completeBooking({ bookingId });
-    setActionLoadingId(null);
-    if (res.ok) router.refresh();
-  };
-
-  const handleQuickNoShow = async (bookingId: string) => {
-    setActionLoadingId(bookingId);
-    const res = await markNoShow({ bookingId });
-    setActionLoadingId(null);
-    if (res.ok) router.refresh();
-  };
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const tomorrowStart = todayStart + 86_400_000;
-  const tomorrowEnd = tomorrowStart + 86_400_000;
-  const weekEnd = todayStart + 7 * 86_400_000;
-
-  const filtered = initialBookings.filter((b) => {
-    // Status filter
-    if (statusFilter !== "all" && b.status !== statusFilter) return false;
-
-    // Staff filter
-    if (staffFilter !== "all" && b.staffId !== staffFilter) return false;
-
-    // Date filter
-    const bookingTime = new Date(b.startAt).getTime();
-    if (dateFilter === "today") {
-      if (bookingTime < todayStart || bookingTime >= tomorrowStart) return false;
-    } else if (dateFilter === "tomorrow") {
-      if (bookingTime < tomorrowStart || bookingTime >= tomorrowEnd) return false;
-    } else if (dateFilter === "week") {
-      if (bookingTime < todayStart || bookingTime >= weekEnd) return false;
-    } else if (dateFilter === "past") {
-      if (bookingTime >= todayStart) return false;
+  async function runQuick(booking: BookingListItem, action: QuickAction) {
+    setBusyId(booking.id);
+    setError(null);
+    setNotice(null);
+    const result = await CALLS[action]({ bookingId: booking.id });
+    setBusyId(null);
+    if (result.ok) {
+      setNotice(doneMessage(action, booking));
+      router.refresh();
+    } else {
+      setError(result.message || FAILED[action]);
     }
+  }
 
-    // Search query
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      const matchRef = b.refCode.toLowerCase().includes(q);
-      const matchCustomer = b.customerName.toLowerCase().includes(q);
-      const matchService = b.serviceName.toLowerCase().includes(q);
-      const matchNotes = b.notes?.toLowerCase().includes(q);
-      if (!matchRef && !matchCustomer && !matchService && !matchNotes) return false;
-    }
+  const actions: InboxActions = {
+    busyId,
+    onOpen: setSelected,
+    onAccept: (b) => void runQuick(b, "accept"),
+    onComplete: (b) => void runQuick(b, "complete"),
+    onNoShow: (b) => void runQuick(b, "no_show"),
+    onDecline: setDeclining,
+  };
 
-    return true;
-  });
-
-  const requestedCount = initialBookings.filter((b) => b.status === "requested").length;
-  const confirmedCount = initialBookings.filter((b) => b.status === "confirmed").length;
-  const completedCount = initialBookings.filter((b) => b.status === "completed").length;
+  const filters = { search, staffId };
+  const filtering = search.trim() !== "" || staffId !== "all";
+  const matching = initialBookings.filter((b) => matchesFilters(b, filters));
+  const counts = countByView(matching);
+  const groups = groupByDay(matching, view, nowMs);
+  const elsewhereView = INBOX_VIEWS.find((v) => v.id !== view && counts[v.id] > 0)?.id;
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-neutral-900 sm:text-3xl">
-            Booking Inbox
-          </h1>
-          <p className="mt-1 text-xs text-neutral-500">
-            Review, confirm, decline, and manage all client appointment requests.
-          </p>
-        </div>
-      </div>
+    <div className="max-w-5xl space-y-6">
+      <InboxHeader summary={summaryLine(initialBookings, nowMs)} />
 
-      {/* Filter and Search Bar */}
-      <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs">
-        {/* Search & dropdowns */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="relative">
-            <Search className="absolute top-3 left-3 size-4 text-neutral-400" />
-            <Input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search ref code, customer, service..."
-              className="h-10 pl-9 text-xs"
+      {error && <ActionError message={error} onDismiss={() => setError(null)} />}
+      {notice && <SuccessNotice message={notice} onDismiss={() => setNotice(null)} />}
+
+      {initialBookings.length === 0 ? (
+        <InboxNoBookings shopSlug={shopSlug} />
+      ) : (
+        <>
+          <div className="space-y-4">
+            <InboxTabs view={view} counts={counts} onChange={setView} />
+            <InboxToolbar
+              search={search}
+              onSearch={setSearch}
+              staffId={staffId}
+              onStaff={setStaffId}
+              staff={shopStaff}
             />
           </div>
 
-          <div>
-            <select
-              value={staffFilter}
-              onChange={(e) => setStaffFilter(e.target.value)}
-              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-800 outline-none"
-            >
-              <option value="all">All Team Members</option>
-              {shopStaff.map((s) => (
-                <option key={s.userId} value={s.userId}>
-                  {s.name} ({s.role})
-                </option>
-              ))}
-            </select>
+          <div
+            role="tabpanel"
+            id="inbox-panel"
+            aria-labelledby={`inbox-tab-${view}`}
+            className="space-y-8"
+          >
+            {groups.length === 0 ? (
+              <InboxEmpty
+                view={view}
+                filtering={filtering}
+                search={search}
+                elsewhere={
+                  elsewhereView ? { view: elsewhereView, count: counts[elsewhereView] } : null
+                }
+                onClear={() => {
+                  setSearch("");
+                  setStaffId("all");
+                }}
+                onShowView={setView}
+              />
+            ) : (
+              groups.map((group) => (
+                <DayGroupList
+                  key={group.key}
+                  group={group}
+                  view={view}
+                  nowMs={nowMs}
+                  actions={actions}
+                />
+              ))
+            )}
           </div>
-
-          <div>
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-800 outline-none"
-            >
-              <option value="all">All Dates</option>
-              <option value="today">Today</option>
-              <option value="tomorrow">Tomorrow</option>
-              <option value="week">Next 7 Days</option>
-              <option value="past">Past Bookings</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto border-t border-neutral-100 pt-2 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "all"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            All ({initialBookings.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("requested")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "requested"
-                ? "bg-amber-600 font-bold text-white"
-                : "bg-amber-100 text-amber-900 hover:bg-amber-200"
-            }`}
-          >
-            Pending Requests ({requestedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("confirmed")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "confirmed"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            Confirmed ({confirmedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("completed")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "completed"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            Completed ({completedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("declined")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "declined"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            Declined
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("cancelled")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "cancelled"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            Cancelled
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("no_show")}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${
-              statusFilter === "no_show"
-                ? "bg-navy-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
-          >
-            No-Show
-          </button>
-        </div>
-      </div>
-
-      {/* Bookings List */}
-      <div className="rounded-2xl border border-neutral-200 bg-white shadow-2xs">
-        {filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-              <Inbox className="size-6" />
-            </div>
-            <h3 className="mt-3 font-display text-base font-bold text-neutral-900">
-              No matching bookings
-            </h3>
-            <p className="mx-auto mt-1 max-w-sm text-xs text-neutral-500">
-              There are no bookings matching the selected filters or search criteria.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-neutral-100">
-            {filtered.map((b) => (
-              <div
-                key={b.id}
-                className="flex flex-col gap-3 p-4 transition-colors hover:bg-neutral-50/70 sm:flex-row sm:items-center sm:justify-between"
-              >
-                {/* Details */}
-                <div className="flex-1 cursor-pointer" onClick={() => setSelectedBooking(b)}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-neutral-900">
-                      {b.refCode}
-                    </span>
-                    <BookingStatusBadge status={b.status} />
-                    {b.isWalkIn && (
-                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800">
-                        Walk-in
-                      </span>
-                    )}
-                    <span className="text-xs text-neutral-500">
-                      · {formatManila(b.startAt, "MMM d, yyyy · h:mm a")}
-                    </span>
-                  </div>
-
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <h4 className="font-display text-sm font-bold text-neutral-900">
-                      {b.serviceName}
-                    </h4>
-                    <span className="text-xs text-neutral-400">·</span>
-                    <span className="text-xs font-medium text-neutral-700">{b.customerName}</span>
-                    {b.customerPhone && (
-                      <span className="text-xs text-neutral-500">({b.customerPhone})</span>
-                    )}
-                    {b.staffName && (
-                      <>
-                        <span className="text-xs text-neutral-400">·</span>
-                        <span className="inline-flex items-center gap-1 text-xs text-neutral-600">
-                          <UserCheck className="size-3 text-neutral-400" />
-                          {b.staffName}
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {b.notes && (
-                    <p className="mt-1 line-clamp-1 text-xs text-neutral-500">{b.notes}</p>
-                  )}
-                </div>
-
-                {/* Price & Actions */}
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <span className="text-sm font-bold text-neutral-900">
-                    {b.totalCentavos !== null ? formatPeso(b.totalCentavos) : "Quote"}
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    {b.status === "requested" && (
-                      <>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDeclineBookingId({ id: b.id, refCode: b.refCode })}
-                          className="h-8 border-rose-200 text-xs text-rose-700 hover:bg-rose-50"
-                        >
-                          Decline
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={actionLoadingId === b.id}
-                          onClick={() => handleQuickAccept(b.id)}
-                          className="h-8 bg-green-600 text-xs font-bold text-white hover:bg-green-500"
-                        >
-                          {actionLoadingId === b.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            "Accept"
-                          )}
-                        </Button>
-                      </>
-                    )}
-
-                    {b.status === "confirmed" && (
-                      <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleQuickNoShow(b.id)}
-                          disabled={actionLoadingId === b.id}
-                          className="h-8 text-xs text-neutral-500 hover:text-amber-800"
-                          title="Mark customer as No-show"
-                        >
-                          No-show
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={actionLoadingId === b.id}
-                          onClick={() => handleQuickComplete(b.id)}
-                          className="h-8 bg-teal-600 text-xs font-bold text-white hover:bg-teal-500"
-                        >
-                          {actionLoadingId === b.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <CheckCircle2 className="mr-1 size-3.5" />
-                              Done
-                            </>
-                          )}
-                        </Button>
-                      </>
-                    )}
-
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1 border-emerald-200 text-xs text-emerald-700 hover:bg-emerald-50"
-                      title="Chat with customer"
-                    >
-                      <Link href={`/dashboard/bookings/${b.id}`}>
-                        <MessageSquare className="size-3.5" />
-                        <span className="hidden sm:inline">Chat</span>
-                      </Link>
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedBooking(b)}
-                      className="h-8 text-xs text-neutral-600 hover:bg-neutral-100"
-                    >
-                      View
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <BookingDetailModal
-        isOpen={!!selectedBooking}
-        onClose={() => setSelectedBooking(null)}
-        booking={selectedBooking}
-        shopStaff={shopStaff}
-        onActionComplete={() => {
-          setSelectedBooking(null);
-          router.refresh();
-        }}
-      />
-
-      {declineBookingId && (
-        <DeclineDialog
-          isOpen={true}
-          onClose={() => setDeclineBookingId(null)}
-          bookingId={declineBookingId.id}
-          refCode={declineBookingId.refCode}
-          onSuccess={() => router.refresh()}
-        />
+        </>
       )}
 
-      {cancelBookingId && (
-        <CancelDialog
-          isOpen={true}
-          onClose={() => setCancelBookingId(null)}
-          bookingId={cancelBookingId.id}
-          refCode={cancelBookingId.refCode}
-          onSuccess={() => router.refresh()}
+      <BookingDetailModal
+        isOpen={!!selected}
+        onClose={() => setSelected(null)}
+        booking={selected}
+        shopStaff={shopStaff}
+        onActionComplete={(message) => {
+          setSelected(null);
+          if (message) setNotice(message);
+          router.refresh();
+        }}
+        onUpdated={() => router.refresh()}
+      />
+
+      {declining && (
+        <DeclineDialog
+          isOpen
+          onClose={() => setDeclining(null)}
+          bookingId={declining.id}
+          refCode={declining.refCode}
+          onSuccess={() => {
+            setNotice(`Declined ${declining.customerName}'s request.`);
+            router.refresh();
+          }}
         />
       )}
     </div>

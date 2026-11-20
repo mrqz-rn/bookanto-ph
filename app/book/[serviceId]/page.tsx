@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -8,6 +8,7 @@ import {
   BookingFlow,
   type FlowService,
 } from "@/features/bookings/components/customer/booking-flow";
+import { CUSTOMER_BOOKING_MODES } from "@/features/bookings/booking-modes";
 import { getBookableService } from "@/features/bookings/customer-queries";
 import { getCurrentUser } from "@/lib/auth";
 import { formatPeso } from "@/lib/money";
@@ -22,10 +23,11 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { serviceId } = await params;
   const service = await getBookableService(serviceId, new Date());
-  if (!service) return { title: "Service Not Found | BooKanto" };
+  // The root layout's title template adds "| BooKanto".
+  if (!service) return { title: "Service not found" };
 
   return {
-    title: `Book ${service.name} - ${service.shop.name} | BooKanto`,
+    title: `Book ${service.name} - ${service.shop.name}`,
     description: `Book your appointment for ${service.name} at ${service.shop.name}. Verified local services sa kanto mo.`,
   };
 }
@@ -83,50 +85,62 @@ export default async function BookServicePage({ params }: Props) {
     }));
   }
 
-  return (
-    <div className="mx-auto max-w-xl px-4 py-6 sm:px-6">
-      {/* Back to shop navigation */}
-      <div className="mb-4">
-        <Link
-          href={`/shop/${service.shop.slug}`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-navy-900"
-        >
-          <ArrowLeft className="size-4" />
-          Back to {service.shop.name}
-        </Link>
-      </div>
+  const mode = CUSTOMER_BOOKING_MODES[service.bookingType];
 
-      {/* Booking Header */}
-      <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-2xs">
-        <span className="text-xs font-semibold tracking-wider text-green-700 uppercase">
+  return (
+    <main id="main" className="mx-auto max-w-xl px-4 pt-2 sm:px-6 sm:pt-6">
+      <Link
+        href={`/shop/${service.shop.slug}`}
+        className="-ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-slate-600 hover:text-navy-900 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <ArrowLeft aria-hidden className="size-4" />
+        Back to {service.shop.name}
+      </Link>
+
+      <header className="mt-2 pb-5">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-green-700">
           {service.shop.name}
-        </span>
-        <h1 className="mt-1 font-display text-2xl font-bold text-navy-900 sm:text-3xl">
-          {service.name}
-        </h1>
-        {service.description && (
-          <p className="mt-1 text-sm text-slate-600">{service.description}</p>
-        )}
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-navy-900">
-          <span className="rounded-md bg-green-50 px-2.5 py-1 text-green-800">{priceLabel}</span>
-          {service.bookingType !== "quote" && (
-            <span className="font-normal text-slate-600">{service.durationMin} minutes</span>
-          )}
-          {depositLabel && (
-            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-              {depositLabel} required
+          {service.shop.verified && (
+            <span className="inline-flex items-center gap-1 text-success">
+              <BadgeCheck aria-hidden className="size-4" />
+              Verified shop
             </span>
           )}
-        </div>
-      </div>
+        </p>
+        <h1 className="mt-1 font-display text-3xl leading-tight font-bold text-navy-900">
+          {service.name}
+        </h1>
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-base text-slate-600">
+          <span className="font-bold text-navy-900">{priceLabel}</span>
+          {service.bookingType !== "quote" && service.bookingType !== "queue" && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{service.durationMin} min</span>
+            </>
+          )}
+          <span aria-hidden>·</span>
+          <span>{mode.label}</span>
+        </p>
+        {service.description && (
+          <p className="mt-2 text-sm text-slate-600">{service.description}</p>
+        )}
+        {depositLabel && service.bookingType !== "queue" && (
+          <p className="mt-3 flex items-start gap-2 text-sm text-navy-900">
+            <Wallet aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            <span>
+              <span className="font-semibold">{depositLabel}</span>, paid online after the shop
+              confirms.
+            </span>
+          </p>
+        )}
+      </header>
 
-      {/* Booking Flow Form */}
       <BookingFlow
         service={flowService}
         today={manilaDate(now)}
         signedIn={!!user}
         savedAddresses={savedAddresses}
       />
-    </div>
+    </main>
   );
 }

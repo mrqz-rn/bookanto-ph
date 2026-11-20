@@ -84,6 +84,7 @@ describe("SlotPreview", () => {
       remaining: 1,
       staffIds: [],
       label: time,
+      hour: 9,
     })),
   });
 

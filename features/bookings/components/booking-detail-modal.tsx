@@ -2,32 +2,46 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  CheckCircle2,
-  Clock,
-  Loader2,
-  MapPin,
-  MessageSquare,
-  Phone,
-  X,
-  XCircle,
-} from "lucide-react";
+import { Clock, Loader2, MapPin, MessageSquare, Phone, StickyNote, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/money";
-import { formatManila } from "@/lib/time";
+import { formatManila, formatManilaTime } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import { acceptBooking, assignStaff, completeBooking, markNoShow } from "../actions";
-import type { BookingListItem } from "../constants";
+import { BOOKING_STATUS_CONFIG, type BookingListItem } from "../constants";
+import { canShopComplete, canShopMarkNoShow, TYPE_LABELS } from "../rules";
+import {
+  acceptVerdict,
+  bookingEndMs,
+  firstName,
+  formatDuration,
+  isClosed,
+  isQuoteRequest,
+  requestDeadline,
+} from "../today";
 import { BookingStatusBadge } from "./booking-status-badge";
 import { CancelDialog } from "./cancel-dialog";
 import { DeclineDialog } from "./decline-dialog";
+import { FOCUS_RING as FOCUS, PRESS } from "./booking-ui";
 
 type BookingDetailModalProps = {
   isOpen: boolean;
   onClose: () => void;
   booking: BookingListItem | null;
   shopStaff: Array<{ userId: string; name: string; role: string }>;
-  onActionComplete?: () => void;
+  /** After accept, done, no-show, decline or cancel; the message says what happened. */
+  onActionComplete?: (message?: string) => void;
+  /** After a change that keeps the sheet open (the team member). Falls back to onActionComplete. */
+  onUpdated?: () => void;
+};
+
+type Action = "accept" | "complete" | "no_show";
+
+const FAILED: Record<Action, string> = {
+  accept: "Couldn't accept the booking. Try again.",
+  complete: "Couldn't mark the booking done. Try again.",
+  no_show: "Couldn't mark the no-show. Try again.",
 };
 
 export function BookingDetailModal({
@@ -36,293 +50,359 @@ export function BookingDetailModal({
   booking,
   shopStaff,
   onActionComplete,
+  onUpdated,
 }: BookingDetailModalProps) {
   const [selectedStaffId, setSelectedStaffId] = React.useState(booking?.staffId || "");
-  const [loading, setLoading] = React.useState(false);
+  const [busy, setBusy] = React.useState<Action | null>(null);
   const [assigning, setAssigning] = React.useState(false);
+  const [assigned, setAssigned] = React.useState(false);
   const [showDecline, setShowDecline] = React.useState(false);
   const [showCancel, setShowCancel] = React.useState(false);
-  const [actionSuccessMessage, setActionSuccessMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const closeRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
     if (booking) {
       setSelectedStaffId(booking.staffId || "");
-      setActionSuccessMessage(null);
+      setError(null);
+      setAssigned(false);
     }
   }, [booking]);
 
-  if (!isOpen || !booking) return null;
+  const open = isOpen && !!booking;
+  const childOpen = showDecline || showCancel;
 
-  const handleAccept = async () => {
-    setLoading(true);
-    const res = await acceptBooking({
-      bookingId: booking.id,
-      staffId: selectedStaffId || null,
-    });
-    setLoading(false);
-    if (res.ok) {
-      setActionSuccessMessage("Booking accepted and confirmed!");
-      onActionComplete?.();
-    }
+  const closeLatest = React.useRef(onClose);
+  React.useEffect(() => {
+    closeLatest.current = onClose;
+  });
+
+  // Focus lands on Close once, when the sheet opens.
+  React.useEffect(() => {
+    if (open) closeRef.current?.focus();
+  }, [open, booking?.id]);
+
+  // Escape closes the sheet, unless the decline or cancel dialog is on top.
+  React.useEffect(() => {
+    if (!open || childOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeLatest.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, childOpen]);
+
+  if (!open || !booking) return null;
+
+  const nowMs = Date.now();
+  const shopSide = {
+    status: booking.status,
+    bookingType: booking.bookingType ?? "slot",
+    startAt: new Date(booking.startAt),
+    expiresAt: booking.expiresAt ? new Date(booking.expiresAt) : null,
   };
+  const quote = isQuoteRequest(booking);
+  const verdict = booking.status === "requested" && !quote ? acceptVerdict(booking, nowMs) : null;
+  const deadline = booking.status === "requested" ? requestDeadline(booking, nowMs) : null;
+  const complete = canShopComplete(shopSide, new Date(nowMs));
+  const noShow = canShopMarkNoShow(shopSide, new Date(nowMs));
+  const centavos = booking.totalCentavos ?? booking.quotedPriceCentavos;
+  const name = firstName(booking.customerName);
 
-  const handleComplete = async () => {
-    setLoading(true);
-    const res = await completeBooking({ bookingId: booking.id });
-    setLoading(false);
-    if (res.ok) {
-      setActionSuccessMessage("Appointment marked as completed!");
-      onActionComplete?.();
+  async function run(action: Action) {
+    if (!booking) return;
+    setBusy(action);
+    setError(null);
+    const call =
+      action === "accept"
+        ? acceptBooking({ bookingId: booking.id, staffId: selectedStaffId || null })
+        : action === "complete"
+          ? completeBooking({ bookingId: booking.id })
+          : markNoShow({ bookingId: booking.id });
+    const result = await call;
+    setBusy(null);
+    if (!result.ok) {
+      setError(result.message || FAILED[action]);
+      return;
     }
-  };
+    const when = `${formatManila(booking.startAt, "EEE, MMM d")} at ${formatManilaTime(booking.startAt)}`;
+    onActionComplete?.(
+      action === "accept"
+        ? `Accepted. ${booking.customerName} is booked for ${when}.`
+        : action === "complete"
+          ? `Marked ${booking.customerName}'s ${booking.serviceName} done.`
+          : `Marked ${booking.customerName} as a no-show.`,
+    );
+  }
 
-  const handleNoShow = async () => {
-    setLoading(true);
-    const res = await markNoShow({ bookingId: booking.id });
-    setLoading(false);
-    if (res.ok) {
-      setActionSuccessMessage("Customer marked as no-show.");
-      onActionComplete?.();
-    }
-  };
-
-  const handleAssignStaff = async (newStaffId: string) => {
+  async function handleAssignStaff(newStaffId: string) {
+    if (!booking) return;
     setSelectedStaffId(newStaffId);
+    setAssigned(false);
     if (!newStaffId) return;
-
     setAssigning(true);
-    const res = await assignStaff({
-      bookingId: booking.id,
-      staffId: newStaffId,
-    });
+    setError(null);
+    const result = await assignStaff({ bookingId: booking.id, staffId: newStaffId });
     setAssigning(false);
-    if (res.ok) {
-      onActionComplete?.();
+    if (result.ok) {
+      setAssigned(true);
+      (onUpdated ?? onActionComplete)?.();
+    } else {
+      setError(result.message || "Couldn't change the team member. Try again.");
     }
-  };
+  }
 
-  const startFormatted = formatManila(booking.startAt, "EEEE, MMMM d, yyyy · h:mm a");
-  const endFormatted = booking.endAt ? formatManila(booking.endAt, "h:mm a") : null;
+  const titleId = `booking-${booking.id}-title`;
 
   return (
     <>
-      <div className="backdrop-blur-2xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
-        <div className="relative w-full max-w-lg rounded-2xl border border-neutral-200 bg-white shadow-xl">
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/50 sm:items-center sm:p-4"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-bold text-neutral-900">
-                {booking.refCode}
-              </span>
-              <BookingStatusBadge status={booking.status} />
-              {booking.isWalkIn && (
-                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800">
-                  Walk-in
-                </span>
-              )}
+          <div className="flex items-start justify-between gap-3 border-b border-border px-5 pt-5 pb-4">
+            <div className="min-w-0">
+              <h2 id={titleId} className="font-display text-2xl font-bold text-navy-900">
+                {booking.serviceName}
+              </h2>
+              <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <BookingStatusBadge status={booking.status} />
+                {booking.isWalkIn && (
+                  <span className="rounded-full bg-yellow-400 px-2.5 py-0.5 text-xs font-semibold text-navy-900">
+                    Walk-in
+                  </span>
+                )}
+                <span className="tabular-nums">{booking.refCode}</span>
+              </p>
             </div>
             <button
+              ref={closeRef}
               type="button"
               onClick={onClose}
-              className="flex size-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+              aria-label="Close"
+              className={cn(
+                "-mt-1 -mr-2 grid size-11 shrink-0 place-items-center rounded-full text-slate-600 hover:bg-neutral-100 hover:text-navy-900",
+                FOCUS,
+              )}
             >
-              <X className="size-5" />
+              <X aria-hidden className="size-5" />
             </button>
           </div>
 
-          <div className="space-y-5 p-6">
-            {actionSuccessMessage && (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                <span>{actionSuccessMessage}</span>
-              </div>
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+            {error && (
+              <p
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-danger"
+              >
+                {error}
+              </p>
             )}
 
-            {/* Schedule & Service Card */}
-            <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-4">
-              <div className="flex items-start justify-between">
+            {/* When and how much */}
+            <section aria-label="When" className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Clock aria-hidden className="mt-0.5 size-5 shrink-0 text-slate-600" />
                 <div>
-                  <h3 className="font-display text-base font-bold text-neutral-900">
-                    {booking.serviceName}
-                  </h3>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-neutral-600">
-                    <Clock className="size-3.5" />
-                    <span>
-                      {startFormatted} {endFormatted ? `– ${endFormatted}` : ""} (
-                      {booking.serviceDurationMin} mins)
-                    </span>
-                  </div>
+                  <p className="text-base font-semibold text-navy-900">
+                    {formatManila(booking.startAt, "EEEE, MMMM d")}
+                  </p>
+                  <p className="text-base text-slate-600 tabular-nums">
+                    {formatManilaTime(booking.startAt)} to{" "}
+                    {formatManilaTime(new Date(bookingEndMs(booking)))} ·{" "}
+                    {formatDuration(booking.serviceDurationMin * 60_000)}
+                  </p>
+                  {deadline && (
+                    <p
+                      className={cn(
+                        "mt-1 text-sm font-semibold",
+                        deadline.urgent ? "text-danger" : "text-warning",
+                      )}
+                    >
+                      {deadline.label}
+                    </p>
+                  )}
                 </div>
-                <div className="text-right">
-                  <span className="text-sm font-bold text-neutral-900">
-                    {booking.totalCentavos !== null ? formatPeso(booking.totalCentavos) : "Quote"}
+              </div>
+              <p className="shrink-0 font-display text-2xl font-bold text-navy-900 tabular-nums">
+                {centavos !== null ? formatPeso(centavos) : "To quote"}
+              </p>
+            </section>
+
+            {booking.address && (
+              <section aria-label="Address" className="flex items-start gap-3">
+                <MapPin aria-hidden className="mt-0.5 size-5 shrink-0 text-slate-600" />
+                <div>
+                  <p className="text-sm font-semibold text-navy-900">{TYPE_LABELS.home}</p>
+                  <p className="text-base text-slate-600">{booking.address}</p>
+                </div>
+              </section>
+            )}
+
+            {/* Customer */}
+            <section aria-labelledby={`${titleId}-customer`} className="rounded-xl bg-muted p-4">
+              <h3 id={`${titleId}-customer`} className="text-sm font-semibold text-slate-600">
+                Customer
+              </h3>
+              <p className="mt-1 text-lg font-semibold text-navy-900">{booking.customerName}</p>
+              {booking.notes && (
+                <p className="mt-2 flex items-start gap-2 text-base text-navy-900">
+                  <StickyNote aria-hidden className="mt-1 size-4 shrink-0 text-slate-600" />
+                  <span>{booking.notes}</span>
+                </p>
+              )}
+              {(booking.customerPhone || booking.customerId) && (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {booking.customerPhone && (
+                    <Button asChild variant="outline" className={cn("bg-white", PRESS)}>
+                      <a href={`tel:${booking.customerPhone}`}>
+                        <Phone aria-hidden />
+                        Call {name}
+                      </a>
+                    </Button>
+                  )}
+                  {booking.customerId && (
+                    <Button asChild variant="outline" className={cn("bg-white", PRESS)}>
+                      <Link href={`/dashboard/bookings/${booking.id}`}>
+                        <MessageSquare aria-hidden />
+                        Message {name}
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* Team member */}
+            {shopStaff.length > 0 && !isClosed(booking) && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <label
+                    htmlFor={`${titleId}-staff`}
+                    className="text-sm font-semibold text-navy-900"
+                  >
+                    Team member
+                  </label>
+                  <span role="status" className="text-sm text-slate-600">
+                    {assigning ? "Saving…" : assigned ? "Saved" : ""}
                   </span>
                 </div>
-              </div>
-
-              {booking.address && (
-                <div className="flex items-start gap-1.5 border-t border-neutral-200 pt-1 text-xs text-neutral-600">
-                  <MapPin className="mt-0.5 size-3.5 shrink-0 text-neutral-500" />
-                  <span>{booking.address}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Customer Information */}
-            <div className="space-y-2 rounded-xl border border-neutral-200 p-4">
-              <span className="text-[11px] font-bold tracking-wider text-neutral-400 uppercase">
-                Customer Details
-              </span>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold text-neutral-600">
-                    {booking.customerName.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-neutral-900">{booking.customerName}</p>
-                    {booking.customerPhone ? (
-                      <a
-                        href={`tel:${booking.customerPhone}`}
-                        className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
-                      >
-                        <Phone className="size-3" />
-                        {booking.customerPhone}
-                      </a>
-                    ) : (
-                      <span className="text-xs text-neutral-400">No phone provided</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {booking.notes && (
-                <div className="mt-2 rounded-lg bg-neutral-100/70 p-2.5 text-xs text-neutral-700">
-                  <span className="font-semibold text-neutral-900">Notes:</span> {booking.notes}
-                </div>
-              )}
-
-              {/* Chat action */}
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
-                <div className="min-w-0 pr-2">
-                  <p className="text-xs font-bold text-emerald-950">Chat & Quick Replies</p>
-                  <p className="truncate text-[11px] text-emerald-700">
-                    Photos, updates, and read receipts
-                  </p>
-                </div>
-                <Button
-                  asChild
-                  size="sm"
-                  className="h-8 shrink-0 bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700"
+                <select
+                  id={`${titleId}-staff`}
+                  value={selectedStaffId}
+                  onChange={(event) => void handleAssignStaff(event.target.value)}
+                  disabled={assigning}
+                  className={cn(
+                    "mt-1.5 h-11 w-full rounded-md border border-input bg-white px-3 text-base text-navy-900 shadow-xs disabled:opacity-60",
+                    FOCUS,
+                  )}
                 >
-                  <Link href={`/dashboard/bookings/${booking.id}`}>
-                    <MessageSquare className="mr-1.5 size-3.5" />
-                    Open Chat
-                  </Link>
-                </Button>
-              </div>
-            </div>
+                  <option value="">Not assigned yet</option>
+                  {shopStaff.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
+          </div>
 
-            {/* Assigned Staff */}
-            <div className="space-y-2 rounded-xl border border-neutral-200 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold tracking-wider text-neutral-400 uppercase">
-                  Assigned Team Member
-                </span>
-                {assigning && (
-                  <span className="animate-pulse text-[10px] text-neutral-500">Saving...</span>
-                )}
-              </div>
-              <select
-                value={selectedStaffId}
-                onChange={(e) => handleAssignStaff(e.target.value)}
-                className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-900 outline-none"
-              >
-                <option value="">Unassigned</option>
-                {shopStaff.map((s) => (
-                  <option key={s.userId} value={s.userId}>
-                    {s.name} ({s.role})
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Actions */}
+          <div className="border-t border-border px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
+            {quote && (
+              <Button asChild className={cn("w-full", PRESS)}>
+                <Link href="/dashboard/quotes">Send a quote</Link>
+              </Button>
+            )}
 
-            {/* Action Bar */}
-            <div className="border-t border-neutral-200 pt-2">
-              {booking.status === "requested" && (
-                <div className="flex items-center justify-between gap-3">
+            {verdict && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
+                    disabled={busy !== null}
                     onClick={() => setShowDecline(true)}
-                    className="border-rose-200 text-xs text-rose-700 hover:bg-rose-50"
+                    className={PRESS}
                   >
-                    <XCircle className="mr-1.5 size-4" />
-                    Decline Request
+                    Decline
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
-                    disabled={loading}
-                    onClick={handleAccept}
-                    className="bg-green-600 text-xs font-bold text-white hover:bg-green-500"
+                    disabled={busy !== null || !verdict.allowed}
+                    onClick={() => void run("accept")}
+                    className={PRESS}
                   >
-                    {loading ? (
-                      <Loader2 className="mr-1.5 size-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-1.5 size-4" />
-                    )}
-                    Accept & Confirm
+                    {busy === "accept" && <Loader2 aria-hidden className="animate-spin" />}
+                    Accept
                   </Button>
                 </div>
-              )}
+                {!verdict.allowed && (
+                  <p className="mt-2 text-sm text-slate-600">{verdict.reason}</p>
+                )}
+              </>
+            )}
 
-              {booking.status === "confirmed" && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowCancel(true)}
-                      className="text-xs text-neutral-600 hover:bg-neutral-100"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleNoShow}
-                      disabled={loading}
-                      className="border-amber-200 text-xs text-amber-800 hover:bg-amber-50"
-                    >
-                      Mark No-show
-                    </Button>
-                  </div>
+            {booking.status === "confirmed" && (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[auto_1fr_1fr]">
                   <Button
                     type="button"
-                    size="sm"
-                    disabled={loading}
-                    onClick={handleComplete}
-                    className="bg-teal-600 text-xs font-bold text-white hover:bg-teal-500"
+                    variant="ghost"
+                    disabled={busy !== null}
+                    onClick={() => setShowCancel(true)}
+                    className="col-span-2 text-slate-600 sm:col-span-1"
                   >
-                    {loading ? (
-                      <Loader2 className="mr-1.5 size-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-1.5 size-4" />
-                    )}
-                    Complete Service
+                    Cancel booking
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy !== null || !noShow.allowed}
+                    onClick={() => void run("no_show")}
+                    className={PRESS}
+                  >
+                    {busy === "no_show" && <Loader2 aria-hidden className="animate-spin" />}
+                    No-show
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={busy !== null || !complete.allowed}
+                    onClick={() => void run("complete")}
+                    className={PRESS}
+                  >
+                    {busy === "complete" && <Loader2 aria-hidden className="animate-spin" />}
+                    Mark done
                   </Button>
                 </div>
-              )}
+                {!complete.allowed && (
+                  <p className="mt-2 text-sm text-slate-600">{complete.reason}</p>
+                )}
+              </>
+            )}
 
-              {["completed", "declined", "cancelled", "no_show"].includes(booking.status) && (
-                <div className="py-2 text-center text-xs font-medium text-neutral-500">
-                  This booking is finalized ({booking.status}).
-                </div>
-              )}
-            </div>
+            {booking.status === "quoted" && (
+              <p className="text-sm text-slate-600">
+                Quote sent. {name} confirms or lets it expire.
+              </p>
+            )}
+
+            {isClosed(booking) && (
+              <p className="text-sm text-slate-600">
+                This booking is closed:{" "}
+                {BOOKING_STATUS_CONFIG[booking.status]?.label ?? booking.status}.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -333,7 +413,7 @@ export function BookingDetailModal({
         bookingId={booking.id}
         refCode={booking.refCode}
         onSuccess={() => {
-          onActionComplete?.();
+          onActionComplete?.(`Declined ${booking.customerName}'s request.`);
           onClose();
         }}
       />
@@ -344,7 +424,7 @@ export function BookingDetailModal({
         bookingId={booking.id}
         refCode={booking.refCode}
         onSuccess={() => {
-          onActionComplete?.();
+          onActionComplete?.(`Cancelled ${booking.customerName}'s booking.`);
           onClose();
         }}
       />
