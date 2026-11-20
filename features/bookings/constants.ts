@@ -1,4 +1,4 @@
-import type { BookingStatus, ShopRole } from "@/lib/db/schema/enums";
+import type { BookingStatus, BookingType, ShopRole } from "@/lib/db/schema/enums";
 
 export type BookingStatusConfig = {
   label: string;
@@ -79,6 +79,23 @@ export type BookingListItem = {
   totalCentavos: number | null;
   isWalkIn: boolean;
   createdAt: string;
+  /** When an unanswered request lapses (ISO). Optional: older offline caches lack it. */
+  expiresAt?: string | null;
+  /** Slot, home, quote or queue. Optional for the same reason. */
+  bookingType?: BookingType;
+};
+
+/**
+ * The shop's hours for one Manila day, as UTC instants (ISO). Null in place of
+ * this object means no hours are set for that weekday.
+ */
+export type TodayHours = {
+  opensAt: string;
+  closesAt: string;
+  breakStartAt: string | null;
+  breakEndAt: string | null;
+  /** Set (possibly to "") when a closure covers the day; the hours then don't apply. */
+  closedReason: string | null;
 };
 
 export type BookingEventItem = {

@@ -1,18 +1,21 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
   bookingEvents,
   bookings,
+  businessHours,
+  closures,
   services,
   shopMembers,
   shops,
   users,
   type BookingStatus,
+  type BookingType,
 } from "@/lib/db/schema";
-import { formatManila, manilaDate, manilaToUtc, startOfManilaDay } from "@/lib/time";
+import { formatManila, manilaDate, manilaToUtc, manilaWeekday, startOfManilaDay } from "@/lib/time";
 
 import type {
   BookingDetail,
@@ -23,6 +26,7 @@ import type {
   RevenueStaffPerformance,
   ShopRevenueStats,
   TodayDashboardData,
+  TodayHours,
   TodayStats,
 } from "./constants";
 
@@ -72,6 +76,59 @@ function mapBookingListItem(row: {
     totalCentavos: row.booking.totalCentavos,
     isWalkIn,
     createdAt: row.booking.createdAt.toISOString(),
+    expiresAt: row.booking.expiresAt ? row.booking.expiresAt.toISOString() : null,
+    bookingType: row.booking.bookingType as BookingType,
+  };
+}
+
+/**
+ * The shop's opening hours for a Manila date (today by default), or null when
+ * none are set for that weekday. A closure overlapping the day sets closedReason.
+ */
+export async function getShopHoursForDay(
+  shopId: string,
+  targetDate?: string,
+): Promise<TodayHours | null> {
+  const dateStr = targetDate || manilaDate(new Date());
+  const startOfDay = manilaToUtc(dateStr, "00:00");
+  const endOfDay = manilaToUtc(dateStr, "23:59:59.999");
+
+  const [hours, closure] = await Promise.all([
+    db
+      .select({
+        opens: businessHours.opens,
+        closes: businessHours.closes,
+        breakStart: businessHours.breakStart,
+        breakEnd: businessHours.breakEnd,
+      })
+      .from(businessHours)
+      .where(
+        and(eq(businessHours.shopId, shopId), eq(businessHours.weekday, manilaWeekday(startOfDay))),
+      )
+      .limit(1)
+      .then((rows) => rows[0]),
+    db
+      .select({ reason: closures.reason })
+      .from(closures)
+      .where(
+        and(
+          eq(closures.shopId, shopId),
+          lt(closures.startsAt, endOfDay),
+          gt(closures.endsAt, startOfDay),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]),
+  ]);
+
+  if (!hours) return null;
+  const at = (time: string | null) => (time ? manilaToUtc(dateStr, time).toISOString() : null);
+  return {
+    opensAt: manilaToUtc(dateStr, hours.opens).toISOString(),
+    closesAt: manilaToUtc(dateStr, hours.closes).toISOString(),
+    breakStartAt: at(hours.breakStart),
+    breakEndAt: at(hours.breakEnd),
+    closedReason: closure ? (closure.reason?.trim() ?? "") : null,
   };
 }
 

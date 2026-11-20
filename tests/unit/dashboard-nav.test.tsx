@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DashboardContentSlot,
   DashboardMobileNav,
   DashboardNavProvider,
-  DashboardSubNav,
+  DashboardSidebar,
+  NAV_GROUPS,
 } from "@/features/shops/components/dashboard-nav";
 import { getDashboardSkeletonForPath } from "@/features/shops/components/dashboard-skeletons";
 
@@ -19,74 +20,64 @@ afterEach(() => {
   cleanup();
 });
 
-describe("DashboardNav components", () => {
-  it("highlights Today as active when on /dashboard", () => {
-    mockPathname = "/dashboard";
-    render(<DashboardSubNav />);
+const shop = { name: "Kuya Jun's Barbershop", status: "active", slug: "kuya-jun-barbershop" };
 
-    const todayLink = screen.getByRole("link", { name: /Today/i });
-    expect(todayLink).toHaveClass("bg-green-100/70", "text-green-800");
+describe("Dashboard sidebar", () => {
+  it.each([
+    ["/dashboard", /^Today$/],
+    ["/dashboard/inbox", /^Inbox$/],
+    ["/dashboard/calendar", /^Calendar$/],
+    ["/dashboard/walk-ins", /^Walk-ins$/],
+    ["/dashboard/staff", /Staff accounts/i],
+    ["/dashboard/reports", /Revenue & stats/i],
+    ["/dashboard/services", /Services & prices/i],
+  ])("marks the current page on %s", (path, name) => {
+    mockPathname = path;
+    render(<DashboardSidebar shop={shop} />);
 
-    const inboxLink = screen.getByRole("link", { name: /Inbox/i });
-    expect(inboxLink).toHaveClass("text-neutral-600");
+    const current = screen.getByRole("link", { name });
+    expect(current).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page"),
+    ).toHaveLength(1);
   });
 
-  it("highlights Inbox when on /dashboard/inbox", () => {
+  it("keeps Today only for the dashboard home, not its sub-pages", () => {
     mockPathname = "/dashboard/inbox";
-    render(<DashboardSubNav />);
-
-    const inboxLink = screen.getByRole("link", { name: /Inbox/i });
-    expect(inboxLink).toHaveClass("bg-green-100/70", "text-green-800");
-
-    const todayLink = screen.getByRole("link", { name: /Today/i });
-    expect(todayLink).toHaveClass("text-neutral-600");
+    render(<DashboardSidebar shop={shop} />);
+    expect(screen.getByRole("link", { name: /^Today$/ })).not.toHaveAttribute("aria-current");
   });
 
-  it("highlights Calendar when on /dashboard/calendar", () => {
-    mockPathname = "/dashboard/calendar";
-    render(<DashboardSubNav />);
+  it("lists every page once, in its group, with the shop and its public page", () => {
+    mockPathname = "/dashboard";
+    render(<DashboardSidebar shop={shop} />);
 
-    const calendarLink = screen.getByRole("link", { name: /Calendar/i });
-    expect(calendarLink).toHaveClass("bg-green-100/70", "text-green-800");
+    for (const group of NAV_GROUPS) {
+      const list = screen.getByRole("list", { name: group.label });
+      expect(within(list).getAllByRole("link")).toHaveLength(group.items.length);
+    }
+    expect(screen.getByText("Kuya Jun's Barbershop")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /View shop page/i })).toHaveAttribute(
+      "href",
+      "/shop/kuya-jun-barbershop",
+    );
   });
 
-  it("highlights Walk-ins when on /dashboard/walk-ins", () => {
-    mockPathname = "/dashboard/walk-ins";
-    render(<DashboardSubNav />);
-
-    const walkInsLink = screen.getByRole("link", { name: /Walk-ins/i });
-    expect(walkInsLink).toHaveClass("bg-green-100/70", "text-green-800");
+  it("offers shop setup when there is no shop yet", () => {
+    mockPathname = "/dashboard";
+    render(<DashboardSidebar shop={null} />);
+    expect(screen.getByRole("link", { name: /Set up your shop/i })).toHaveAttribute(
+      "href",
+      "/dashboard/setup",
+    );
   });
 
-  it("highlights Staff Accounts when on /dashboard/staff", () => {
-    mockPathname = "/dashboard/staff";
-    render(<DashboardSubNav />);
-
-    const staffLink = screen.getByRole("link", { name: /Staff Accounts/i });
-    expect(staffLink).toHaveClass("bg-green-100/70", "text-green-800");
-  });
-
-  it("highlights Revenue & Stats when on /dashboard/reports", () => {
-    mockPathname = "/dashboard/reports";
-    render(<DashboardSubNav />);
-
-    const reportsLink = screen.getByRole("link", { name: /Revenue & Stats/i });
-    expect(reportsLink).toHaveClass("bg-green-100/70", "text-green-800");
-  });
-
-  it("renders mobile navigation bar with active state indicator", () => {
-    mockPathname = "/dashboard/reports";
-    render(<DashboardMobileNav />);
-
-    const reportsLink = screen.getByRole("link", { name: /Reports/i });
-    expect(reportsLink).toHaveClass("text-green-700");
-  });
-
-  it("optimistically switches active tab and displays target skeleton on click", () => {
+  it("highlights the clicked page and shows its skeleton before the route loads", () => {
     mockPathname = "/dashboard/inbox";
     render(
       <DashboardNavProvider>
-        <DashboardSubNav />
+        <DashboardSidebar shop={shop} />
         <DashboardContentSlot>
           <div>Current Inbox Content</div>
         </DashboardContentSlot>
@@ -95,15 +86,57 @@ describe("DashboardNav components", () => {
 
     expect(screen.getByText("Current Inbox Content")).toBeInTheDocument();
 
-    const calendarLink = screen.getByRole("link", { name: /Calendar/i });
+    const calendarLink = screen.getByRole("link", { name: /^Calendar$/ });
     fireEvent.click(calendarLink);
 
-    // Calendar tab is immediately highlighted
-    expect(calendarLink).toHaveClass("bg-green-100/70", "text-green-800");
-    // Calendar skeleton is immediately displayed
+    expect(calendarLink).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("status", { name: /Loading booking calendar/i })).toBeInTheDocument();
   });
+});
 
+describe("Dashboard bottom bar", () => {
+  it("shows the four daily pages and More", () => {
+    mockPathname = "/dashboard/calendar";
+    render(<DashboardMobileNav shop={shop} />);
+
+    const bar = screen.getByRole("navigation", { name: "Shop dashboard" });
+    expect(
+      within(bar)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Today", "Inbox", "Calendar", "Walk-ins"]);
+    expect(within(bar).getByRole("link", { name: "Calendar" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(bar).getByRole("button", { name: "More" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("opens every page from More, with the current one marked, and closes on Escape", () => {
+    mockPathname = "/dashboard/reports";
+    render(<DashboardMobileNav shop={shop} />);
+
+    const more = screen.getByRole("button", { name: "More" });
+    fireEvent.click(more);
+
+    const sheet = screen.getByRole("dialog", { name: "All pages" });
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(within(sheet).getByRole("link", { name: /Revenue & stats/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(sheet).getByRole("link", { name: /Booking rules/i })).toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: /^Account$/ })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("Dashboard skeletons", () => {
   it("returns matching skeletons for each store dashboard tab route", () => {
     const paths = [
       "/dashboard",

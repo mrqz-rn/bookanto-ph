@@ -8,65 +8,71 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function TodayDashboardSkeleton() {
   return (
     <div role="status" aria-busy="true" aria-label="Loading today's schedule" className="space-y-6">
-      {/* Top Header & Quick Actions */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header: title and hours, then the bookings switch and Add walk-in */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-64 rounded-lg" />
-          <Skeleton className="h-4 w-80 max-w-full rounded-md" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
+          <Skeleton className="h-5 w-72 max-w-full rounded-md" />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Skeleton className="h-9 w-40 rounded-xl" />
-          <Skeleton className="h-9 w-36 rounded-lg" />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Skeleton className="h-11 w-full rounded-full sm:w-48" />
+          <Skeleton className="h-11 w-full rounded-md sm:w-36" />
         </div>
       </div>
 
-      {/* 5 KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs">
-            <Skeleton className="size-9 rounded-xl" />
-            <Skeleton className="mt-3 h-3 w-24 rounded-sm" />
-            <Skeleton className="mt-2 h-7 w-20 rounded-md" />
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+        {/* Up next and Today so far */}
+        <div className="space-y-6 lg:order-2 lg:col-span-4">
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <Skeleton className="h-6 w-24 rounded-md" />
+            <Skeleton className="mt-4 h-9 w-28 rounded-md" />
+            <Skeleton className="mt-2 h-4 w-24 rounded-sm" />
+            <Skeleton className="mt-4 h-5 w-40 rounded-sm" />
+            <Skeleton className="mt-2 h-4 w-48 rounded-sm" />
+            <Skeleton className="mt-5 h-11 w-full rounded-md" />
           </div>
-        ))}
-      </div>
-
-      {/* Filter Pills Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-neutral-200 bg-white p-3 shadow-2xs">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-8 w-28 shrink-0 rounded-lg" />
-        ))}
-      </div>
-
-      {/* Today's Bookings List */}
-      <div className="divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white shadow-2xs">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-24 rounded-sm" />
-                <Skeleton className="h-5 w-20 rounded-full" />
-                <Skeleton className="h-4 w-32 rounded-sm" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-5 w-28 rounded-sm" />
-                <Skeleton className="h-4 w-36 rounded-sm" />
-              </div>
-              <Skeleton className="h-3.5 w-48 rounded-sm" />
-            </div>
-            <div className="flex items-center justify-between gap-2 sm:justify-end">
-              <Skeleton className="h-5 w-14 rounded-sm" />
-              <div className="flex items-center gap-1.5">
-                <Skeleton className="h-8 w-16 rounded-md" />
-                <Skeleton className="h-8 w-16 rounded-md" />
-                <Skeleton className="h-8 w-14 rounded-md" />
-              </div>
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <Skeleton className="h-6 w-32 rounded-md" />
+            <Skeleton className="mt-4 h-2 w-full rounded-full" />
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-16 rounded-sm" />
+                  <Skeleton className="h-7 w-20 rounded-md" />
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Schedule */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-white lg:order-1 lg:col-span-8">
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <Skeleton className="h-6 w-24 rounded-md" />
+            <div className="flex gap-1">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-11 w-20 shrink-0 rounded-full" />
+              ))}
+            </div>
+          </div>
+          <div className="divide-y divide-border">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3 p-4 sm:px-5">
+                <div className="w-16 shrink-0 space-y-1.5 sm:w-20">
+                  <Skeleton className="h-4 w-14 rounded-sm" />
+                  <Skeleton className="h-3 w-10 rounded-sm" />
+                </div>
+                <Skeleton className="mt-1.5 size-2.5 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-5 w-40 max-w-full rounded-sm" />
+                  <Skeleton className="h-4 w-52 max-w-full rounded-sm" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-12 shrink-0 rounded-sm" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <span className="sr-only">Loading today&apos;s schedule…</span>

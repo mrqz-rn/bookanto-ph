@@ -1,0 +1,35 @@
+name: bookanto
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: bookanto-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-54322}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Local email testing service (catches OTP / verification emails)
+  inbucket:
+    image: inbucket/inbucket:latest
+    container_name: bookanto-inbucket
+    restart: unless-stopped
+    ports:
+      - "54324:9000" # Web UI / HTTP API
+      - "2500:2500" # SMTP
+    environment:
+      INBUCKET_STORAGE_TYPE: memory
+
+volumes:
+  postgres_data:

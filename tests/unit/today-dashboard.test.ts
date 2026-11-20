@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getTodayDashboardData } from "@/features/bookings/queries";
+import { getShopHoursForDay, getTodayDashboardData } from "@/features/bookings/queries";
 import { db } from "@/lib/db";
 
 describe("getTodayDashboardData query", () => {
@@ -196,5 +196,54 @@ describe("getTodayDashboardData query", () => {
 
     // Verify where condition was constructed with valid Date objects
     expect(capturedWhere).toBeDefined();
+  });
+});
+
+describe("getShopHoursForDay query", () => {
+  const shopId = randomUUID();
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Two selects run together: the weekday's hours, then any closure overlapping the day. */
+  function mockRows(hours: unknown[], closures: unknown[]) {
+    const results = [hours, closures];
+    vi.spyOn(db, "select").mockImplementation((() => {
+      const rows = results.shift() ?? [];
+      return {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(rows) }),
+        }),
+      };
+    }) as never);
+  }
+
+  it("turns the weekday's wall-clock hours into instants for that Manila date", async () => {
+    mockRows(
+      [{ opens: "09:00:00", closes: "19:00:00", breakStart: "12:00:00", breakEnd: "13:00:00" }],
+      [],
+    );
+
+    const hours = await getShopHoursForDay(shopId, "2026-11-15");
+
+    expect(hours).toEqual({
+      opensAt: "2026-11-15T01:00:00.000Z",
+      closesAt: "2026-11-15T11:00:00.000Z",
+      breakStartAt: "2026-11-15T04:00:00.000Z",
+      breakEndAt: "2026-11-15T05:00:00.000Z",
+      closedReason: null,
+    });
+  });
+
+  it("marks the day closed when a closure overlaps it, and returns null with no hours", async () => {
+    mockRows(
+      [{ opens: "09:00", closes: "19:00", breakStart: null, breakEnd: null }],
+      [{ reason: null }],
+    );
+    expect((await getShopHoursForDay(shopId, "2026-11-15"))?.closedReason).toBe("");
+
+    mockRows([], []);
+    expect(await getShopHoursForDay(shopId, "2026-11-15")).toBeNull();
   });
 });
