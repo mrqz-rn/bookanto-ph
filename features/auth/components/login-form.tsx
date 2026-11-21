@@ -22,12 +22,15 @@ type LoginFormProps = {
   /** "shop" when the visitor came from shop registration: shop copy, code sign-in first. */
   intent?: "customer" | "shop";
   initialError?: string;
+  /** A success message, e.g. after a password reset. */
+  notice?: string;
 };
 
 export function LoginForm({
   next = DEFAULT_AUTH_REDIRECT,
   intent = "customer",
   initialError,
+  notice,
 }: LoginFormProps) {
   const router = useRouter();
   const isShopIntent = intent === "shop";
@@ -133,6 +136,15 @@ export function LoginForm({
           className="mb-6 rounded-lg border border-danger/30 bg-red-50 p-4 text-sm text-danger"
         >
           {error}
+        </div>
+      )}
+
+      {notice && !error && (
+        <div
+          role="status"
+          className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+        >
+          {notice}
         </div>
       )}
 
@@ -261,6 +273,14 @@ export function LoginForm({
                 required
                 disabled={isBusy}
               />
+              <div className="mt-1 flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-green-700 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-between">

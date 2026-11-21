@@ -250,7 +250,8 @@ enabled = true
 host = "smtp.gmail.com"
 port = 587
 user = "bookantoph@gmail.com"
-pass = "xtiaeprtcxcctgkn"
+# Never commit the password: set SUPABASE_SMTP_PASS in supabase/.env (gitignored) or the shell.
+pass = "env(SUPABASE_SMTP_PASS)"
 admin_email = "bookantoph@gmail.com"
 sender_name = "BooKanto"
 

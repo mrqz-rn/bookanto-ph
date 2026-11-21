@@ -11,11 +11,11 @@ export const metadata: Metadata = {
 };
 
 type LoginPageProps = {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; reset?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { next, error } = await searchParams;
+  const { next, error, reset } = await searchParams;
   const user = await getCurrentUser();
 
   if (user) {
@@ -34,6 +34,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       next={next}
       intent={isShopSetupPath(next) ? "shop" : "customer"}
       initialError={errorMessage}
+      notice={
+        reset === "done" ? "Your password was changed. Sign in with your new password." : undefined
+      }
     />
   );
 }

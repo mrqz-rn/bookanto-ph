@@ -2,6 +2,13 @@ export const OTP_COUNTDOWN_SECONDS = 60;
 
 export const DEFAULT_AUTH_REDIRECT = "/auth/continue";
 
+/** A password reset link works once, for this long. */
+export const PASSWORD_RESET_TTL_MINUTES = 10;
+
+/** Password length for new passwords (bcrypt reads at most 72 bytes). */
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 72;
+
 /**
  * Phone (SMS OTP) sign-in is temporarily disabled. Flip to `true` to re-enable
  * the "Phone Number" tab on /login and the phone OTP server actions.

@@ -1,6 +1,9 @@
 "use server";
 
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { writeAudit } from "@/lib/audit";
 import {
@@ -9,29 +12,41 @@ import {
   requireUser,
   sendEmailOtp,
   sendOtp,
+  setUserPassword,
   signInDemoAccount,
   signInWithPassword,
   signOut,
+  signOutEverywhere,
   startTotpEnrollment,
   verifyEmailOtp,
   verifyOtp,
   verifyTotpCode,
 } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { passwordResetTokens, users } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { sendAccountEmail } from "@/lib/notify";
+import { publicEnv } from "@/lib/public-env";
 import { hitRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request";
 
 import {
   DEFAULT_AUTH_REDIRECT,
+  PASSWORD_RESET_TTL_MINUTES,
   PHONE_AUTH_DISABLED_MESSAGE,
   PHONE_AUTH_ENABLED,
 } from "./constants";
+import { passwordChangedEmail, passwordResetEmail } from "./emails";
+import { hashResetToken } from "./queries";
 import {
   demoSignInSchema,
   emailOtpRequestSchema,
   emailOtpVerifySchema,
   emailPasswordSignInSchema,
   oauthSignInSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema,
   phoneOtpRequestSchema,
   phoneOtpVerifySchema,
   twoFactorVerifySchema,
@@ -168,5 +183,134 @@ export async function verifyTwoFactorAction(
     });
 
     return { next };
+  });
+}
+
+const RESET_LINK_DEAD =
+  "This reset link has expired or was already used. Request a new one from the sign-in page.";
+
+/** Sends the email after the response, so a reply never reveals whether an account exists. */
+function sendLater(to: string, email: { subject: string; html: string; text: string }) {
+  after(async () => {
+    const result = await sendAccountEmail({ to, ...email });
+    if (!result.success) console.error("Account email failed:", result.messageId);
+  });
+}
+
+/**
+ * Emails a password reset link that works once, for 10 minutes. Answers the
+ * same whether or not the address has an account.
+ */
+export async function requestPasswordResetAction(
+  input: unknown,
+): Promise<ActionResult<{ sent: true }>> {
+  return runAction(async () => {
+    // Guests use this, so there's no user or permission; rate limits instead.
+    const { email } = parseInput(passwordResetRequestSchema, input);
+    const ip = await getClientIp();
+    const emailKey = createHash("sha256").update(email).digest("hex").slice(0, 32);
+    const allowed =
+      (await hitRateLimit(`password-reset:email:${emailKey}`, 3, 10 * 60)) &&
+      (!ip || (await hitRateLimit(`password-reset:ip:${ip}`, 10, 60 * 60)));
+    if (!allowed) {
+      throw new AppError(
+        "RATE_LIMITED",
+        "Too many reset requests. Wait 10 minutes, then try again.",
+      );
+    }
+
+    const [user] = await db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(
+        and(
+          sql`lower(${users.email}) = ${email}`,
+          isNull(users.deletedAt),
+          eq(users.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    if (user?.email) {
+      const token = randomBytes(32).toString("base64url");
+      await db.transaction(async (tx) => {
+        // A new link replaces any older unused one.
+        await tx
+          .delete(passwordResetTokens)
+          .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+        await tx.insert(passwordResetTokens).values({
+          userId: user.id,
+          tokenHash: hashResetToken(token),
+          expiresAt: sql`now() + make_interval(mins => ${PASSWORD_RESET_TTL_MINUTES})`,
+        });
+      });
+      await writeAudit({
+        actorId: user.id,
+        action: "auth.password_reset_requested",
+        targetType: "user",
+        targetId: user.id,
+        ip,
+      });
+      const link = `${publicEnv.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")}/reset-password?token=${token}`;
+      sendLater(user.email, passwordResetEmail({ name: user.name, link }));
+    }
+
+    return { sent: true };
+  });
+}
+
+/**
+ * Sets a new password from a reset link. The link is claimed in one update,
+ * so it works once even if submitted twice; then every session is signed out.
+ */
+export async function resetPasswordAction(input: unknown): Promise<ActionResult<{ done: true }>> {
+  return runAction(async () => {
+    const { token, password } = parseInput(passwordResetSchema, input);
+
+    const [claimed] = await db
+      .update(passwordResetTokens)
+      .set({ usedAt: sql`now()` })
+      .where(
+        and(
+          eq(passwordResetTokens.tokenHash, hashResetToken(token)),
+          isNull(passwordResetTokens.usedAt),
+          gt(passwordResetTokens.expiresAt, sql`now()`),
+        ),
+      )
+      .returning({ id: passwordResetTokens.id, userId: passwordResetTokens.userId });
+    if (!claimed) throw new AppError("VALIDATION", RESET_LINK_DEAD);
+
+    const [user] = await db
+      .select({ id: users.id, authId: users.authId, name: users.name, email: users.email })
+      .from(users)
+      .where(and(eq(users.id, claimed.userId), isNull(users.deletedAt)))
+      .limit(1);
+    if (!user) throw new AppError("VALIDATION", RESET_LINK_DEAD);
+
+    try {
+      await setUserPassword(user.authId, password);
+    } catch (error) {
+      // The password didn't change, so give the link back for another try.
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: null })
+        .where(eq(passwordResetTokens.id, claimed.id));
+      throw error;
+    }
+
+    await db
+      .delete(passwordResetTokens)
+      .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+    await signOutEverywhere(user.authId);
+    await writeAudit({
+      actorId: user.id,
+      action: "auth.password_reset",
+      targetType: "user",
+      targetId: user.id,
+      ip: await getClientIp(),
+    });
+    if (user.email) sendLater(user.email, passwordChangedEmail({ name: user.name }));
+
+    return { done: true };
   });
 }

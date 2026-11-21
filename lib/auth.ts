@@ -31,6 +31,7 @@ import { AppError } from "@/lib/errors";
 import { normalizePhone } from "@/lib/phone";
 import { publicEnv } from "@/lib/public-env";
 import { getRequestOrigin } from "@/lib/request";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Auth adapter. Supabase Auth today; only this file changes for Cognito.
@@ -1140,4 +1141,28 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<vo
       code: ["That code didn't work."],
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Password reset (features/auth). The app checks the reset link itself; these
+// change the password and end old sessions through the auth provider.
+
+/** Sets a new password for an account. Call only after a reset link was claimed. */
+export async function setUserPassword(authId: string, password: string): Promise<void> {
+  const { error } = await createSupabaseAdminClient().auth.admin.updateUserById(authId, {
+    password,
+  });
+  if (!error) return;
+  if (error.code === "weak_password" || /password/i.test(error.message)) {
+    throw new AppError("VALIDATION", "Choose a stronger password.", {
+      password: ["Choose a stronger password."],
+    });
+  }
+  console.error("Password update failed:", error.message);
+  throw new AppError("INTERNAL", "We couldn't change your password. Please try again.");
+}
+
+/** Signs the account out on every device (after a password reset). */
+export async function signOutEverywhere(authId: string): Promise<void> {
+  await db.execute(sql`delete from auth.sessions where user_id = ${authId}::uuid`);
 }

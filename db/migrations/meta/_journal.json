@@ -99,6 +99,13 @@
       "when": 1794971175317,
       "tag": "0013_email_default_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795234736843,
+      "tag": "0014_password_reset_tokens",
+      "breakpoints": true
     }
   ]
 }

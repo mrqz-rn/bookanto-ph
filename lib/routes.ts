@@ -14,6 +14,8 @@ export const DYNAMIC_ROUTES = [
   "/login",
   "/verify",
   "/two-factor",
+  "/forgot-password",
+  "/reset-password",
   "/search",
   "/auth",
 ];

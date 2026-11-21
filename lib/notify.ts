@@ -302,6 +302,16 @@ const emailProviders: Record<EmailProviderName, EmailProvider> = {
   log: new LogEmailProvider(),
 };
 
+/**
+ * Sends one account email now (password reset and the like) through the
+ * configured service. Skips notification preferences: these aren't optional.
+ */
+export function sendAccountEmail(
+  params: Parameters<EmailProvider["sendEmail"]>[0],
+): ReturnType<EmailProvider["sendEmail"]> {
+  return emailProviders[configuredEmailProvider()].sendEmail(params);
+}
+
 /** Hands each email to the configured service, chosen at send time. */
 class ConfiguredEmailProvider implements EmailProvider {
   sendEmail(params: Parameters<EmailProvider["sendEmail"]>[0]) {
@@ -992,7 +1002,7 @@ function generateReceiptEmailHtml({
 }
 
 /** Text from people (names, notes) goes into email HTML escaped. */
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
