@@ -20,25 +20,29 @@ import {
   users,
 } from "@/lib/db/schema";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
-import { MAX_FILE_SIZE_BYTES, validateImageBytes } from "@/lib/media";
-import { uploadPhoto } from "@/lib/storage";
+import { DOCUMENT_FILE_TYPES } from "@/lib/file-types";
+import { MAX_FILE_SIZE_BYTES, validateDocumentBytes, validateImageBytes } from "@/lib/media";
+import { createDocumentUploadUrl, readDocument, removeDocuments, uploadPhoto } from "@/lib/storage";
 
 import {
   addShopPhotoSchema,
   addStaffMemberSchema,
+  confirmShopDocumentSchema,
   createShopSchema,
+  isShopDocumentPath,
   removeShopMediaSchema,
   removeStaffMemberSchema,
   reorderShopMediaSchema,
   setAcceptingTodaySchema,
+  startShopDocumentUploadSchema,
   submitForVerificationSchema,
   toggleStaffActiveSchema,
   updateShopDetailsSchema,
   updateShopHoursSchema,
   updateShopLocationSchema,
   updateStaffRoleSchema,
-  uploadShopDocumentSchema,
 } from "./schema";
+import { MAX_SHOP_DOCUMENTS } from "./constants";
 
 /**
  * Creates a new shop record in 'draft' status and assigns the current user as owner.
@@ -377,7 +381,36 @@ export async function removeShopMedia(input: unknown): Promise<ActionResult<{ su
     const data = parseInput(removeShopMediaSchema, input);
     assertCan(user, "shop:update", { shopId: data.shopId });
 
-    await db.delete(media).where(and(eq(media.id, data.mediaId), eq(media.ownerId, data.shopId)));
+    const [item] = await db
+      .select({ id: media.id, path: media.path, kind: media.kind })
+      .from(media)
+      .where(
+        and(
+          eq(media.id, data.mediaId),
+          eq(media.ownerType, "shop"),
+          eq(media.ownerId, data.shopId),
+        ),
+      )
+      .limit(1);
+    if (!item) throw new AppError("NOT_FOUND");
+
+    // Verification documents are the owner's alone (RBAC: managers can't see them).
+    if (item.kind === "document") {
+      assertCan(user, "shop_document:upload", { shopId: data.shopId });
+    }
+
+    await db.delete(media).where(eq(media.id, item.id));
+
+    if (item.kind === "document") {
+      await removeDocuments([item.path]);
+      await writeAudit({
+        actorId: user.id,
+        action: "shop.document_removed",
+        targetType: "shop",
+        targetId: data.shopId,
+        data: { mediaId: item.id },
+      });
+    }
 
     revalidateTag(CACHE_TAGS.shops);
     return { success: true };
@@ -410,16 +443,82 @@ export async function reorderShopMedia(input: unknown): Promise<ActionResult<{ s
   });
 }
 
+/** Counts the verification documents a shop has on file. */
+async function countShopDocuments(shopId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(media)
+    .where(and(eq(media.ownerType, "shop"), eq(media.ownerId, shopId), eq(media.kind, "document")));
+  return row?.count ?? 0;
+}
+
 /**
- * Uploads/records a verification document for the shop.
+ * Step 1 of uploading a verification document: returns a one-time URL the
+ * browser uploads the file to, at a path the server picks inside the shop's
+ * folder of the private documents bucket. Nothing is recorded until
+ * confirmShopDocument checks the file.
  */
-export async function uploadShopDocument(
+export async function startShopDocumentUpload(
   input: unknown,
-): Promise<ActionResult<{ mediaId: string }>> {
+): Promise<ActionResult<{ uploadUrl: string; path: string }>> {
   return runAction(async () => {
     const user = await requireUser();
-    const data = parseInput(uploadShopDocumentSchema, input);
+    const data = parseInput(startShopDocumentUploadSchema, input);
     assertCan(user, "shop_document:upload", { shopId: data.shopId });
+
+    if ((await countShopDocuments(data.shopId)) >= MAX_SHOP_DOCUMENTS) {
+      throw new AppError(
+        "VALIDATION",
+        `You can keep up to ${MAX_SHOP_DOCUMENTS} documents. Remove one to add another.`,
+      );
+    }
+
+    const ext = DOCUMENT_FILE_TYPES[data.contentType];
+    const path = `${data.shopId}/${data.documentType}-${randomUUID()}.${ext}`;
+    const { uploadUrl } = await createDocumentUploadUrl(path);
+    return { uploadUrl, path };
+  });
+}
+
+/**
+ * Step 2: checks the uploaded file by its signature and size (deleting it if
+ * it fails) and records it as a verification document.
+ */
+export async function confirmShopDocument(
+  input: unknown,
+): Promise<ActionResult<{ mediaId: string; path: string }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const data = parseInput(confirmShopDocumentSchema, input);
+    assertCan(user, "shop_document:upload", { shopId: data.shopId });
+
+    if (!isShopDocumentPath(data.path, data.shopId, data.documentType)) {
+      throw new AppError(
+        "VALIDATION",
+        "That upload doesn't belong to this shop. Please try again.",
+      );
+    }
+
+    const [existing] = await db
+      .select({ id: media.id })
+      .from(media)
+      .where(
+        and(eq(media.ownerType, "shop"), eq(media.ownerId, data.shopId), eq(media.path, data.path)),
+      )
+      .limit(1);
+    if (existing) return { mediaId: existing.id, path: data.path };
+
+    const bytes = await readDocument(data.path);
+    if (!bytes) {
+      throw new AppError("VALIDATION", "We didn't receive the file. Please upload it again.");
+    }
+    if (bytes.length > MAX_FILE_SIZE_BYTES || !validateDocumentBytes(bytes).valid) {
+      await removeDocuments([data.path]);
+      throw new AppError(
+        "VALIDATION",
+        "That file isn't a PDF, JPEG, PNG or WebP under 8 MB. Please upload a clear photo or scan.",
+      );
+    }
 
     const [created] = await db
       .insert(media)
@@ -428,9 +527,9 @@ export async function uploadShopDocument(
         ownerId: data.shopId,
         path: data.path,
         kind: "document",
-        sortOrder: data.sortOrder,
+        sortOrder: await countShopDocuments(data.shopId),
       })
-      .returning();
+      .returning({ id: media.id });
 
     if (!created) {
       throw new AppError("INTERNAL", "Could not save document record.");
@@ -441,10 +540,10 @@ export async function uploadShopDocument(
       action: "shop.document_uploaded",
       targetType: "shop",
       targetId: data.shopId,
-      data: { mediaId: created.id },
+      data: { mediaId: created.id, documentType: data.documentType },
     });
 
-    return { mediaId: created.id };
+    return { mediaId: created.id, path: data.path };
   });
 }
 

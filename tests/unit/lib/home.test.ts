@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { canAccessPath, homePathFor, isStoreAccount, resolvePostLoginPath } from "@/lib/home";
+import {
+  canAccessPath,
+  homePathFor,
+  isShopSetupPath,
+  isStoreAccount,
+  resolvePostLoginPath,
+  SHOP_REGISTRATION_ROUTE,
+  SHOP_SETUP_ROUTE,
+} from "@/lib/home";
 
 const store = {
   platformRole: "customer" as const,
@@ -43,5 +51,20 @@ describe("account homes", () => {
     expect(resolvePostLoginPath(customer, "/account/bookings")).toBe("/account/bookings");
     expect(resolvePostLoginPath(customer, "//evil.example")).toBe("/explore");
     expect(resolvePostLoginPath(admin, "/admin/users")).toBe("/admin/users");
+  });
+});
+
+describe("shop registration", () => {
+  it("recognises a login that leads into the onboarding wizard", () => {
+    expect(isShopSetupPath(SHOP_SETUP_ROUTE)).toBe(true);
+    expect(isShopSetupPath("/dashboard/setup?step=2")).toBe(true);
+    expect(isShopSetupPath("/dashboard")).toBe(false);
+    expect(isShopSetupPath("/dashboard/setup-other")).toBe(false);
+    expect(isShopSetupPath(undefined)).toBe(false);
+  });
+
+  it("lets a customer account continue to the wizard after login", () => {
+    expect(resolvePostLoginPath(customer, SHOP_SETUP_ROUTE)).toBe(SHOP_SETUP_ROUTE);
+    expect(canAccessPath(customer, SHOP_REGISTRATION_ROUTE)).toBe(true);
   });
 });

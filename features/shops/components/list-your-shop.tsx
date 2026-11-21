@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { SHOP_REGISTRATION_ROUTE } from "@/lib/home";
 
-/** Invitation to shop owners. Sign-up starts at the onboarding wizard. */
+/** Invitation to shop owners. Leads to the registration explainer, then the wizard. */
 export function ListYourShop() {
   return (
     <section
@@ -18,7 +19,7 @@ export function ListYourShop() {
         from your phone.
       </p>
       <Button asChild size="lg" className="mt-6">
-        <Link href="/dashboard/setup">List your shop</Link>
+        <Link href={SHOP_REGISTRATION_ROUTE}>List your shop</Link>
       </Button>
     </section>
   );

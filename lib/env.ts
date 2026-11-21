@@ -21,6 +21,10 @@ const serverEnv = parseEnv(
       // Semaphore SMS API credentials (PH gateway)
       SEMAPHORE_API_KEY: z.string().optional(),
       SEMAPHORE_SENDER_NAME: z.string().optional().default("BooKanto"),
+      // Supabase secret key (sb_secret_…), server only. Private storage for
+      // verification documents (lib/supabase/admin.ts). Locally:
+      // `pnpm exec supabase status -o env` prints it as SECRET_KEY.
+      SUPABASE_SECRET_KEY: z.preprocess(unset, z.string().optional()),
       // Webhook secret for Supabase Send SMS Hook
       SUPABASE_SMS_HOOK_SECRET: z.string().optional(),
       // Outgoing email (lib/notify.ts). EMAIL_PROVIDER picks the service; left

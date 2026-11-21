@@ -188,24 +188,30 @@ export function StepDetails({
           Select all services that apply to your business.
         </p>
         <div className="mt-2.5 flex flex-wrap gap-2">
-          {categories.map((cat) => {
-            const isSelected = selectedCategoryIds.includes(cat.id);
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => toggleCategory(cat.id)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                  isSelected
-                    ? "bg-navy-900 text-white shadow-xs"
-                    : "border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50"
-                }`}
-              >
-                {isSelected && <Check className="size-3.5 text-orange-400" />}
-                {cat.name}
-              </button>
-            );
-          })}
+          {categories.length === 0 ? (
+            <p className="text-xs text-amber-700">
+              No categories available. Please ensure categories are configured in the database.
+            </p>
+          ) : (
+            categories.map((cat) => {
+              const isSelected = selectedCategoryIds.includes(cat.id);
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => toggleCategory(cat.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                    isSelected
+                      ? "bg-navy-900 text-white shadow-xs"
+                      : "border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50"
+                  }`}
+                >
+                  {isSelected && <Check className="size-3.5 text-orange-400" />}
+                  {cat.name}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 

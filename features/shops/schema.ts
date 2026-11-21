@@ -1,7 +1,10 @@
 import { z } from "zod";
 
+import { DOCUMENT_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "@/lib/file-types";
 import { isInPhilippines } from "@/lib/geo";
 import { isValidPhilippinePhone, normalizePhone } from "@/lib/phone";
+
+import { DOCUMENT_TYPES, type DocumentTypeId } from "./constants";
 
 export const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -134,11 +137,41 @@ export const reorderShopMediaSchema = z.strictObject({
   mediaIds: z.array(z.string().uuid()).min(1),
 });
 
-export const uploadShopDocumentSchema = z.strictObject({
+const documentTypeSchema = z.enum(
+  DOCUMENT_TYPES.map((doc) => doc.type) as [DocumentTypeId, ...DocumentTypeId[]],
+  "Choose which document this is.",
+);
+
+/** Step 1 of a document upload: ask for a one-time upload URL. */
+export const startShopDocumentUploadSchema = z.strictObject({
   shopId: z.string().uuid("Invalid shop ID."),
-  path: z.string().min(1, "Document path is required."),
-  sortOrder: z.number().int().min(0).default(0),
+  documentType: documentTypeSchema,
+  contentType: z.enum(DOCUMENT_MIME_TYPES, "Upload a PDF, JPEG, PNG or WebP file."),
+  size: z
+    .number()
+    .int()
+    .positive("The file is empty.")
+    .max(MAX_FILE_SIZE_BYTES, "The file is larger than 8 MB."),
 });
+
+/** Step 2: confirm the uploaded file so the server can check it and record it. */
+export const confirmShopDocumentSchema = z.strictObject({
+  shopId: z.string().uuid("Invalid shop ID."),
+  documentType: documentTypeSchema,
+  path: z.string().min(1).max(300),
+});
+
+/**
+ * Whether `path` has the shape startShopDocumentUpload hands out for this shop
+ * and document type: `<shopId>/<type>-<uuid>.<ext>`.
+ */
+export function isShopDocumentPath(path: string, shopId: string, documentType: string): boolean {
+  const prefix = `${shopId}/${documentType}-`;
+  if (!path.startsWith(prefix)) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(pdf|jpg|png|webp)$/.test(
+    path.slice(prefix.length),
+  );
+}
 
 export const submitForVerificationSchema = z.strictObject({
   shopId: z.string().uuid("Invalid shop ID."),

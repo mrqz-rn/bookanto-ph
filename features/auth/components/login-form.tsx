@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight, Store } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,18 +13,29 @@ import {
   signInWithPasswordAction,
 } from "@/features/auth/actions";
 import { DEFAULT_AUTH_REDIRECT, PHONE_AUTH_ENABLED } from "@/features/auth/constants";
+import { SHOP_REGISTRATION_ROUTE } from "@/lib/home";
 
 import { SocialAuthButtons } from "./social-auth-buttons";
 
 type LoginFormProps = {
   next?: string;
+  /** "shop" when the visitor came from shop registration: shop copy, code sign-in first. */
+  intent?: "customer" | "shop";
   initialError?: string;
 };
 
-export function LoginForm({ next = DEFAULT_AUTH_REDIRECT, initialError }: LoginFormProps) {
+export function LoginForm({
+  next = DEFAULT_AUTH_REDIRECT,
+  intent = "customer",
+  initialError,
+}: LoginFormProps) {
   const router = useRouter();
+  const isShopIntent = intent === "shop";
   const [tab, setTab] = React.useState<"phone" | "email">(PHONE_AUTH_ENABLED ? "phone" : "email");
-  const [emailMode, setEmailMode] = React.useState<"password" | "otp">("password");
+  // A new shop owner has no password yet; the email code creates the account.
+  const [emailMode, setEmailMode] = React.useState<"password" | "otp">(
+    isShopIntent ? "otp" : "password",
+  );
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -89,12 +101,30 @@ export function LoginForm({ next = DEFAULT_AUTH_REDIRECT, initialError }: LoginF
   return (
     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
       <div className="mb-6 text-center">
-        <h1 className="font-display text-3xl font-bold tracking-tight text-navy-900">
-          Welcome to BooKanto
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Book trusted local services in your neighborhood
-        </p>
+        {isShopIntent ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              <Store className="size-3.5" aria-hidden />
+              For shops and service providers
+            </span>
+            <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-navy-900">
+              Register your shop
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Log in or create a free account with your email or Google. Next, you&apos;ll set up
+              your shop in 5 steps.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-navy-900">
+              Welcome to BooKanto
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Book trusted local services in your neighborhood
+            </p>
+          </>
+        )}
       </div>
 
       {error && (
@@ -281,6 +311,34 @@ export function LoginForm({ next = DEFAULT_AUTH_REDIRECT, initialError }: LoginF
 
       {/* Social login buttons: Google (Facebook temporarily hidden) */}
       <SocialAuthButtons next={next} onError={setError} />
+
+      {isShopIntent ? (
+        <p className="mt-6 text-center text-sm text-slate-600">
+          Just booking a service?{" "}
+          <Link
+            href="/login"
+            className="inline-flex min-h-11 items-center font-semibold text-green-700 hover:underline"
+          >
+            Log in as a customer
+          </Link>
+        </p>
+      ) : (
+        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-semibold text-navy-900">
+            Do you have a shop or are you a service provider?
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Get bookings from customers nearby. Free during the pilot.
+          </p>
+          <Link
+            href={SHOP_REGISTRATION_ROUTE}
+            className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-green-700 hover:underline"
+          >
+            Register your shop with us
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </div>
+      )}
 
       <p className="mt-6 text-center text-xs text-slate-500">
         By continuing, you agree to BooKanto&apos;s{" "}

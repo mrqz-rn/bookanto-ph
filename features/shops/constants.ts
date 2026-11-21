@@ -8,6 +8,30 @@ export const ONBOARDING_STEPS = [
 
 export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number]["id"];
 
+/** Who can register, shown on /register-shop. Matches the four booking types. */
+export const PROVIDER_KINDS = [
+  {
+    id: "storefront",
+    title: "Shops with a storefront",
+    description: "Barbershops, salons, repair shops and clinics. Customers book a time slot.",
+  },
+  {
+    id: "home",
+    title: "Home service providers",
+    description: "Aircon cleaning, plumbing, home massage. You go to the customer's address.",
+  },
+  {
+    id: "quote",
+    title: "Jobs priced on request",
+    description: "Customers describe the job and you send a price before they confirm.",
+  },
+  {
+    id: "queue",
+    title: "Walk-in and queue shops",
+    description: "Customers take a number online and come in when it's their turn.",
+  },
+] as const;
+
 export const WEEKDAYS = [
   { day: 0, label: "Sunday", short: "Sun" },
   { day: 1, label: "Monday", short: "Mon" },
@@ -45,6 +69,11 @@ export const DOCUMENT_TYPES = [
     required: true,
   },
 ] as const;
+
+export type DocumentTypeId = (typeof DOCUMENT_TYPES)[number]["type"];
+
+/** Most verification documents one shop can keep at a time. */
+export const MAX_SHOP_DOCUMENTS = 10;
 
 export const CITY_PRESETS = [
   { name: "Marikina", lat: 14.6507, lng: 121.1029 },

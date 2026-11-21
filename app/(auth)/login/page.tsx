@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/features/auth/components/login-form";
 import { getCurrentUser } from "@/lib/auth";
-import { resolvePostLoginPath } from "@/lib/home";
+import { isShopSetupPath, resolvePostLoginPath } from "@/lib/home";
 
 export const metadata: Metadata = {
   title: "Log in",
@@ -29,5 +29,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         ? "No authorization code returned. Please try again."
         : undefined;
 
-  return <LoginForm next={next} initialError={errorMessage} />;
+  return (
+    <LoginForm
+      next={next}
+      intent={isShopSetupPath(next) ? "shop" : "customer"}
+      initialError={errorMessage}
+    />
+  );
 }

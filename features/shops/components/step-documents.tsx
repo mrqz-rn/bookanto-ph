@@ -4,8 +4,30 @@ import * as React from "react";
 import { CheckCircle2, FileCheck, FileText, ShieldCheck, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { submitForVerification, uploadShopDocument, removeShopMedia } from "../actions";
-import { DOCUMENT_TYPES } from "../constants";
+import { DOCUMENT_FILE_TYPES, isDocumentMimeType, MAX_FILE_SIZE_BYTES } from "@/lib/file-types";
+
+import {
+  confirmShopDocument,
+  removeShopMedia,
+  startShopDocumentUpload,
+  submitForVerification,
+} from "../actions";
+import { DOCUMENT_TYPES, type DocumentTypeId } from "../constants";
+
+const ACCEPT = Object.keys(DOCUMENT_FILE_TYPES).join(",");
+
+/** Sends the file straight to storage through the one-time URL (same form as supabase-js). */
+async function putToSignedUrl(uploadUrl: string, file: File): Promise<boolean> {
+  const body = new FormData();
+  body.append("cacheControl", "3600");
+  body.append("", file);
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    body,
+    headers: { "x-upsert": "false" },
+  });
+  return response.ok;
+}
 
 type MediaItem = {
   id: string;
@@ -33,37 +55,52 @@ export function StepDocuments({
 
   const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
 
-  const handleFileUpload = async (type: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (type: DocumentTypeId, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
 
-    if (file.size > 8 * 1024 * 1024) {
-      setError("File exceeds maximum allowed size of 8 MB.");
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError("That file is larger than 8 MB. Take a smaller photo or compress the PDF.");
+      return;
+    }
+    if (!isDocumentMimeType(file.type)) {
+      setError("Upload a PDF, JPEG, PNG or WebP file.");
       return;
     }
 
     setUploadingType(type);
 
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
-      const path = `documents/${shopId}/${type}-${Date.now()}.${ext}`;
-
-      const result = await uploadShopDocument({
+      const started = await startShopDocumentUpload({
         shopId,
-        path,
         documentType: type,
-        sortOrder: documents.length,
+        contentType: file.type,
+        size: file.size,
       });
+      if (!started.ok) {
+        setError(started.message);
+        return;
+      }
 
-      if (result.ok) {
+      if (!(await putToSignedUrl(started.data.uploadUrl, file))) {
+        setError("The upload didn't go through. Check your connection and try again.");
+        return;
+      }
+
+      const confirmed = await confirmShopDocument({
+        shopId,
+        documentType: type,
+        path: started.data.path,
+      });
+      if (confirmed.ok) {
         setDocuments((prev) => [
           ...prev,
-          { id: result.data.mediaId, path, sortOrder: prev.length },
+          { id: confirmed.data.mediaId, path: confirmed.data.path, sortOrder: prev.length },
         ]);
       } else {
-        setError(result.message);
+        setError(confirmed.message);
       }
     } catch {
       setError("Could not upload document. Please try again.");
@@ -80,6 +117,8 @@ export function StepDocuments({
       const result = await removeShopMedia({ shopId, mediaId });
       if (result.ok) {
         setDocuments((prev) => prev.filter((d) => d.id !== mediaId));
+      } else {
+        setError(result.message);
       }
     } catch {
       setError("Could not remove document.");
@@ -175,7 +214,7 @@ export function StepDocuments({
                     fileInputRefs.current[docType.type] = el;
                   }}
                   type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  accept={ACCEPT}
                   onChange={(e) => handleFileUpload(docType.type, e)}
                   className="hidden"
                 />

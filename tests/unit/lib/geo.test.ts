@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { nearbyShopsInput } from "@/features/search/schema";
-import { coarsen, formatDistance, isInPhilippines } from "@/lib/geo";
+import { coarsen, formatDistance, isInPhilippines, roundCoordinate } from "@/lib/geo";
 
 describe("coarsen", () => {
   it("rounds to about a kilometer", () => {
@@ -31,5 +31,12 @@ describe("nearby search input", () => {
   it("rejects extra fields and strings", () => {
     expect(nearbyShopsInput.safeParse({ lat: 14.65, lng: 121.1, radius: 1e6 }).success).toBe(false);
     expect(nearbyShopsInput.safeParse({ lat: "14.65", lng: "121.1" }).success).toBe(false);
+  });
+});
+
+describe("roundCoordinate", () => {
+  it("keeps six decimals", () => {
+    expect(roundCoordinate(14.65071234)).toBe(14.650712);
+    expect(roundCoordinate(121.1029999)).toBe(121.103);
   });
 });

@@ -170,6 +170,8 @@ export function StepLocation({
           lat={coords.lat}
           lng={coords.lng}
           onChange={(newCoords) => setCoords(newCoords)}
+          // Prefill from a search result, but never overwrite what the owner typed.
+          onAddressFound={(found) => setAddress((current) => (current.trim() ? current : found))}
           address={address}
         />
       </div>

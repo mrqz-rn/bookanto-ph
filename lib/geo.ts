@@ -24,3 +24,8 @@ export function formatDistance(meters: number): string {
   const km = meters / 1000;
   return `${km < 10 ? Number(km.toFixed(1)) : Math.round(km)} km`;
 }
+
+/** Rounds a coordinate to 6 decimals (about 11 cm), the precision we store. */
+export function roundCoordinate(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}

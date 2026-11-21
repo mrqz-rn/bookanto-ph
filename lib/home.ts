@@ -11,8 +11,21 @@ export const POST_LOGIN_ROUTE = "/auth/continue";
 /** Marketplace routes a store account can't open. */
 export const MARKETPLACE_ROUTES = ["/explore", "/search"];
 
+/** Public page that explains shop registration to owners and service providers. */
+export const SHOP_REGISTRATION_ROUTE = "/register-shop";
+
+/** The shop onboarding wizard. Needs a session; middleware sends guests to /login. */
+export const SHOP_SETUP_ROUTE = "/dashboard/setup";
+
 /** Dashboard routes a user account can still open, so it can list a shop. */
-export const DASHBOARD_ONBOARDING_ROUTES = ["/dashboard/setup"];
+export const DASHBOARD_ONBOARDING_ROUTES = [SHOP_SETUP_ROUTE];
+
+/** Whether a post-login `next` leads into shop registration. */
+export function isShopSetupPath(next: string | null | undefined): boolean {
+  if (!next) return false;
+  const pathname = next.split(/[?#]/)[0] ?? next;
+  return matchesRoute(pathname, DASHBOARD_ONBOARDING_ROUTES);
+}
 
 type HomeUser = Pick<AuthzUser, "platformRole" | "memberships">;
 

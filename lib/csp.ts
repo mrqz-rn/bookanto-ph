@@ -5,9 +5,12 @@
 // per-request nonce, so they allow inline scripts but keep every other
 // restriction.
 //
-// Allowed hosts are limited to Supabase, Google Maps and Cloudflare
-// Turnstile. Sentry and PostHog should go through same-origin routes (Sentry
-// tunnelRoute, a PostHog rewrite) so they need no entry here.
+// Allowed hosts are limited to Supabase, Google Maps, the open-source map
+// services (lib/open-map.ts) and Cloudflare Turnstile. Sentry and PostHog
+// should go through same-origin routes (Sentry tunnelRoute, a PostHog
+// rewrite) so they need no entry here.
+
+import { NOMINATIM_HOST, OPEN_MAP_TILE_HOST } from "@/lib/open-map";
 
 const GOOGLE_MAPS = {
   script: ["https://maps.googleapis.com"],
@@ -45,9 +48,24 @@ export function buildCsp({ nonce, supabaseUrl, dev }: CspOptions): string {
     "default-src": ["'self'"],
     "script-src": scriptSrc,
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", supabase.origin, ...GOOGLE_MAPS.img],
+    "img-src": [
+      "'self'",
+      "data:",
+      "blob:",
+      supabase.origin,
+      ...GOOGLE_MAPS.img,
+      OPEN_MAP_TILE_HOST,
+    ],
     "font-src": ["'self'", ...GOOGLE_MAPS.font],
-    "connect-src": ["'self'", supabase.origin, supabaseRealtime, ...GOOGLE_MAPS.connect],
+    "connect-src": [
+      "'self'",
+      supabase.origin,
+      supabaseRealtime,
+      ...GOOGLE_MAPS.connect,
+      // Open-source maps: OpenFreeMap tiles, fonts and icons; Nominatim place search.
+      OPEN_MAP_TILE_HOST,
+      NOMINATIM_HOST,
+    ],
     "frame-src": [TURNSTILE],
     "worker-src": ["'self'", "blob:"],
     "manifest-src": ["'self'"],

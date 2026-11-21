@@ -40,6 +40,13 @@ describe("buildCsp", () => {
     expect(connectSrc).toContain("wss://abc.supabase.co");
   });
 
+  it("allows the open-source map tiles and place search", () => {
+    const policy = buildCsp({ nonce: "abc123", supabaseUrl, dev: false });
+    expect(directive(policy, "connect-src")).toContain("https://tiles.openfreemap.org");
+    expect(directive(policy, "connect-src")).toContain("https://nominatim.openstreetmap.org");
+    expect(directive(policy, "worker-src")).toContain("blob:");
+  });
+
   it("relaxes only what local development needs", () => {
     const policy = buildCsp({ supabaseUrl: "http://127.0.0.1:54321", dev: true });
     expect(directive(policy, "script-src")).toContain("'unsafe-eval'");

@@ -6,8 +6,7 @@ export const MEDIA_BUCKET = "media";
 /** Private bucket for verification documents (business permits, valid IDs). */
 export const DOCUMENTS_BUCKET = "documents";
 
-/** Maximum file size in bytes (8 MB as per security specification). */
-export const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
+export { DOCUMENT_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "./file-types";
 
 /** The public URL of a photo stored at `path` in the media bucket. */
 export function mediaUrl(path: string): string {
