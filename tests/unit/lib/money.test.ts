@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPeso, pesosToCentavos } from "@/lib/money";
+import { formatPeso, formatPesoCompact, pesosToCentavos } from "@/lib/money";
+
+describe("formatPesoCompact", () => {
+  it("shortens large amounts", () => {
+    expect(formatPesoCompact(95_000)).toBe("₱950");
+    expect(formatPesoCompact(1_250_000)).toBe("₱12.5K");
+    expect(formatPesoCompact(123_456_700)).toBe("₱1.2M");
+    expect(formatPesoCompact(0)).toBe("₱0");
+  });
+
+  it("rejects fractional centavos", () => {
+    expect(() => formatPesoCompact(1.5)).toThrow(RangeError);
+  });
+});
 
 describe("formatPeso", () => {
   it("drops decimals for whole pesos", () => {

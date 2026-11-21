@@ -245,18 +245,43 @@ describe("Analytics UI Components", () => {
     it("renders booking funnel steps and overall conversion rate", () => {
       render(<FunnelChart data={mockFunnelData} />);
 
-      expect(screen.getByText("Booking Funnel Conversion")).toBeInTheDocument();
-      expect(screen.getAllByText("9%").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("1. Shop Profile Viewed")).toBeInTheDocument();
-      expect(screen.getByText("2. Funnel Started")).toBeInTheDocument();
-      expect(screen.getByText("7. Service Completed")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Booking funnel" })).toBeInTheDocument();
+      expect(screen.getByText("9%")).toBeInTheDocument();
+      expect(screen.getByText("Shop Profile Viewed")).toBeInTheDocument();
+      expect(screen.getByText("Funnel Started")).toBeInTheDocument();
+      expect(screen.getByText("Service Completed")).toBeInTheDocument();
     });
 
-    it("displays drop-off rates between stages", () => {
+    it("shows each drop-off between the two steps it belongs to", () => {
       render(<FunnelChart data={mockFunnelData} />);
 
-      expect(screen.getByText("50% drop-off to next step")).toBeInTheDocument();
-      expect(screen.getByText("40% drop-off to next step")).toBeInTheDocument();
+      // dropOffRate is the share lost on the way into a step, so the first step has none.
+      const items = screen.getAllByRole("listitem");
+      expect(items[0]).not.toHaveTextContent("drop off");
+      expect(items[1]).toHaveTextContent("50% drop off");
+      expect(items[2]).toHaveTextContent("40% drop off");
+    });
+
+    it("calls out the biggest drop", () => {
+      render(<FunnelChart data={mockFunnelData} />);
+
+      expect(
+        screen.getByText(/drop\s+off between shop profile viewed and funnel started/),
+      ).toBeInTheDocument();
+    });
+
+    it("renders an empty state when nothing was tracked", () => {
+      render(
+        <FunnelChart
+          data={{
+            ...mockFunnelData,
+            overallConversionRate: 0,
+            steps: mockFunnelData.steps.map((step) => ({ ...step, count: 0 })),
+          }}
+        />,
+      );
+
+      expect(screen.getByText("No funnel events in this period")).toBeInTheDocument();
     });
   });
 
@@ -264,7 +289,7 @@ describe("Analytics UI Components", () => {
     it("renders retention matrix rows and cohort summary metrics", () => {
       render(<CohortMatrixTable data={mockCohortData} />);
 
-      expect(screen.getByText("Customer Cohort Retention")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Customer retention" })).toBeInTheDocument();
       expect(screen.getByText("40.9%")).toBeInTheDocument();
       expect(screen.getByText("Sep 2026")).toBeInTheDocument();
       expect(screen.getByText("Oct 2026")).toBeInTheDocument();
@@ -286,12 +311,12 @@ describe("Analytics UI Components", () => {
       };
 
       render(<CohortMatrixTable data={emptyCohortData} />);
-      expect(screen.getByText("No Cohort History Yet")).toBeInTheDocument();
+      expect(screen.getByText("No cohort history yet")).toBeInTheDocument();
     });
   });
 
   describe("PilotMetricsDashboard", () => {
-    it("renders pilot launch milestone targets and key KPIs", () => {
+    it("renders the pilot targets with their progress", () => {
       render(
         <PilotMetricsDashboard
           metrics={mockPilotMetrics}
@@ -300,14 +325,22 @@ describe("Analytics UI Components", () => {
         />,
       );
 
-      expect(screen.getByText("Pilot Metrics Dashboard")).toBeInTheDocument();
-      expect(screen.getByText("Pilot Milestone Targets")).toBeInTheDocument();
-      expect(screen.getByText("Active Partner Shops")).toBeInTheDocument();
-      expect(screen.getByText("Gross Merchandise Value")).toBeInTheDocument();
-      expect(screen.getByText("Completed Bookings")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1, name: "Pilot metrics" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Pilot targets" })).toBeInTheDocument();
+      expect(screen.getByText("Active partner shops")).toBeInTheDocument();
+      expect(screen.getByText("Gross merchandise value")).toBeInTheDocument();
+      expect(screen.getByText("Repeat customer rate")).toBeInTheDocument();
+      // 180 of the 1,000-booking target.
+      expect(
+        screen.getByRole("progressbar", { name: "Bookings, share of target" }),
+      ).toHaveAttribute("aria-valuenow", "18");
+      expect(screen.getByRole("link", { name: /5 waiting for approval/ })).toHaveAttribute(
+        "href",
+        "/admin/shops?status=pending",
+      );
     });
 
-    it("switches tabs between overview, funnel, and cohorts", () => {
+    it("shows every section on one page, without tabs", () => {
       render(
         <PilotMetricsDashboard
           metrics={mockPilotMetrics}
@@ -316,10 +349,59 @@ describe("Analytics UI Components", () => {
         />,
       );
 
-      const cohortTabButton = screen.getByRole("button", { name: /Cohort Retention/i });
-      fireEvent.click(cohortTabButton);
+      for (const name of [
+        "Bookings and revenue",
+        "Booking funnel",
+        "Customer retention",
+        "Bookings by category",
+        "Bookings by city",
+      ]) {
+        expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+      }
+      expect(screen.getByText("Quezon City")).toBeInTheDocument();
+    });
 
-      expect(screen.getByText("Platform-Wide Customer Cohorts")).toBeInTheDocument();
+    it("marks the selected period and offers pilot to date for short periods", () => {
+      render(
+        <PilotMetricsDashboard
+          metrics={mockPilotMetrics}
+          cohorts={mockCohortData}
+          currentPeriod="30d"
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "30 days" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(screen.getByRole("button", { name: /See pilot to date/ })).toBeInTheDocument();
+    });
+
+    it("hides the pilot-to-date hint when the period already covers the pilot", () => {
+      render(
+        <PilotMetricsDashboard
+          metrics={mockPilotMetrics}
+          cohorts={mockCohortData}
+          currentPeriod="pilot"
+        />,
+      );
+
+      expect(screen.queryByRole("button", { name: /See pilot to date/ })).not.toBeInTheDocument();
+    });
+
+    it("switches the trend chart between bookings and revenue", () => {
+      render(
+        <PilotMetricsDashboard
+          metrics={mockPilotMetrics}
+          cohorts={mockCohortData}
+          currentPeriod="30d"
+        />,
+      );
+
+      const revenue = screen.getByRole("button", { name: "Revenue" });
+      fireEvent.click(revenue);
+      expect(revenue).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByText(/Value of completed bookings, per day/)).toBeInTheDocument();
     });
   });
 

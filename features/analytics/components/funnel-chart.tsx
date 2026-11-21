@@ -1,17 +1,11 @@
 "use client";
 
 import * as React from "react";
-import {
-  ArrowDown,
-  CheckCircle2,
-  ChevronRight,
-  Eye,
-  Sparkles,
-  UserCheck,
-  Users,
-} from "lucide-react";
+import { ArrowDown, Filter, TrendingDown } from "lucide-react";
+import { cn } from "cn";
 
-import type { BookingFunnelData, FunnelStepMetric } from "../constants";
+import type { BookingFunnelData } from "../constants";
+import { EmptyChart, Panel, PanelHeader } from "./panel";
 
 type FunnelChartProps = {
   data: BookingFunnelData;
@@ -19,105 +13,116 @@ type FunnelChartProps = {
   description?: string;
 };
 
-const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  view_shop: Eye,
-  select_service: Sparkles,
-  select_slot: ChevronRight,
-  enter_details: Users,
-  submit_booking: UserCheck,
-  confirmed: CheckCircle2,
-  completed: CheckCircle2,
-};
-
 export function FunnelChart({
   data,
-  title = "Booking Funnel Conversion",
-  description = "Customer journey from shop view to completed service",
+  title = "Booking funnel",
+  description = "How many customers reach each step, from opening a shop's page to a completed service.",
 }: FunnelChartProps) {
-  const maxCount = Math.max(...data.steps.map((s) => s.count), 1);
+  const headingId = React.useId();
+  const steps = [...data.steps].sort((a, b) => a.order - b.order);
+  const firstCount = steps[0]?.count ?? 0;
+  const maxCount = Math.max(...steps.map((s) => s.count), 1);
+
+  // Each step's dropOffRate is the share lost on the way into that step.
+  const biggestDropIndex = steps.reduce(
+    (best, step, index) =>
+      index > 0 && step.dropOffRate > (steps[best]?.dropOffRate ?? 0) ? index : best,
+    0,
+  );
+  const biggestDrop = biggestDropIndex > 0 ? steps[biggestDropIndex] : undefined;
+  const biggestDropFrom = biggestDrop ? steps[biggestDropIndex - 1] : undefined;
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xs sm:p-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-display text-lg font-bold text-neutral-900 sm:text-xl">{title}</h2>
-          <p className="text-xs text-neutral-500">{description}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-right">
-            <span className="block text-[10px] font-bold tracking-wider text-emerald-800 uppercase">
-              Overall Conversion
-            </span>
-            <span className="font-display text-lg font-bold text-emerald-900 sm:text-xl">
-              {data.overallConversionRate}%
-            </span>
+    <Panel aria-labelledby={headingId}>
+      <PanelHeader
+        id={headingId}
+        title={title}
+        description={description}
+        aside={
+          <div className="sm:text-right">
+            <p className="text-3xl font-semibold text-foreground">{data.overallConversionRate}%</p>
+            <p className="text-sm text-muted-foreground">
+              of shop views end in a completed service
+            </p>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Funnel Steps Flow */}
-      <div className="mt-6 space-y-3">
-        {data.steps.map((step: FunnelStepMetric, index: number) => {
-          const Icon = STEP_ICONS[step.step] || ChevronRight;
-          const barWidthPercent = Math.max(8, Math.round((step.count / maxCount) * 100));
-          const isFinal = index === data.steps.length - 1;
+      {firstCount === 0 ? (
+        <EmptyChart icon={Filter} title="No funnel events in this period">
+          Steps fill in as customers open shop pages and start booking.
+        </EmptyChart>
+      ) : (
+        <>
+          {biggestDrop && biggestDropFrom ? (
+            <p className="mt-5 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-foreground">
+              <TrendingDown className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+              <span>
+                <span className="font-semibold">Biggest drop:</span> {biggestDrop.dropOffRate}% drop
+                off between {biggestDropFrom.label.toLowerCase()} and{" "}
+                {biggestDrop.label.toLowerCase()}.
+              </span>
+            </p>
+          ) : null}
 
-          return (
-            <div key={step.step} className="group relative">
-              <div className="flex flex-col gap-2 rounded-xl border border-neutral-100 bg-neutral-50/50 p-3 transition-colors hover:border-emerald-200 hover:bg-emerald-50/20 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700 shadow-2xs">
-                    <Icon className="size-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-neutral-900">
-                        {step.order}. {step.label}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-neutral-500">
-                      {step.count.toLocaleString()} visits/events
+          <ol className="mt-5">
+            {steps.map((step, index) => {
+              const isBiggestDrop = index === biggestDropIndex && index > 0;
+              return (
+                <li key={step.step}>
+                  {index > 0 ? (
+                    <p
+                      className={cn(
+                        "flex items-center gap-1.5 py-1.5 pl-2.5 text-xs",
+                        isBiggestDrop ? "font-semibold text-warning" : "text-muted-foreground",
+                      )}
+                    >
+                      <ArrowDown className="size-3.5" aria-hidden />
+                      {step.dropOffRate}% drop off
+                    </p>
+                  ) : null}
+
+                  <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_7rem]">
+                    <span
+                      className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground tabular-nums"
+                      aria-hidden
+                    >
+                      {step.order}
                     </span>
-                  </div>
-                </div>
+                    <span className="truncate text-sm font-medium text-foreground">
+                      <span className="sr-only">Step {step.order}: </span>
+                      {step.label}
+                    </span>
 
-                {/* Progress bar & conversion stats */}
-                <div className="flex flex-1 items-center gap-4 sm:max-w-md sm:justify-end">
-                  <div className="hidden h-2.5 flex-1 overflow-hidden rounded-full bg-neutral-200 sm:block">
+                    {/* Bar: full row width under 640px, its own column above. */}
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-500"
-                      style={{ width: `${barWidthPercent}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-3 text-right">
-                    <div>
-                      <span className="block text-[10px] text-neutral-400">vs Previous</span>
-                      <span className="text-xs font-bold text-neutral-800">
-                        {index === 0 ? "100%" : `${step.conversionFromPrevious}%`}
-                      </span>
+                      className="col-span-3 col-start-1 row-start-2 h-2 rounded-r-[4px] bg-neutral-100 sm:col-span-1 sm:col-start-3 sm:row-start-1"
+                      aria-hidden
+                    >
+                      <div
+                        className="h-full rounded-r-[4px] bg-green-600"
+                        style={{ width: `${Math.max(1, (step.count / maxCount) * 100)}%` }}
+                      />
                     </div>
-                    <div className="w-16">
-                      <span className="block text-[10px] text-neutral-400">Total Conv.</span>
-                      <span className="text-xs font-bold text-emerald-700">
-                        {step.conversionFromFirst}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Drop-off connector line */}
-              {!isFinal && step.dropOffRate > 0 && (
-                <div className="ml-7 flex items-center gap-2 py-1 text-[11px] text-rose-500">
-                  <ArrowDown className="size-3 text-rose-400" />
-                  <span className="font-medium">{step.dropOffRate}% drop-off to next step</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                    <p className="text-right text-sm tabular-nums sm:col-start-4">
+                      <span className="font-semibold text-foreground">
+                        {step.count.toLocaleString()}
+                      </span>{" "}
+                      <span className="text-muted-foreground">
+                        · {index === 0 ? "100" : step.conversionFromFirst}%
+                      </span>
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+            Counts are tracked events at each step; the percentage is their share of shop views.
+          </p>
+        </>
+      )}
+    </Panel>
   );
 }

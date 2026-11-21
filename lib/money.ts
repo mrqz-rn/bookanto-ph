@@ -36,3 +36,16 @@ export function formatPeso(centavos: Centavos): string {
 }
 
 export const formatCentavos = formatPeso;
+
+const compactPesos = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** Formats centavos as short pesos for chart axes and tight spaces: "₱950", "₱12.5K", "₱1.2M". */
+export function formatPesoCompact(centavos: Centavos): string {
+  if (!Number.isSafeInteger(centavos)) throw new RangeError("Centavos must be an integer");
+  return compactPesos.format(centavos / 100);
+}

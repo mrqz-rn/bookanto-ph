@@ -54,102 +54,149 @@ export async function getAdminNavCounts(): Promise<Record<AdminNavBadge, number>
   };
 }
 
-export async function getAdminOverviewStats() {
+/** A figure for the last 7 days beside the same figure for the 7 days before. */
+export type WeekOverWeek = { current: number; previous: number };
+
+/**
+ * Everything on the admin overview: work waiting, the last 7 days against the
+ * 7 before, the queues' first items and (for super admins) recent activity.
+ */
+export async function getAdminOverviewStats({ includeAudit }: { includeAudit: boolean }) {
+  const last7 = sql`now() - interval '7 days'`;
+  const last14 = sql`now() - interval '14 days'`;
+
   const [
     [pendingShops],
-    [activeShops],
-    [totalUsers],
-    [totalBookings],
     [openReports],
     [activeFraud],
-    [activeAnnounce],
+    [liveShops],
+    [customers],
+    [bookingTotals],
+    [week],
+    [newCustomers],
   ] = await Promise.all([
     db.select({ count: count() }).from(shops).where(eq(shops.status, "pending")),
+    db.select({ count: count() }).from(reports).where(eq(reports.status, "open")),
+    db.select({ count: count() }).from(fraudSignals).where(eq(fraudSignals.status, "active")),
     db.select({ count: count() }).from(shops).where(eq(shops.status, "active")),
     db.select({ count: count() }).from(users).where(isNull(users.deletedAt)),
     db.select({ count: count() }).from(bookings),
-    db.select({ count: count() }).from(reports).where(eq(reports.status, "open")),
-    db.select({ count: count() }).from(fraudSignals).where(eq(fraudSignals.status, "active")),
-    db.select({ count: count() }).from(announcements).where(eq(announcements.isActive, true)),
+    db
+      .select({
+        madeNow: sql<number>`count(*) filter (where ${bookings.createdAt} >= ${last7})::int`,
+        madePrev: sql<number>`count(*) filter (where ${bookings.createdAt} >= ${last14} and ${bookings.createdAt} < ${last7})::int`,
+        doneNow: sql<number>`count(*) filter (where ${bookings.status} = 'completed' and ${bookings.startAt} >= ${last7})::int`,
+        donePrev: sql<number>`count(*) filter (where ${bookings.status} = 'completed' and ${bookings.startAt} >= ${last14} and ${bookings.startAt} < ${last7})::int`,
+        valueNow: sql<number>`coalesce(sum(${bookings.totalCentavos}) filter (where ${bookings.status} = 'completed' and ${bookings.startAt} >= ${last7}), 0)::int`,
+        valuePrev: sql<number>`coalesce(sum(${bookings.totalCentavos}) filter (where ${bookings.status} = 'completed' and ${bookings.startAt} >= ${last14} and ${bookings.startAt} < ${last7}), 0)::int`,
+      })
+      .from(bookings)
+      .where(or(sql`${bookings.createdAt} >= ${last14}`, sql`${bookings.startAt} >= ${last14}`)),
+    db
+      .select({
+        now: sql<number>`count(*) filter (where ${users.createdAt} >= ${last7})::int`,
+        prev: sql<number>`count(*) filter (where ${users.createdAt} < ${last7})::int`,
+      })
+      .from(users)
+      .where(
+        and(
+          isNull(users.deletedAt),
+          eq(users.platformRole, "customer"),
+          sql`${users.createdAt} >= ${last14}`,
+        ),
+      ),
   ]);
 
-  const recentPending = await db
-    .select({
-      id: shops.id,
-      name: shops.name,
-      slug: shops.slug,
-      status: shops.status,
-      createdAt: shops.createdAt,
-      ownerName: users.name,
-      ownerPhone: users.phone,
-    })
-    .from(shops)
-    .innerJoin(users, eq(shops.ownerId, users.id))
-    .where(eq(shops.status, "pending"))
-    .orderBy(desc(shops.createdAt))
-    .limit(5);
+  const documentCount = sql<number>`(
+    select count(*)::int from ${media}
+    where ${media.ownerType} = 'shop' and ${media.ownerId} = ${shops.id} and ${media.kind} = 'document'
+  )`;
 
-  const recentReports = await db
-    .select({
-      id: reports.id,
-      reason: reports.reason,
-      status: reports.status,
-      bookingId: reports.bookingId,
-      reviewId: reports.reviewId,
-      createdAt: reports.createdAt,
-      reporterName: users.name,
-    })
-    .from(reports)
-    .innerJoin(users, eq(reports.reporterId, users.id))
-    .where(eq(reports.status, "open"))
-    .orderBy(desc(reports.createdAt))
-    .limit(5);
-
-  const recentSignals = await db
-    .select({
-      id: fraudSignals.id,
-      targetType: fraudSignals.targetType,
-      targetId: fraudSignals.targetId,
-      signalType: fraudSignals.signalType,
-      severity: fraudSignals.severity,
-      score: fraudSignals.score,
-      status: fraudSignals.status,
-      createdAt: fraudSignals.createdAt,
-    })
-    .from(fraudSignals)
-    .where(eq(fraudSignals.status, "active"))
-    .orderBy(desc(fraudSignals.score), desc(fraudSignals.createdAt))
-    .limit(5);
-
-  const recentAudit = await db
-    .select({
-      id: auditLog.id,
-      action: auditLog.action,
-      targetType: auditLog.targetType,
-      targetId: auditLog.targetId,
-      createdAt: auditLog.createdAt,
-      actorName: users.name,
-      actorEmail: users.email,
-    })
-    .from(auditLog)
-    .leftJoin(users, eq(auditLog.actorId, users.id))
-    .orderBy(desc(auditLog.createdAt))
-    .limit(8);
+  const [recentPending, recentReports, recentSignals, recentAudit] = await Promise.all([
+    db
+      .select({
+        id: shops.id,
+        name: shops.name,
+        createdAt: shops.createdAt,
+        ownerName: users.name,
+        cityName: cities.name,
+        documentCount,
+      })
+      .from(shops)
+      .innerJoin(users, eq(shops.ownerId, users.id))
+      .leftJoin(cities, eq(shops.cityId, cities.id))
+      .where(eq(shops.status, "pending"))
+      .orderBy(asc(shops.createdAt))
+      .limit(5),
+    db
+      .select({
+        id: reports.id,
+        reason: reports.reason,
+        bookingId: reports.bookingId,
+        reviewId: reports.reviewId,
+        createdAt: reports.createdAt,
+        reporterName: users.name,
+      })
+      .from(reports)
+      .innerJoin(users, eq(reports.reporterId, users.id))
+      .where(eq(reports.status, "open"))
+      .orderBy(asc(reports.createdAt))
+      .limit(5),
+    db
+      .select({
+        id: fraudSignals.id,
+        targetType: fraudSignals.targetType,
+        signalType: fraudSignals.signalType,
+        severity: fraudSignals.severity,
+        score: fraudSignals.score,
+        createdAt: fraudSignals.createdAt,
+      })
+      .from(fraudSignals)
+      .where(eq(fraudSignals.status, "active"))
+      .orderBy(desc(fraudSignals.score), desc(fraudSignals.createdAt))
+      .limit(5),
+    includeAudit
+      ? db
+          .select({
+            id: auditLog.id,
+            action: auditLog.action,
+            targetType: auditLog.targetType,
+            createdAt: auditLog.createdAt,
+            actorName: users.name,
+            actorEmail: users.email,
+          })
+          .from(auditLog)
+          .leftJoin(users, eq(auditLog.actorId, users.id))
+          .orderBy(desc(auditLog.createdAt))
+          .limit(8)
+      : Promise.resolve(null),
+  ]);
 
   return {
-    pendingShopsCount: pendingShops?.count ?? 0,
-    activeShopsCount: activeShops?.count ?? 0,
-    totalUsersCount: totalUsers?.count ?? 0,
-    totalBookingsCount: totalBookings?.count ?? 0,
-    openReportsCount: openReports?.count ?? 0,
-    activeFraudSignalsCount: activeFraud?.count ?? 0,
-    activeAnnouncementsCount: activeAnnounce?.count ?? 0,
+    attention: {
+      pendingShops: pendingShops?.count ?? 0,
+      openReports: openReports?.count ?? 0,
+      activeFraud: activeFraud?.count ?? 0,
+    },
+    lastWeek: {
+      bookingsMade: { current: week?.madeNow ?? 0, previous: week?.madePrev ?? 0 },
+      bookingsCompleted: { current: week?.doneNow ?? 0, previous: week?.donePrev ?? 0 },
+      completedValueCentavos: { current: week?.valueNow ?? 0, previous: week?.valuePrev ?? 0 },
+      newCustomers: { current: newCustomers?.now ?? 0, previous: newCustomers?.prev ?? 0 },
+    } satisfies Record<string, WeekOverWeek>,
+    totals: {
+      liveShops: liveShops?.count ?? 0,
+      users: customers?.count ?? 0,
+      bookings: bookingTotals?.count ?? 0,
+    },
     recentPending,
     recentReports,
     recentSignals,
     recentAudit,
   };
 }
+
+export type AdminOverviewStats = Awaited<ReturnType<typeof getAdminOverviewStats>>;
 
 /**
  * Lists shops with filtering by status and text search.
@@ -170,7 +217,13 @@ export async function getAdminShops(params: {
   if (params.search?.trim()) {
     const q = `%${params.search.trim()}%`;
     conditions.push(
-      or(ilike(shops.name, q), ilike(shops.slug, q), ilike(shops.phone, q), ilike(users.name, q)),
+      or(
+        ilike(shops.name, q),
+        ilike(shops.slug, q),
+        ilike(shops.phone, q),
+        ilike(users.name, q),
+        ilike(users.email, q),
+      ),
     );
   }
 
@@ -205,7 +258,8 @@ export async function getAdminShops(params: {
     .leftJoin(cities, eq(shops.cityId, cities.id))
     .leftJoin(barangays, eq(shops.barangayId, barangays.id))
     .where(whereClause)
-    .orderBy(desc(shops.createdAt))
+    // Shops in review are a queue: oldest first. Everything else: newest first.
+    .orderBy(params.status === "pending" ? asc(shops.createdAt) : desc(shops.createdAt))
     .limit(limit)
     .offset(offset);
 
@@ -239,6 +293,28 @@ export async function getAdminShops(params: {
     })),
   };
 }
+
+/** How many shops have each status, for the directory's tabs. */
+export async function getAdminShopStatusCounts(): Promise<Record<ShopStatus | "all", number>> {
+  const rows = await db
+    .select({ status: shops.status, count: count() })
+    .from(shops)
+    .groupBy(shops.status);
+  const counts: Record<ShopStatus | "all", number> = {
+    all: 0,
+    draft: 0,
+    pending: 0,
+    active: 0,
+    suspended: 0,
+  };
+  for (const row of rows) {
+    counts[row.status] = row.count;
+    counts.all += row.count;
+  }
+  return counts;
+}
+
+export type AdminShopListItem = Awaited<ReturnType<typeof getAdminShops>>["shops"][number];
 
 /**
  * Fetches a single shop's full profile for admin verification and review.

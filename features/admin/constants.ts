@@ -65,6 +65,14 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ label: string; items: readonly Ad
   },
 ];
 
+/** Status words shop owners also see in their dashboard. */
+export const SHOP_STATUS_LABELS: Record<ShopStatus, string> = {
+  pending: "In review",
+  active: "Active",
+  draft: "Draft",
+  suspended: "Suspended",
+};
+
 export const SHOP_STATUS_COLORS: Record<ShopStatus, string> = {
   draft: "bg-neutral-100 text-neutral-700 border-neutral-300",
   pending: "bg-amber-50 text-amber-800 border-amber-300",
@@ -106,3 +114,46 @@ export const PLATFORM_ROLE_COLORS: Record<PlatformRole, string> = {
 };
 
 export const DEFAULT_PAGE_SIZE = 20;
+
+/** Plain names for fraud signal types. */
+export const FRAUD_SIGNAL_LABELS: Record<string, string> = {
+  excessive_cancellations: "Many cancellations",
+  excessive_no_shows: "Many no-shows",
+  burst_bookings: "Burst of bookings",
+  dispute_rate_high: "High dispute rate",
+  review_abuse: "Review abuse",
+  suspicious_velocity: "Suspicious activity speed",
+  custom: "Flagged by an admin",
+};
+
+/** Plain sentences for the audit actions an admin most often scans for. */
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  "shop.create": "registered a shop",
+  "shop.submitted_for_verification": "sent a shop for review",
+  "shop.verified": "approved a shop",
+  "shop.rejected": "rejected a shop",
+  "shop.suspended": "suspended a shop",
+  "shop.unsuspended": "restored a shop",
+  "shop.document_uploaded": "uploaded a verification document",
+  "shop.document_removed": "removed a verification document",
+  "user.registered": "created an account",
+  "user.role_changed": "changed a user's role",
+  "user.suspended": "suspended a user",
+  "user.unsuspended": "restored a user",
+  "user.account_deleted": "deleted their account",
+  "report.resolved": "resolved a report",
+  "review.reported": "reported a review",
+  "booking.viewed_by_admin": "opened a booking",
+  "payment.refunded": "refunded a payment",
+  "admin.signed_in": "signed in to the admin console",
+  "admin.two_factor_enabled": "turned on two-factor sign-in",
+  "auth.password_reset_requested": "asked for a password reset link",
+  "auth.password_reset": "reset their password",
+};
+
+/** A plain label for an audit action; unknown ones read as words ("shop update hours"). */
+export function auditActionLabel(action: string): string {
+  const known = AUDIT_ACTION_LABELS[action];
+  if (known) return known;
+  return action.replace(/[._]/g, " ").replace(/\s+/g, " ").trim();
+}

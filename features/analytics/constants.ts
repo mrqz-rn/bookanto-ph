@@ -1,12 +1,12 @@
 import type { FunnelStep } from "@/lib/db/schema/enums";
 
 export const ANALYTICS_PERIODS = [
-  { key: "today", label: "Today" },
-  { key: "7d", label: "Last 7 Days" },
-  { key: "30d", label: "Last 30 Days" },
-  { key: "90d", label: "Last 90 Days" },
-  { key: "pilot", label: "Pilot to Date" },
-  { key: "all", label: "All Time" },
+  { key: "today", label: "Today", shortLabel: "Today" },
+  { key: "7d", label: "Last 7 Days", shortLabel: "7 days" },
+  { key: "30d", label: "Last 30 Days", shortLabel: "30 days" },
+  { key: "90d", label: "Last 90 Days", shortLabel: "90 days" },
+  { key: "pilot", label: "Pilot to Date", shortLabel: "Pilot to date" },
+  { key: "all", label: "All Time", shortLabel: "All time" },
 ] as const;
 
 export type AnalyticsPeriod = (typeof ANALYTICS_PERIODS)[number]["key"];

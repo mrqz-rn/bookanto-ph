@@ -1,10 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { TrendingUp, Users } from "lucide-react";
+import { Users } from "lucide-react";
+import { cn } from "cn";
 
 import { formatPeso } from "@/lib/money";
-import type { CohortReportData, CustomerCohort } from "../constants";
+
+import type { CohortReportData } from "../constants";
+import { EmptyChart, Panel, PanelHeader } from "./panel";
 
 type CohortMatrixTableProps = {
   data: CohortReportData;
@@ -12,151 +15,145 @@ type CohortMatrixTableProps = {
   description?: string;
 };
 
-function getRetentionShading(rate: number): string {
-  if (rate === 0) return "bg-neutral-50 text-neutral-400";
-  if (rate < 15) return "bg-emerald-50 text-emerald-800";
-  if (rate < 30) return "bg-emerald-100 text-emerald-900 font-medium";
-  if (rate < 50) return "bg-emerald-200 text-emerald-950 font-semibold";
-  return "bg-emerald-600 text-white font-bold";
+// One hue, light to dark. Dark steps take white text, light steps navy.
+const RETENTION_BINS = [
+  { label: "0%", test: (r: number) => r === 0, cell: "bg-neutral-50 text-muted-foreground" },
+  { label: "Under 15%", test: (r: number) => r < 15, cell: "bg-green-50 text-foreground" },
+  { label: "15–30%", test: (r: number) => r < 30, cell: "bg-green-100 text-foreground" },
+  { label: "30–50%", test: (r: number) => r < 50, cell: "bg-green-300 text-foreground" },
+  { label: "50% and up", test: () => true, cell: "bg-green-700 font-semibold text-white" },
+] as const;
+
+function retentionCell(rate: number): string {
+  return (RETENTION_BINS.find((bin) => bin.test(rate)) ?? RETENTION_BINS[4]).cell;
 }
 
 export function CohortMatrixTable({
   data,
-  title = "Customer Cohort Retention",
-  description = "Percentage of acquired customers who returned to book services over subsequent periods",
+  title = "Customer retention",
+  description = "Of the customers who first booked in each month, the share who booked again in the months after.",
 }: CohortMatrixTableProps) {
-  const periodPrefix = data.periodType === "weekly" ? "W" : "M";
+  const headingId = React.useId();
+  const prefix = data.periodType === "weekly" ? "W" : "M";
+  const periodWord = data.periodType === "weekly" ? "week" : "month";
+
+  const summary = [
+    { label: "Customers tracked", value: data.summary.totalTrackedCustomers.toLocaleString() },
+    { label: `Back in ${prefix}1`, value: `${data.summary.averageM1Retention}%` },
+    { label: `Back in ${prefix}2`, value: `${data.summary.averageM2Retention}%` },
+    { label: `Back in ${prefix}3`, value: `${data.summary.averageM3Retention}%` },
+    { label: "Average lifetime value", value: formatPeso(data.summary.overallAverageLtvCentavos) },
+  ];
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xs sm:p-6">
-      {/* Header & Cohort Summary */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-display text-lg font-bold text-neutral-900 sm:text-xl">{title}</h2>
-          <p className="text-xs text-neutral-500">{description}</p>
-        </div>
-
-        {/* Quick Summary Badges */}
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-center sm:text-left">
-            <span className="block text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
-              Avg M1 Retention
-            </span>
-            <span className="font-display text-base font-bold text-emerald-700 sm:text-lg">
-              {data.summary.averageM1Retention}%
-            </span>
-          </div>
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-center sm:text-left">
-            <span className="block text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
-              Overall Avg LTV
-            </span>
-            <span className="font-display text-base font-bold text-neutral-900 sm:text-lg">
-              {formatPeso(data.summary.overallAverageLtvCentavos)}
-            </span>
-          </div>
-        </div>
-      </div>
+    <Panel aria-labelledby={headingId}>
+      <PanelHeader id={headingId} title={title} description={description} />
 
       {data.cohorts.length === 0 ? (
-        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 py-12 text-center">
-          <Users className="size-8 text-neutral-400" />
-          <h3 className="mt-2 text-sm font-semibold text-neutral-900">No Cohort History Yet</h3>
-          <p className="mt-1 max-w-sm text-xs text-neutral-500">
-            As new customers book appointments across weeks and months, retention cohorts will
-            automatically generate here.
-          </p>
-        </div>
+        <EmptyChart icon={Users} title="No cohort history yet">
+          Cohorts appear once customers have booked across at least one {periodWord}.
+        </EmptyChart>
       ) : (
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-xs">
-            <thead>
-              <tr className="border-b border-neutral-200 text-[11px] font-bold text-neutral-500 uppercase">
-                <th className="py-2.5 pr-4">Cohort</th>
-                <th className="px-3 py-2.5 text-center">Customers</th>
-                <th className="px-3 py-2.5 text-right">Total GMV</th>
-                <th className="px-3 py-2.5 text-right">Avg LTV</th>
-                {Array.from({ length: data.maxPeriods }).map((_, idx) => (
-                  <th key={idx} className="px-2 py-2.5 text-center">
-                    {periodPrefix}
-                    {idx}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {data.cohorts.map((cohort: CustomerCohort) => (
-                <tr key={cohort.cohortKey} className="hover:bg-neutral-50/50">
-                  <td className="py-3 pr-4 font-bold text-neutral-900">{cohort.cohortLabel}</td>
-                  <td className="px-3 py-3 text-center font-medium text-neutral-700">
-                    {cohort.cohortSize.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-3 text-right font-medium text-neutral-700">
-                    {formatPeso(cohort.totalSpendCentavos)}
-                  </td>
-                  <td className="px-3 py-3 text-right font-semibold text-emerald-800">
-                    {formatPeso(cohort.cumulativeLtvCentavos)}
-                  </td>
+        <>
+          <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
+            {summary.map((item) => (
+              <div key={item.label}>
+                <dt className="text-sm text-muted-foreground">{item.label}</dt>
+                <dd className="mt-0.5 text-xl font-semibold text-foreground">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
 
-                  {/* Retention cells across periods */}
-                  {Array.from({ length: data.maxPeriods }).map((_, pIdx) => {
-                    const activity = cohort.retentionPeriods.find((p) => p.periodIndex === pIdx);
-                    if (!activity) {
+          <div className="-mx-5 mt-6 overflow-x-auto px-5 sm:mx-0 sm:px-0">
+            <table className="w-full min-w-[42rem] border-separate border-spacing-[2px] text-left text-sm">
+              <caption className="sr-only">
+                Retention by first-booking {periodWord}. {prefix}0 is the first {periodWord}.
+              </caption>
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th scope="col" className="sticky left-0 bg-card py-2 pr-4 font-medium">
+                    First booked
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-right font-medium">
+                    Customers
+                  </th>
+                  <th scope="col" className="px-2 py-2 text-right font-medium">
+                    Revenue
+                  </th>
+                  <th scope="col" className="px-2 py-2 pr-4 text-right font-medium">
+                    Lifetime value
+                  </th>
+                  {Array.from({ length: data.maxPeriods }, (_, i) => (
+                    <th key={i} scope="col" className="w-14 py-2 text-center font-medium">
+                      {prefix}
+                      {i}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {data.cohorts.map((cohort) => (
+                  <tr key={cohort.cohortKey}>
+                    <th
+                      scope="row"
+                      className="sticky left-0 bg-card py-1.5 pr-4 font-medium whitespace-nowrap text-foreground"
+                    >
+                      {cohort.cohortLabel}
+                    </th>
+                    <td className="px-2 py-1.5 text-right text-foreground">
+                      {cohort.cohortSize.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-muted-foreground">
+                      {formatPeso(cohort.totalSpendCentavos)}
+                    </td>
+                    <td className="px-2 py-1.5 pr-4 text-right text-muted-foreground">
+                      {formatPeso(cohort.cumulativeLtvCentavos)}
+                    </td>
+                    {Array.from({ length: data.maxPeriods }, (_, i) => {
+                      const activity = cohort.retentionPeriods.find((p) => p.periodIndex === i);
+                      if (!activity) {
+                        return (
+                          <td key={i} className="text-center text-muted-foreground">
+                            <span aria-hidden>·</span>
+                            <span className="sr-only">Not reached yet</span>
+                          </td>
+                        );
+                      }
                       return (
-                        <td key={pIdx} className="px-1 py-1 text-center">
-                          <span className="block rounded-lg py-1.5 text-[11px] text-neutral-300">
-                            -
-                          </span>
+                        <td
+                          key={i}
+                          className={cn(
+                            "rounded-[4px] py-1.5 text-center text-xs",
+                            retentionCell(activity.retentionRate),
+                          )}
+                          title={`${activity.activeUsers.toLocaleString()} customers · ${formatPeso(activity.spendCentavos)}`}
+                        >
+                          {activity.retentionRate}%
                         </td>
                       );
-                    }
-
-                    const shadingClass = getRetentionShading(activity.retentionRate);
-
-                    return (
-                      <td key={pIdx} className="px-1 py-1 text-center">
-                        <div
-                          className={`rounded-lg py-1.5 transition-colors ${shadingClass}`}
-                          title={`${activity.activeUsers} active customer(s) • ${formatPeso(activity.spendCentavos)}`}
-                        >
-                          <span className="text-[11px]">{activity.retentionRate}%</span>
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Heatmap Legend */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
-        <div className="flex items-center gap-1.5">
-          <TrendingUp className="size-3.5 text-neutral-400" />
-          <span>Heatmap shows customer retention percentage per subsequent period</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase">Legend:</span>
-          <div className="flex items-center gap-1">
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
-              0%
-            </span>
-            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-800">
-              &lt;15%
-            </span>
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-900">
-              15-30%
-            </span>
-            <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] text-emerald-950">
-              30-50%
-            </span>
-            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-              50%+
-            </span>
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </div>
-    </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
+            <span>Share who booked again:</span>
+            <ul className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {RETENTION_BINS.map((bin) => (
+                <li key={bin.label} className="flex items-center gap-1.5">
+                  <span
+                    className={cn("size-3 rounded-[3px] ring-1 ring-border ring-inset", bin.cell)}
+                    aria-hidden
+                  />
+                  {bin.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+    </Panel>
   );
 }

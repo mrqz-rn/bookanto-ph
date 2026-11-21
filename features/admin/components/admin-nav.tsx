@@ -161,6 +161,44 @@ function NavGroups({ user, counts, pathname }: AdminNavProps & { pathname: strin
   );
 }
 
+/** The sidebar's foot: who is signed in, the live site and sign out, in one row. */
+function CompactAccount({ user }: { user: AdminNavUser }) {
+  const iconButton = cn(
+    "grid size-11 shrink-0 place-items-center rounded-lg text-neutral-600 transition-colors duration-150 motion-safe:active:scale-95 [@media(pointer:fine)]:size-10",
+    focusRing,
+  );
+  return (
+    <div className="flex items-center gap-1 border-t border-neutral-200 pt-3">
+      <div className="min-w-0 flex-1 px-2">
+        <p className="truncate text-sm font-semibold text-navy-900">
+          {user.name || "Administrator"}
+        </p>
+        {user.email && <p className="truncate text-xs text-neutral-500">{user.email}</p>}
+      </div>
+      <Link
+        href="/"
+        target="_blank"
+        rel="noopener"
+        aria-label="View the live site (opens in a new tab)"
+        title="View the live site"
+        className={cn(iconButton, "hover:bg-neutral-100 hover:text-navy-900")}
+      >
+        <ExternalLink aria-hidden className="size-4" />
+      </Link>
+      <form action={signOutAction}>
+        <button
+          type="submit"
+          aria-label="Sign out"
+          title="Sign out"
+          className={cn(iconButton, "hover:bg-red-50 hover:text-red-700")}
+        >
+          <LogOut aria-hidden className="size-4" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function AccountPanel({ user }: { user: AdminNavUser }) {
   return (
     <div className="space-y-1 border-t border-neutral-200 pt-3">
@@ -216,8 +254,8 @@ export function AdminSidebar({ user, counts }: AdminNavProps) {
       <nav aria-label="Admin console" className="mt-2 flex-1 overflow-y-auto px-3 pb-3">
         <NavGroups user={user} counts={counts} pathname={pathname} />
       </nav>
-      <div className="px-3 pb-4">
-        <AccountPanel user={user} />
+      <div className="px-3 pb-3">
+        <CompactAccount user={user} />
       </div>
     </aside>
   );
