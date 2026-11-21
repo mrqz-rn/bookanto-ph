@@ -215,14 +215,12 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
                   <li key={svc.id} className="relative flex items-center gap-4 py-4">
                     {svc.coverPhotoUrl && (
                       <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-slate-100 sm:size-20">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={svc.coverPhotoUrl}
                           alt={svc.name}
-                          className="size-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
+                          fill
+                          sizes="(min-width: 640px) 80px, 64px"
+                          className="object-cover"
                         />
                       </div>
                     )}
