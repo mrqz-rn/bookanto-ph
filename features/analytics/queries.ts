@@ -18,6 +18,7 @@ import { formatManila, manilaDate, manilaToUtc, manilaWeekday, startOfManilaDay 
 import {
   FUNNEL_STEP_METADATA,
   PILOT_TARGETS,
+  PILOT_WINDOW,
   type AnalyticsPeriod,
   type BookingFunnelData,
   type CohortPeriodActivity,
@@ -58,9 +59,9 @@ export function resolvePeriodDateRange(period: AnalyticsPeriod = "30d"): {
       return { startDate, endDate: now, periodLabel: "Last 90 Days" };
     }
     case "pilot": {
-      // Pilot start date (or 180 days ago for full pilot window)
-      const startDate = new Date(now.getTime() - 180 * 86_400_000);
-      return { startDate, endDate: now, periodLabel: "Pilot to Date" };
+      const startDate = manilaToUtc(PILOT_WINDOW.from);
+      const endDate = manilaToUtc(PILOT_WINDOW.to, "23:59:59.999");
+      return { startDate, endDate, periodLabel: "Pilot" };
     }
     case "all":
     default: {

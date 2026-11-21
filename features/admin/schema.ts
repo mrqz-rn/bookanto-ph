@@ -130,7 +130,3 @@ export const createCustomFraudSignalSchema = z.strictObject({
 });
 
 export const runFraudScanSchema = z.strictObject({});
-
-export const logAdminBookingViewSchema = z.strictObject({
-  bookingId: z.string().uuid("Invalid booking ID."),
-});

@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   deleteCategory,
-  logAdminBookingView,
   rejectShop,
   resolveDispute,
   suspendShop,
@@ -45,7 +44,6 @@ describe("admin actions", () => {
   const targetCategoryId = randomUUID();
   const targetReportId = randomUUID();
   const targetSignalId = randomUUID();
-  const targetBookingId = randomUUID();
 
   const mockAdminUser: authModule.CurrentUser = {
     id: adminId,
@@ -349,11 +347,6 @@ describe("admin actions", () => {
         expect(res.data.scanned).toBe(5);
         expect(res.data.newSignals).toBe(2);
       }
-    });
-
-    it("logs admin booking view to audit log", async () => {
-      const res = await logAdminBookingView({ bookingId: targetBookingId });
-      expect(res.ok).toBe(true);
     });
   });
 });

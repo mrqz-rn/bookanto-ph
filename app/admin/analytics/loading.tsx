@@ -4,13 +4,16 @@ const PANEL = "rounded-xl border border-border bg-card p-5 shadow-2xs sm:p-6";
 
 export default function Loading() {
   return (
-    <div className="space-y-8" aria-busy="true" aria-label="Loading pilot metrics">
+    <div className="space-y-8" aria-busy="true" aria-label="Loading metrics">
       <div className="space-y-5">
         <div>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="mt-2 h-4 w-full max-w-md" />
         </div>
-        <Skeleton className="h-[52px] w-full rounded-xl sm:w-[34rem] lg:h-11" />
+        <div className="space-y-3">
+          <Skeleton className="h-[54px] w-full rounded-xl sm:w-64" />
+          <Skeleton className="h-4 w-72" />
+        </div>
       </div>
 
       <div className={PANEL}>

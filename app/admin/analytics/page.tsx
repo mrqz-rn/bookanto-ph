@@ -1,38 +1,50 @@
 import type { Metadata } from "next";
 
-import { PilotMetricsDashboard } from "@/features/analytics/components/pilot-metrics-dashboard";
-import { type AnalyticsPeriod } from "@/features/analytics/constants";
+import { MetricsDashboard } from "@/features/analytics/components/metrics-dashboard";
+import { PILOT_WINDOW, type MetricsRange } from "@/features/analytics/constants";
 import { getCohortReport, getPilotMetrics } from "@/features/analytics/queries";
+import { metricsRangeSchema } from "@/features/analytics/schema";
 import { requireUser } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
+import { manilaDate, manilaToUtc } from "@/lib/time";
 
 export const metadata: Metadata = {
-  title: "Pilot Metrics & Analytics | Admin Console | BooKanto",
+  title: "Metrics | Admin Console | BooKanto",
   description:
-    "Pilot launch KPIs, booking funnel conversion events, and customer cohort retention reports.",
+    "Pilot targets, bookings and revenue, the booking funnel and customer retention, for the pilot or any date range.",
 };
 
 type PageProps = {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ from?: string | string[]; to?: string | string[] }>;
 };
-
-const VALID_PERIODS: readonly AnalyticsPeriod[] = ["today", "7d", "30d", "90d", "pilot", "all"];
 
 export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
   const user = await requireUser();
   assertCan(user, "admin:analytics.read");
 
-  const { period = "30d" } = await searchParams;
-  const selectedPeriod: AnalyticsPeriod = VALID_PERIODS.includes(period as AnalyticsPeriod)
-    ? (period as AnalyticsPeriod)
-    : "30d";
+  // No dates, or dates that don't parse, show the whole pilot.
+  const { from, to } = await searchParams;
+  const asked = from !== undefined || to !== undefined;
+  const parsed = metricsRangeSchema.safeParse({ from, to });
+  const range: MetricsRange = parsed.success
+    ? { kind: "custom", ...parsed.data }
+    : { kind: "pilot", ...PILOT_WINDOW };
 
   const [metrics, cohorts] = await Promise.all([
-    getPilotMetrics({ period: selectedPeriod }),
+    getPilotMetrics({
+      startDate: manilaToUtc(range.from),
+      endDate: manilaToUtc(range.to, "23:59:59.999"),
+    }),
     getCohortReport({ periodType: "monthly", periodsCount: 6 }),
   ]);
 
   return (
-    <PilotMetricsDashboard metrics={metrics} cohorts={cohorts} currentPeriod={selectedPeriod} />
+    <MetricsDashboard
+      metrics={metrics}
+      cohorts={cohorts}
+      range={range}
+      today={manilaDate(new Date())}
+      invalidRange={asked && !parsed.success}
+    />
   );
 }

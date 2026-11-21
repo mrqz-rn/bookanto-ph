@@ -12,7 +12,7 @@ export default function AnalyticsError({
 }) {
   return (
     <div className="space-y-8">
-      <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Pilot metrics</h1>
+      <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Metrics</h1>
       <div className="flex flex-col items-start gap-4 rounded-xl border border-border bg-card p-6 shadow-2xs">
         <ChartColumn className="size-6 text-muted-foreground" aria-hidden />
         <div>

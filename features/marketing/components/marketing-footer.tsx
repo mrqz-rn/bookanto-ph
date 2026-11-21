@@ -34,7 +34,7 @@ export function MarketingFooter() {
           <div className="col-span-12 flex items-center gap-4 lg:col-span-5 lg:items-start">
             <LogoMark className="h-12 rounded-[13px] ring-1 ring-white/20" />
             <p className="max-w-[38ch] text-[16px] leading-relaxed text-white/80">
-              Online booking for barbershops, salons and local service shops in the Philippines.
+              Online booking for local service shops in the Philippines.
             </p>
           </div>
           <nav aria-label="Footer" className="col-span-12 lg:col-span-6 lg:col-start-7">

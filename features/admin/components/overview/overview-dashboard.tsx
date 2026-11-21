@@ -351,7 +351,7 @@ export function OverviewDashboard({ stats }: { stats: AdminOverviewStats }) {
               focusRing,
             )}
           >
-            Pilot metrics
+            Metrics
             <ChevronRight aria-hidden className="size-4" />
           </Link>
         </div>

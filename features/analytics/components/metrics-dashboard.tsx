@@ -3,57 +3,59 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CircleCheck, Info, MapPin, Tag } from "lucide-react";
+import { ArrowRight, CircleAlert, CircleCheck, Info, MapPin, Tag } from "lucide-react";
 import { cn } from "cn";
 
 import { formatPeso } from "@/lib/money";
+import { formatManilaDateRange } from "@/lib/time";
 
 import {
-  ANALYTICS_PERIODS,
   PILOT_TARGETS,
-  type AnalyticsPeriod,
   type CohortReportData,
+  type MetricsRange,
   type PilotMetricsData,
 } from "../constants";
 import { CohortMatrixTable } from "./cohort-matrix-table";
 import { DailyTrendChart } from "./daily-trend-chart";
 import { FunnelChart } from "./funnel-chart";
+import { MetricsRangeFilter } from "./metrics-range-filter";
 import { Panel, PanelHeader } from "./panel";
 import { RankedBars } from "./ranked-bars";
 
-type PilotMetricsDashboardProps = {
+type MetricsDashboardProps = {
   metrics: PilotMetricsData;
   cohorts: CohortReportData;
-  currentPeriod: AnalyticsPeriod;
+  range: MetricsRange;
+  /** Today's Manila date ("yyyy-MM-dd"). */
+  today: string;
+  /** The URL asked for dates that don't parse, so the page fell back to the pilot. */
+  invalidRange?: boolean;
 };
-
-/** Periods long enough to compare against the whole pilot's targets. */
-const PILOT_WIDE_PERIODS: readonly AnalyticsPeriod[] = ["pilot", "all"];
 
 function percentOf(value: number, target: number): number {
   return target > 0 ? Math.round((value / target) * 100) : 0;
 }
 
-export function PilotMetricsDashboard({
+export function MetricsDashboard({
   metrics,
   cohorts,
-  currentPeriod,
-}: PilotMetricsDashboardProps) {
+  range,
+  today,
+  invalidRange = false,
+}: MetricsDashboardProps) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
-  const [pendingPeriod, setPendingPeriod] = React.useState<AnalyticsPeriod | null>(null);
-  const shownPeriod = isPending && pendingPeriod ? pendingPeriod : currentPeriod;
 
-  const changePeriod = (period: AnalyticsPeriod) => {
-    if (period === currentPeriod) return;
-    setPendingPeriod(period);
+  const selectRange = (next: { from: string; to: string } | null) => {
+    const query = next ? `?${new URLSearchParams(next).toString()}` : "";
     startTransition(() => {
-      router.push(`/admin/analytics?period=${period}`, { scroll: false });
+      router.push(`/admin/analytics${query}`, { scroll: false });
     });
   };
 
-  const periodText = metrics.periodLabel.toLowerCase();
-  const isPilotWide = PILOT_WIDE_PERIODS.includes(currentPeriod);
+  const isPilot = range.kind === "pilot";
+  const rangeLabel = formatManilaDateRange(range.from, range.to);
+  const periodText = isPilot ? `during the pilot (${rangeLabel})` : `from ${rangeLabel}`;
 
   const targets = [
     {
@@ -124,43 +126,33 @@ export function PilotMetricsDashboard({
     <div className="space-y-8">
       <header className="space-y-5">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-            Pilot metrics
-          </h1>
+          <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Metrics</h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Shops, bookings, revenue and repeat customers against the targets for the 6-month pilot.
+            Shops, bookings, revenue and repeat customers, measured against the pilot&apos;s
+            targets.
           </p>
         </div>
 
         {/* One filter row above everything it scopes. */}
-        <div
-          role="group"
-          aria-label="Period"
-          className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1 shadow-2xs sm:inline-flex"
-        >
-          {ANALYTICS_PERIODS.map((p) => {
-            const isActive = shownPeriod === p.key;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => changePeriod(p.key)}
-                className={cn(
-                  "h-11 flex-1 rounded-lg px-3 text-sm font-semibold whitespace-nowrap transition-[background-color,color,transform] active:scale-[0.97] sm:flex-none lg:h-9",
-                  isActive
-                    ? "bg-secondary text-secondary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                {p.shortLabel}
-              </button>
-            );
-          })}
-        </div>
+        <MetricsRangeFilter
+          key={`${range.kind}:${range.from}:${range.to}`}
+          range={range}
+          today={today}
+          onSelect={selectRange}
+        />
+
+        {invalidRange ? (
+          <p
+            role="status"
+            className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-foreground"
+          >
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+            Those dates didn&apos;t work, so this shows the whole pilot. Pick a custom range again.
+          </p>
+        ) : null}
       </header>
 
-      {/* While the next period loads, keep this one on screen, dimmed. */}
+      {/* While the next range loads, keep this one on screen, dimmed. */}
       <div
         aria-busy={isPending}
         className={cn("space-y-8 transition-opacity", isPending && "opacity-60")}
@@ -172,7 +164,7 @@ export function PilotMetricsDashboard({
             description={`Progress toward the pilot's four targets, ${periodText}.`}
           />
 
-          {!isPilotWide ? (
+          {!isPilot ? (
             <div className="mt-4 flex flex-col gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-start gap-2">
                 <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -180,10 +172,10 @@ export function PilotMetricsDashboard({
               </p>
               <button
                 type="button"
-                onClick={() => changePeriod("pilot")}
+                onClick={() => selectRange(null)}
                 className="inline-flex min-h-11 shrink-0 items-center gap-1 self-start font-semibold text-green-700 underline-offset-4 hover:underline sm:self-auto lg:min-h-9"
               >
-                See pilot to date
+                See the whole pilot
                 <ArrowRight className="size-3.5" aria-hidden />
               </button>
             </div>
@@ -250,7 +242,7 @@ export function PilotMetricsDashboard({
             ))}
           </dl>
 
-          <DailyTrendChart data={metrics.dailyTrends} periodLabel={metrics.periodLabel} />
+          <DailyTrendChart data={metrics.dailyTrends} periodLabel={periodText} />
         </Panel>
 
         <FunnelChart data={metrics.funnel} />

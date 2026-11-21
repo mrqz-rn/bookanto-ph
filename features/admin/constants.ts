@@ -37,7 +37,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<{ label: string; items: readonly Ad
     label: "Overview",
     items: [
       { href: "/admin", label: "Overview", icon: "LayoutDashboard", exact: true },
-      { href: "/admin/analytics", label: "Pilot metrics", icon: "BarChart3" },
+      { href: "/admin/analytics", label: "Metrics", icon: "BarChart3" },
     ],
   },
   {
@@ -114,6 +114,34 @@ export const PLATFORM_ROLE_COLORS: Record<PlatformRole, string> = {
 };
 
 export const DEFAULT_PAGE_SIZE = 20;
+
+/** The bookings list's tabs, each a group of statuses (or open disputes). */
+export const ADMIN_BOOKING_VIEWS = [
+  "all",
+  "waiting",
+  "confirmed",
+  "completed",
+  "disputed",
+  "closed",
+] as const;
+export type AdminBookingView = (typeof ADMIN_BOOKING_VIEWS)[number];
+
+/** How the booking happens, in plain words. */
+export const BOOKING_TYPE_LABELS: Record<string, string> = {
+  slot: "At the shop",
+  home: "Home service",
+  quote: "Priced on request",
+  queue: "Walk-in queue",
+};
+
+export const ADMIN_BOOKING_VIEW_LABELS: Record<AdminBookingView, string> = {
+  waiting: "Waiting for reply",
+  confirmed: "Confirmed",
+  completed: "Completed",
+  disputed: "Disputed",
+  closed: "Cancelled or missed",
+  all: "All bookings",
+};
 
 /** Plain names for fraud signal types. */
 export const FRAUD_SIGNAL_LABELS: Record<string, string> = {

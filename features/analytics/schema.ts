@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ANALYTICS_EVENT_NAMES, FUNNEL_STEPS } from "@/lib/db/schema/enums";
+import { isCalendarDate } from "@/lib/time";
 
 export const trackEventSchema = z.strictObject({
   eventName: z.enum(ANALYTICS_EVENT_NAMES),
@@ -36,3 +37,15 @@ export const cohortFilterSchema = z.strictObject({
 });
 
 export type CohortFilterInput = z.infer<typeof cohortFilterSchema>;
+
+const calendarDate = z.string().refine(isCalendarDate, "Enter a date as yyyy-mm-dd.");
+
+/** A custom date range on the admin metrics page (?from=…&to=…), in Manila dates. */
+export const metricsRangeSchema = z
+  .strictObject({ from: calendarDate, to: calendarDate })
+  .refine((range) => range.from <= range.to, {
+    path: ["to"],
+    message: "The end date must be on or after the start date.",
+  });
+
+export type MetricsRangeInput = z.infer<typeof metricsRangeSchema>;

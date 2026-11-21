@@ -62,3 +62,29 @@ export function formatTimeAgo(instant: Instant): string {
   if (diffDays < 30) return `${diffDays}d ago`;
   return formatDate(instant);
 }
+
+/** True for a real "yyyy-MM-dd" calendar date (rejects "2026-02-30"). */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year = 0, month = 0, day = 0] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+/**
+ * Formats two Manila calendar dates ("yyyy-MM-dd") as one range, naming the
+ * month and year only once when they repeat: "Nov 3–21, 2026",
+ * "Oct 1 – Nov 21, 2026", "Dec 1, 2026 – Jul 31, 2027".
+ */
+export function formatManilaDateRange(from: string, to: string): string {
+  const start = manilaToUtc(from, "12:00");
+  const end = manilaToUtc(to, "12:00");
+  if (from === to) return formatDate(start);
+  if (from.slice(0, 4) !== to.slice(0, 4)) return `${formatDate(start)} – ${formatDate(end)}`;
+  if (from.slice(0, 7) !== to.slice(0, 7)) {
+    return `${formatDate(start, "MMM d")} – ${formatDate(end)}`;
+  }
+  return `${formatDate(start, "MMM d")}–${formatDate(end, "d, yyyy")}`;
+}

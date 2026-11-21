@@ -27,7 +27,6 @@ import {
   createCustomFraudSignalSchema,
   deleteAnnouncementSchema,
   deleteCategorySchema,
-  logAdminBookingViewSchema,
   rejectShopSchema,
   resolveDisputeSchema,
   runFraudScanSchema,
@@ -880,31 +879,5 @@ export async function triggerFraudScan(
     revalidatePath("/admin/fraud");
 
     return { scanned: result.scanned, newSignals: result.newSignals };
-  });
-}
-
-/**
- * Logs an admin's view of a booking into the immutable audit log.
- * As specified in development plan: "every admin view of a booking writes audit_log".
- */
-export async function logAdminBookingView(
-  input: unknown,
-): Promise<ActionResult<{ success: true }>> {
-  return runAction(async () => {
-    const user = await requireUser();
-    const { bookingId } = parseInput(logAdminBookingViewSchema, input);
-
-    if (user.platformRole !== "admin" && user.platformRole !== "super_admin") {
-      throw new AppError("FORBIDDEN", "Only admins can log admin booking views.");
-    }
-
-    await writeAudit({
-      actorId: user.id,
-      action: "booking.viewed_by_admin",
-      targetType: "booking",
-      targetId: bookingId,
-    });
-
-    return { success: true };
   });
 }

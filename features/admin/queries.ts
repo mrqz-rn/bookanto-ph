@@ -35,7 +35,7 @@ import type {
   UserStatus,
 } from "@/lib/db/schema/enums";
 
-import { DEFAULT_PAGE_SIZE, type AdminNavBadge } from "./constants";
+import { DEFAULT_PAGE_SIZE, type AdminBookingView, type AdminNavBadge } from "./constants";
 
 /**
  * Overview statistics and urgent action queues for the admin dashboard.
@@ -628,11 +628,57 @@ export async function getAdminUserById(userId: string) {
   };
 }
 
-/**
- * Lists all platform bookings with status filtering and text search.
- */
+const WAITING_STATUSES: BookingStatus[] = ["requested", "quoted"];
+const CLOSED_STATUSES: BookingStatus[] = ["cancelled", "declined", "expired", "no_show"];
+
+/** An open report on the booking: the only case where admins may read its chat. */
+const hasOpenDispute = sql<boolean>`exists (
+  select 1 from ${reports}
+  where ${reports.bookingId} = ${bookings.id} and ${reports.status} = 'open'
+)`;
+
+function bookingViewCondition(view: AdminBookingView) {
+  switch (view) {
+    case "waiting":
+      return inArray(bookings.status, WAITING_STATUSES);
+    case "confirmed":
+      return eq(bookings.status, "confirmed");
+    case "completed":
+      return eq(bookings.status, "completed");
+    case "closed":
+      return inArray(bookings.status, CLOSED_STATUSES);
+    case "disputed":
+      return hasOpenDispute;
+    default:
+      return undefined;
+  }
+}
+
+/** How many bookings each tab holds. */
+export async function getAdminBookingViewCounts(): Promise<Record<AdminBookingView, number>> {
+  const [row] = await db
+    .select({
+      all: sql<number>`count(*)::int`,
+      waiting: sql<number>`count(*) filter (where ${inArray(bookings.status, WAITING_STATUSES)})::int`,
+      confirmed: sql<number>`count(*) filter (where ${bookings.status} = 'confirmed')::int`,
+      completed: sql<number>`count(*) filter (where ${bookings.status} = 'completed')::int`,
+      closed: sql<number>`count(*) filter (where ${inArray(bookings.status, CLOSED_STATUSES)})::int`,
+      disputed: sql<number>`count(*) filter (where ${hasOpenDispute})::int`,
+    })
+    .from(bookings);
+  return {
+    all: row?.all ?? 0,
+    waiting: row?.waiting ?? 0,
+    confirmed: row?.confirmed ?? 0,
+    completed: row?.completed ?? 0,
+    closed: row?.closed ?? 0,
+    disputed: row?.disputed ?? 0,
+  };
+}
+
+/** Bookings across every shop, newest first, for the admin list. */
 export async function getAdminBookings(params: {
-  status?: string;
+  view?: AdminBookingView;
   search?: string;
   limit?: number;
   offset?: number;
@@ -641,12 +687,18 @@ export async function getAdminBookings(params: {
   const offset = params.offset ?? 0;
 
   const conditions = [];
-  if (params.status && params.status !== "all") {
-    conditions.push(eq(bookings.status, params.status as BookingStatus));
-  }
+  const viewCondition = bookingViewCondition(params.view ?? "all");
+  if (viewCondition) conditions.push(viewCondition);
   if (params.search?.trim()) {
     const q = `%${params.search.trim()}%`;
-    conditions.push(or(ilike(bookings.refCode, q), ilike(users.name, q), ilike(shops.name, q)));
+    conditions.push(
+      or(
+        ilike(bookings.refCode, q),
+        ilike(users.name, q),
+        ilike(users.email, q),
+        ilike(shops.name, q),
+      ),
+    );
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -664,17 +716,15 @@ export async function getAdminBookings(params: {
       refCode: bookings.refCode,
       status: bookings.status,
       startAt: bookings.startAt,
-      endAt: bookings.endAt,
       totalCentavos: bookings.totalCentavos,
       quotedPriceCentavos: bookings.quotedPriceCentavos,
       createdAt: bookings.createdAt,
       customerName: users.name,
-      customerPhone: users.phone,
+      customerEmail: users.email,
       shopName: shops.name,
-      shopSlug: shops.slug,
       serviceName: services.name,
-      serviceDurationMin: services.durationMin,
       bookingType: services.bookingType,
+      hasOpenDispute,
     })
     .from(bookings)
     .innerJoin(users, eq(bookings.customerId, users.id))
@@ -685,14 +735,14 @@ export async function getAdminBookings(params: {
     .limit(limit)
     .offset(offset);
 
-  return {
-    total: totalResult?.count ?? 0,
-    bookings: rows,
-  };
+  return { total: totalResult?.count ?? 0, bookings: rows };
 }
 
+export type AdminBookingListItem = Awaited<ReturnType<typeof getAdminBookings>>["bookings"][number];
+
 /**
- * Fetches booking details, event lifecycle log, disputes, and audit history.
+ * One booking with its status history and reports. Chat is separate
+ * (getAdminBookingMessages): admins may read it only while a dispute is open.
  */
 export async function getAdminBookingById(bookingId: string) {
   const [booking] = await db
@@ -708,7 +758,6 @@ export async function getAdminBookingById(bookingId: string) {
       quotedPriceCentavos: bookings.quotedPriceCentavos,
       expiresAt: bookings.expiresAt,
       createdAt: bookings.createdAt,
-      updatedAt: bookings.updatedAt,
       customerId: users.id,
       customerName: users.name,
       customerPhone: users.phone,
@@ -717,9 +766,7 @@ export async function getAdminBookingById(bookingId: string) {
       shopName: shops.name,
       shopSlug: shops.slug,
       shopPhone: shops.phone,
-      serviceId: services.id,
       serviceName: services.name,
-      servicePriceCentavos: services.priceCentavos,
       serviceDurationMin: services.durationMin,
       bookingType: services.bookingType,
     })
@@ -732,7 +779,7 @@ export async function getAdminBookingById(bookingId: string) {
 
   if (!booking) return null;
 
-  const [events, disputes, chatMessages] = await Promise.all([
+  const [events, disputes, [messageCount]] = await Promise.all([
     db
       .select({
         id: bookingEvents.id,
@@ -757,27 +804,36 @@ export async function getAdminBookingById(bookingId: string) {
       })
       .from(reports)
       .innerJoin(users, eq(reports.reporterId, users.id))
-      .where(eq(reports.bookingId, bookingId)),
-    db
-      .select({
-        id: messages.id,
-        body: messages.body,
-        imagePath: messages.imagePath,
-        createdAt: messages.createdAt,
-        senderName: users.name,
-      })
-      .from(messages)
-      .innerJoin(users, eq(messages.senderId, users.id))
-      .where(eq(messages.bookingId, bookingId))
-      .orderBy(asc(messages.createdAt)),
+      .where(eq(reports.bookingId, bookingId))
+      .orderBy(desc(reports.createdAt)),
+    db.select({ count: count() }).from(messages).where(eq(messages.bookingId, bookingId)),
   ]);
 
   return {
     ...booking,
     events,
     disputes,
-    messages: chatMessages,
+    hasOpenDispute: disputes.some((d) => d.status === "open"),
+    messageCount: messageCount?.count ?? 0,
   };
+}
+
+export type AdminBookingDetail = NonNullable<Awaited<ReturnType<typeof getAdminBookingById>>>;
+
+/** A booking's chat. Call only after can(user, "message:read", { disputed: true }). */
+export async function getAdminBookingMessages(bookingId: string) {
+  return db
+    .select({
+      id: messages.id,
+      body: messages.body,
+      imagePath: messages.imagePath,
+      createdAt: messages.createdAt,
+      senderName: users.name,
+    })
+    .from(messages)
+    .innerJoin(users, eq(messages.senderId, users.id))
+    .where(eq(messages.bookingId, bookingId))
+    .orderBy(asc(messages.createdAt));
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 
+import { FilterBar } from "@/features/admin/components/directory";
 import {
   ShopResults,
   ShopResultsSkeleton,
@@ -55,11 +56,10 @@ export default async function AdminShopsPage({ searchParams }: AdminShopsPagePro
         </p>
       </header>
 
-      {/* Side by side only where the full tab bar and the search both fit. */}
-      <div className="flex flex-col gap-4 min-[1400px]:flex-row min-[1400px]:items-center min-[1400px]:justify-between">
+      <FilterBar>
         <ShopStatusTabs counts={counts} filters={filters} />
         <ShopSearch filters={filters} />
-      </div>
+      </FilterBar>
 
       {/* A new key per filter, so switching tabs or pages shows the skeleton. */}
       <Suspense

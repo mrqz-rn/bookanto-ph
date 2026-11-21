@@ -6,7 +6,6 @@ import {
   createCustomFraudSignalSchema,
   deleteAnnouncementSchema,
   deleteCategorySchema,
-  logAdminBookingViewSchema,
   rejectShopSchema,
   resolveDisputeSchema,
   runFraudScanSchema,
@@ -223,11 +222,6 @@ describe("admin schemas", () => {
     it("accepts run fraud scan payload", () => {
       const parsed = runFraudScanSchema.parse({});
       expect(parsed).toEqual({});
-    });
-
-    it("accepts log admin booking view payload", () => {
-      const parsed = logAdminBookingViewSchema.parse({ bookingId: validUuid });
-      expect(parsed.bookingId).toBe(validUuid);
     });
 
     it("accepts valid custom fraud signal creation", () => {

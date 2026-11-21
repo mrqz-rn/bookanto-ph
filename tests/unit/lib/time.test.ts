@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import { formatManila, manilaDate, manilaToUtc, manilaWeekday, startOfManilaDay } from "@/lib/time";
+import {
+  formatManila,
+  formatManilaDateRange,
+  isCalendarDate,
+  manilaDate,
+  manilaToUtc,
+  manilaWeekday,
+  startOfManilaDay,
+} from "@/lib/time";
+
+describe("formatManilaDateRange", () => {
+  it("names the month and year once when they repeat", () => {
+    expect(formatManilaDateRange("2026-11-03", "2026-11-21")).toBe("Nov 3–21, 2026");
+    expect(formatManilaDateRange("2026-10-01", "2026-11-21")).toBe("Oct 1 – Nov 21, 2026");
+    expect(formatManilaDateRange("2026-12-01", "2027-07-31")).toBe("Dec 1, 2026 – Jul 31, 2027");
+    expect(formatManilaDateRange("2026-11-21", "2026-11-21")).toBe("Nov 21, 2026");
+  });
+});
+
+describe("isCalendarDate", () => {
+  it("accepts real dates only", () => {
+    expect(isCalendarDate("2026-12-01")).toBe(true);
+    expect(isCalendarDate("2028-02-29")).toBe(true);
+    expect(isCalendarDate("2026-02-30")).toBe(false);
+    expect(isCalendarDate("2026-1-5")).toBe(false);
+    expect(isCalendarDate("yesterday")).toBe(false);
+  });
+});
 
 // 2026-12-06 is a Sunday. 17:00 UTC that day is 1:00 AM Monday in Manila.
 const sundayAfternoon = "2026-12-06T06:30:00Z";

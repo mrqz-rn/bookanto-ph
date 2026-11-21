@@ -32,10 +32,11 @@ describe("Analytics query logic and calculations", () => {
       expect(diffDays).toBe(90);
     });
 
-    it("resolves pilot to date window", () => {
+    it("resolves the pilot to Dec 1, 2026 – Jul 31, 2027 in Manila time", () => {
       const { startDate, endDate, periodLabel } = resolvePeriodDateRange("pilot");
-      expect(periodLabel).toBe("Pilot to Date");
-      expect(startDate.getTime()).toBeLessThan(endDate.getTime());
+      expect(periodLabel).toBe("Pilot");
+      expect(startDate.toISOString()).toBe("2026-11-30T16:00:00.000Z");
+      expect(endDate.toISOString()).toBe("2027-07-31T15:59:59.999Z");
     });
 
     it("resolves all time window", () => {

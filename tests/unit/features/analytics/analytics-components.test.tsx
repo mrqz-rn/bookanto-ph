@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
+import type * as React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CohortMatrixTable } from "@/features/analytics/components/cohort-matrix-table";
 import { FunnelChart } from "@/features/analytics/components/funnel-chart";
-import { PilotMetricsDashboard } from "@/features/analytics/components/pilot-metrics-dashboard";
+import { MetricsDashboard } from "@/features/analytics/components/metrics-dashboard";
 import { ShopAnalyticsView } from "@/features/analytics/components/shop-analytics-view";
 import type {
   BookingFunnelData,
@@ -13,9 +14,10 @@ import type {
   ShopAnalyticsData,
 } from "@/features/analytics/constants";
 
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push,
     refresh: vi.fn(),
   }),
 }));
@@ -315,17 +317,24 @@ describe("Analytics UI Components", () => {
     });
   });
 
-  describe("PilotMetricsDashboard", () => {
-    it("renders the pilot targets with their progress", () => {
+  describe("MetricsDashboard", () => {
+    const pilotRange = { kind: "pilot", from: "2026-12-01", to: "2027-07-31" } as const;
+    const customRange = { kind: "custom", from: "2026-10-01", to: "2026-11-21" } as const;
+    const renderDashboard = (props: Partial<React.ComponentProps<typeof MetricsDashboard>> = {}) =>
       render(
-        <PilotMetricsDashboard
+        <MetricsDashboard
           metrics={mockPilotMetrics}
           cohorts={mockCohortData}
-          currentPeriod="30d"
+          range={pilotRange}
+          today="2026-11-21"
+          {...props}
         />,
       );
 
-      expect(screen.getByRole("heading", { level: 1, name: "Pilot metrics" })).toBeInTheDocument();
+    it("renders the pilot targets with their progress", () => {
+      renderDashboard();
+
+      expect(screen.getByRole("heading", { level: 1, name: "Metrics" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Pilot targets" })).toBeInTheDocument();
       expect(screen.getByText("Active partner shops")).toBeInTheDocument();
       expect(screen.getByText("Gross merchandise value")).toBeInTheDocument();
@@ -341,13 +350,7 @@ describe("Analytics UI Components", () => {
     });
 
     it("shows every section on one page, without tabs", () => {
-      render(
-        <PilotMetricsDashboard
-          metrics={mockPilotMetrics}
-          cohorts={mockCohortData}
-          currentPeriod="30d"
-        />,
-      );
+      renderDashboard();
 
       for (const name of [
         "Bookings and revenue",
@@ -361,42 +364,65 @@ describe("Analytics UI Components", () => {
       expect(screen.getByText("Quezon City")).toBeInTheDocument();
     });
 
-    it("marks the selected period and offers pilot to date for short periods", () => {
-      render(
-        <PilotMetricsDashboard
-          metrics={mockPilotMetrics}
-          cohorts={mockCohortData}
-          currentPeriod="30d"
-        />,
-      );
+    it("defaults to the pilot window, Dec 2026 to Jul 2027", () => {
+      renderDashboard();
 
-      expect(screen.getByRole("button", { name: "30 days" })).toHaveAttribute(
+      expect(screen.getByRole("button", { name: "Pilot" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByText("the pilot, Dec 1, 2026 – Jul 31, 2027")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /See the whole pilot/ })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
+    });
+
+    it("applies a custom date range through the URL", () => {
+      renderDashboard();
+
+      fireEvent.click(screen.getByRole("button", { name: "Custom range" }));
+      // Defaults to the last 30 days.
+      expect(screen.getByLabelText("From")).toHaveValue("2026-10-23");
+      expect(screen.getByLabelText("To")).toHaveValue("2026-11-21");
+
+      fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-10-01" } });
+      fireEvent.click(screen.getByRole("button", { name: "Show these dates" }));
+
+      expect(push).toHaveBeenCalledWith("/admin/analytics?from=2026-10-01&to=2026-11-21", {
+        scroll: false,
+      });
+    });
+
+    it("shows an error under the end date when it comes before the start", () => {
+      renderDashboard();
+
+      fireEvent.click(screen.getByRole("button", { name: "Custom range" }));
+      fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-10-01" } });
+      fireEvent.click(screen.getByRole("button", { name: "Show these dates" }));
+
+      expect(screen.getByText("Pick a date on or after the start date.")).toBeInTheDocument();
+      expect(screen.getByLabelText("To")).toHaveAttribute("aria-invalid", "true");
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("keeps a custom range open and offers the whole pilot", () => {
+      renderDashboard({ range: customRange });
+
+      expect(screen.getByRole("button", { name: "Custom range" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
-      expect(screen.getByRole("button", { name: /See pilot to date/ })).toBeInTheDocument();
+      expect(screen.getByLabelText("From")).toHaveValue("2026-10-01");
+      expect(screen.getByText("Oct 1 – Nov 21, 2026")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /See the whole pilot/ }));
+      expect(push).toHaveBeenCalledWith("/admin/analytics", { scroll: false });
     });
 
-    it("hides the pilot-to-date hint when the period already covers the pilot", () => {
-      render(
-        <PilotMetricsDashboard
-          metrics={mockPilotMetrics}
-          cohorts={mockCohortData}
-          currentPeriod="pilot"
-        />,
-      );
+    it("says so when the URL's dates didn't parse", () => {
+      renderDashboard({ invalidRange: true });
 
-      expect(screen.queryByRole("button", { name: /See pilot to date/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Those dates didn't work");
     });
 
     it("switches the trend chart between bookings and revenue", () => {
-      render(
-        <PilotMetricsDashboard
-          metrics={mockPilotMetrics}
-          cohorts={mockCohortData}
-          currentPeriod="30d"
-        />,
-      );
+      renderDashboard();
 
       const revenue = screen.getByRole("button", { name: "Revenue" });
       fireEvent.click(revenue);

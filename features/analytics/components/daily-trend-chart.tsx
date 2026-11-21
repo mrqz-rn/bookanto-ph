@@ -119,6 +119,7 @@ function readout(bucket: Bucket): string {
 
 type DailyTrendChartProps = {
   data: DailyTrend[];
+  /** Reads after "Bookings per day, …", e.g. "from Oct 1 – Nov 21, 2026". */
   periodLabel: string;
 };
 
@@ -131,7 +132,7 @@ export function DailyTrendChart({ data, periodLabel }: DailyTrendChartProps) {
   if (buckets.length === 0 || totalBookings === 0) {
     return (
       <EmptyChart icon={ChartColumn} title="No bookings in this period">
-        Pick a longer period above, or check back once customers start booking.
+        Pick other dates above, or check back once customers start booking.
       </EmptyChart>
     );
   }
@@ -233,7 +234,7 @@ export function DailyTrendChart({ data, periodLabel }: DailyTrendChartProps) {
           <div
             role="slider"
             tabIndex={0}
-            aria-label={`${metric === "bookings" ? "Bookings" : "Revenue"} per ${unit}, ${periodLabel.toLowerCase()}. Use the arrow keys to read each ${unit === "day" ? "day" : "column"}.`}
+            aria-label={`${metric === "bookings" ? "Bookings" : "Revenue"} per ${unit}, ${periodLabel}. Use the arrow keys to read each ${unit === "day" ? "day" : "column"}.`}
             aria-valuemin={0}
             aria-valuemax={buckets.length - 1}
             aria-valuenow={activeIndex ?? buckets.length - 1}

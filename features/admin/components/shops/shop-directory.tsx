@@ -1,19 +1,22 @@
-import Form from "next/form";
 import Link from "next/link";
 import { cn } from "cn";
-import { ChevronLeft, ChevronRight, FileText, Search, X } from "lucide-react";
+import { FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ShopStatus } from "@/lib/db/schema/enums";
 import { formatDate } from "@/lib/time";
 
 import { SHOP_STATUS_COLORS, SHOP_STATUS_LABELS } from "../../constants";
 import type { AdminShopListItem } from "../../queries";
-
-const focusRing =
-  "outline-none focus-visible:ring-2 focus-visible:ring-green-700 focus-visible:ring-offset-2";
+import {
+  DirectorySearch,
+  EmptyState,
+  FilterTabs,
+  focusRing,
+  Pagination,
+  ResultsSummary,
+} from "../directory";
 
 /** Tab order: the queue first, then the rest. */
 const TABS: Array<{ value: ShopStatus | "all"; label: string }> = [
@@ -51,79 +54,29 @@ export function ShopStatusTabs({
 }) {
   const current = filters.status ?? "all";
   return (
-    <nav aria-label="Shop status" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <ul className="flex w-max gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1">
-        {TABS.map((tab) => {
-          const active = current === tab.value;
-          const count = counts[tab.value];
-          return (
-            <li key={tab.value}>
-              <Link
-                href={shopsHref({
-                  status: tab.value === "all" ? undefined : tab.value,
-                  q: filters.q,
-                })}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm whitespace-nowrap transition-colors duration-150 [@media(pointer:fine)]:min-h-10",
-                  focusRing,
-                  active
-                    ? "bg-white font-semibold text-navy-900 shadow-xs"
-                    : "text-neutral-600 hover:bg-white/60 hover:text-navy-900",
-                )}
-              >
-                {tab.label}
-                <span
-                  className={cn(
-                    "min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums",
-                    tab.value === "pending" && count > 0
-                      ? "bg-amber-100 text-amber-900"
-                      : active
-                        ? "bg-neutral-100 text-neutral-700"
-                        : "bg-neutral-200/70 text-neutral-600",
-                  )}
-                >
-                  {count}
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <FilterTabs
+      label="Shop status"
+      tabs={TABS.map((tab) => ({
+        href: shopsHref({ status: tab.value === "all" ? undefined : tab.value, q: filters.q }),
+        label: tab.label,
+        count: counts[tab.value],
+        active: current === tab.value,
+        attention: tab.value === "pending",
+      }))}
+    />
   );
 }
 
 export function ShopSearch({ filters }: { filters: ShopDirectoryFilters }) {
   return (
-    <Form
+    <DirectorySearch
       action="/admin/shops"
-      role="search"
-      className="flex w-full gap-2 min-[1400px]:w-auto sm:max-w-lg"
-    >
-      {filters.status && <input type="hidden" name="status" value={filters.status} />}
-      <div className="relative min-w-0 flex-1 min-[1400px]:w-80">
-        <label htmlFor="shop-search" className="sr-only">
-          Search shops
-        </label>
-        <Search
-          aria-hidden
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400"
-        />
-        <Input
-          id="shop-search"
-          name="q"
-          type="search"
-          defaultValue={filters.q}
-          placeholder="Shop, owner, email or phone"
-          className="h-11 pl-9 text-base sm:text-sm"
-          maxLength={100}
-        />
-      </div>
-      <Button type="submit" variant="outline" className="shrink-0">
-        Search
-      </Button>
-    </Form>
+      id="shop-search"
+      label="Search shops"
+      placeholder="Shop, owner, email or phone"
+      defaultValue={filters.q}
+      keep={{ status: filters.status }}
+    />
   );
 }
 
@@ -296,37 +249,6 @@ function ShopCards({ shops }: { shops: AdminShopListItem[] }) {
   );
 }
 
-function Pagination({
-  filters,
-  total,
-  pageSize,
-}: {
-  filters: ShopDirectoryFilters;
-  total: number;
-  pageSize: number;
-}) {
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (pages <= 1) return null;
-  const link = (page: number, label: string, Icon: typeof ChevronLeft, iconFirst: boolean) => (
-    <Button asChild variant="outline">
-      <Link href={shopsHref({ ...filters, page })} rel={iconFirst ? "prev" : "next"}>
-        {iconFirst && <Icon aria-hidden />}
-        {label}
-        {!iconFirst && <Icon aria-hidden />}
-      </Link>
-    </Button>
-  );
-  return (
-    <nav aria-label="Pages" className="flex items-center justify-between gap-3">
-      <div>{filters.page > 1 && link(filters.page - 1, "Previous", ChevronLeft, true)}</div>
-      <p className="text-sm text-neutral-600">
-        Page {filters.page} of {pages}
-      </p>
-      <div>{filters.page < pages && link(filters.page + 1, "Next", ChevronRight, false)}</div>
-    </nav>
-  );
-}
-
 function EmptyResults({ filters }: { filters: ShopDirectoryFilters }) {
   let title = "No shops yet";
   let body = "Shops appear here as soon as an owner starts registering.";
@@ -343,20 +265,14 @@ function EmptyResults({ filters }: { filters: ShopDirectoryFilters }) {
     title = `No ${SHOP_STATUS_LABELS[filters.status].toLowerCase()} shops`;
     body = "Try another tab.";
   }
-  return (
-    <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center">
-      <p className="font-semibold text-navy-900">{title}</p>
-      <p className="mt-1 text-sm text-neutral-600">{body}</p>
-      {(filters.q || filters.page > 1) && (
-        <Button asChild variant="outline" className="mt-5">
-          <Link href={shopsHref({ status: filters.status })}>
-            <X aria-hidden />
-            {filters.q ? "Clear search" : "First page"}
-          </Link>
-        </Button>
-      )}
-    </div>
-  );
+  const reset =
+    filters.q || filters.page > 1
+      ? {
+          href: shopsHref({ status: filters.status }),
+          label: filters.q ? "Clear search" : "First page",
+        }
+      : undefined;
+  return <EmptyState title={title} body={body} reset={reset} />;
 }
 
 export function ShopResults({
@@ -372,18 +288,24 @@ export function ShopResults({
 }) {
   if (shops.length === 0) return <EmptyResults filters={filters} />;
 
-  const first = (filters.page - 1) * pageSize + 1;
-  const last = first + shops.length - 1;
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-600" aria-live="polite">
-        Showing {first}–{last} of {total} {total === 1 ? "shop" : "shops"}
-        {filters.q && <> matching “{filters.q}”</>}
-        {filters.status === "pending" && " · oldest first"}
-      </p>
+      <ResultsSummary
+        first={(filters.page - 1) * pageSize + 1}
+        count={shops.length}
+        total={total}
+        noun={["shop", "shops"]}
+        query={filters.q}
+        note={filters.status === "pending" ? "oldest first" : undefined}
+      />
       <ShopTable shops={shops} />
       <ShopCards shops={shops} />
-      <Pagination filters={filters} total={total} pageSize={pageSize} />
+      <Pagination
+        page={filters.page}
+        total={total}
+        pageSize={pageSize}
+        hrefFor={(page) => shopsHref({ ...filters, page })}
+      />
     </div>
   );
 }
@@ -437,19 +359,6 @@ export function ShopResultsSkeleton() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** The filter bar while the page first loads. */
-export function ShopFiltersSkeleton() {
-  return (
-    <div
-      className="flex flex-col gap-4 min-[1400px]:flex-row min-[1400px]:items-center min-[1400px]:justify-between"
-      aria-hidden
-    >
-      <Skeleton className="h-12 w-full max-w-xl rounded-xl" />
-      <Skeleton className="h-11 w-full rounded-md min-[1400px]:w-96 sm:max-w-lg" />
     </div>
   );
 }

@@ -5,11 +5,18 @@ export const ANALYTICS_PERIODS = [
   { key: "7d", label: "Last 7 Days", shortLabel: "7 days" },
   { key: "30d", label: "Last 30 Days", shortLabel: "30 days" },
   { key: "90d", label: "Last 90 Days", shortLabel: "90 days" },
-  { key: "pilot", label: "Pilot to Date", shortLabel: "Pilot to date" },
+  { key: "pilot", label: "Pilot", shortLabel: "Pilot" },
   { key: "all", label: "All Time", shortLabel: "All time" },
 ] as const;
 
 export type AnalyticsPeriod = (typeof ANALYTICS_PERIODS)[number]["key"];
+
+/** The pilot's dates, as Manila calendar days (first and last day included). */
+export const PILOT_WINDOW = { from: "2026-12-01", to: "2027-07-31" } as const;
+
+/** What the admin metrics page shows: the whole pilot, or dates the admin picked. */
+export type MetricsRange =
+  { kind: "pilot"; from: string; to: string } | { kind: "custom"; from: string; to: string };
 
 export const PILOT_TARGETS = {
   shops: 50,
