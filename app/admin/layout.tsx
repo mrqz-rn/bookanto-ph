@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { AdminHeader } from "@/features/admin/components/admin-header";
-import { AdminNav } from "@/features/admin/components/admin-nav";
+import {
+  AdminSidebar,
+  AdminTopBar,
+  type AdminNavUser,
+} from "@/features/admin/components/admin-nav";
+import { getAdminNavCounts } from "@/features/admin/queries";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -19,26 +23,29 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   // Admin access guard: user must have platform role of 'admin' or 'super_admin'
-  const isPlatformAdmin = user.platformRole === "admin" || user.platformRole === "super_admin";
-
-  if (!isPlatformAdmin) {
+  if (user.platformRole !== "admin" && user.platformRole !== "super_admin") {
     redirect("/");
   }
 
-  const isSuperAdmin = user.platformRole === "super_admin";
+  const navUser: AdminNavUser = {
+    name: user.name,
+    email: user.email,
+    isSuperAdmin: user.platformRole === "super_admin",
+  };
+  const counts = await getAdminNavCounts();
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50 pb-16">
-      <AdminHeader
-        user={{
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          platformRole: user.platformRole,
-        }}
-      />
-      <AdminNav isSuperAdmin={isSuperAdmin} />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+    <div className="min-h-dvh bg-neutral-50 lg:flex">
+      {/* From 1024px: every page in the sidebar. */}
+      <AdminSidebar user={navUser} counts={counts} />
+
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
+        {/* Below 1024px: the current page in a bar; the rest in a full-screen menu. */}
+        <AdminTopBar user={navUser} counts={counts} />
+        <main id="main" className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+          <div className="mx-auto max-w-7xl">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

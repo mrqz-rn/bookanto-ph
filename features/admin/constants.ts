@@ -7,69 +7,63 @@ import type {
   ShopStatus,
 } from "@/lib/db/schema/enums";
 
-export const ADMIN_NAV_LINKS = [
+/** Which count, if any, shows beside a nav item (getAdminNavCounts). */
+export type AdminNavBadge = "pendingShops" | "openReports" | "activeFraud";
+
+export type AdminNavItem = {
+  href: string;
+  label: string;
+  /** A lucide icon name, mapped in admin-nav.tsx. */
+  icon:
+    | "LayoutDashboard"
+    | "BarChart3"
+    | "Store"
+    | "FolderTree"
+    | "Users"
+    | "Calendar"
+    | "Scale"
+    | "Megaphone"
+    | "ShieldAlert"
+    | "History";
+  /** Only this exact path, not its subpages. */
+  exact?: boolean;
+  badge?: AdminNavBadge;
+  superAdminOnly?: boolean;
+};
+
+/** The admin console's pages, grouped the way an admin works through them. */
+export const ADMIN_NAV_GROUPS: ReadonlyArray<{ label: string; items: readonly AdminNavItem[] }> = [
   {
-    href: "/admin",
     label: "Overview",
-    icon: "LayoutDashboard",
-    description: "System stats, urgent tasks, and operational pulse",
+    items: [
+      { href: "/admin", label: "Overview", icon: "LayoutDashboard", exact: true },
+      { href: "/admin/analytics", label: "Pilot metrics", icon: "BarChart3" },
+    ],
   },
   {
-    href: "/admin/analytics",
-    label: "Pilot Metrics",
-    icon: "BarChart3",
-    description: "Booking funnel events, conversion rates, and pilot KPIs",
+    label: "Marketplace",
+    items: [
+      { href: "/admin/shops", label: "Shops", icon: "Store", badge: "pendingShops" },
+      { href: "/admin/bookings", label: "Bookings", icon: "Calendar" },
+      { href: "/admin/users", label: "Users", icon: "Users" },
+      { href: "/admin/categories", label: "Categories", icon: "FolderTree" },
+    ],
   },
   {
-    href: "/admin/shops",
-    label: "Shops",
-    icon: "Store",
-    description: "Shop approvals, verifications, and status moderation",
+    label: "Trust & safety",
+    items: [
+      { href: "/admin/disputes", label: "Disputes & reports", icon: "Scale", badge: "openReports" },
+      { href: "/admin/fraud", label: "Fraud signals", icon: "ShieldAlert", badge: "activeFraud" },
+    ],
   },
   {
-    href: "/admin/categories",
-    label: "Categories",
-    icon: "FolderTree",
-    description: "Manage service categories, icons, and booking types",
+    label: "Platform",
+    items: [
+      { href: "/admin/announcements", label: "Announcements", icon: "Megaphone" },
+      { href: "/admin/audit", label: "Audit log", icon: "History", superAdminOnly: true },
+    ],
   },
-  {
-    href: "/admin/users",
-    label: "Users",
-    icon: "Users",
-    description: "Customer and staff management, roles, and suspensions",
-  },
-  {
-    href: "/admin/bookings",
-    label: "Bookings",
-    icon: "Calendar",
-    description: "All platform bookings oversight and lifecycle tracking",
-  },
-  {
-    href: "/admin/disputes",
-    label: "Disputes & Reports",
-    icon: "Scale",
-    description: "Booking disputes and inappropriate review moderation",
-  },
-  {
-    href: "/admin/announcements",
-    label: "Announcements",
-    icon: "Megaphone",
-    description: "Broadcast platform alerts and maintenance messages",
-  },
-  {
-    href: "/admin/fraud",
-    label: "Fraud Signals",
-    icon: "ShieldAlert",
-    description: "Risk detection, cancellation spikes, and velocity signals",
-  },
-  {
-    href: "/admin/audit",
-    label: "Audit Log",
-    icon: "History",
-    description: "Immutable history of sensitive admin and system actions",
-    superAdminOnly: true,
-  },
-] as const;
+];
 
 export const SHOP_STATUS_COLORS: Record<ShopStatus, string> = {
   draft: "bg-neutral-100 text-neutral-700 border-neutral-300",

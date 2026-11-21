@@ -35,11 +35,25 @@ import type {
   UserStatus,
 } from "@/lib/db/schema/enums";
 
-import { DEFAULT_PAGE_SIZE } from "./constants";
+import { DEFAULT_PAGE_SIZE, type AdminNavBadge } from "./constants";
 
 /**
  * Overview statistics and urgent action queues for the admin dashboard.
  */
+/** The counts beside nav items: work waiting for an admin. */
+export async function getAdminNavCounts(): Promise<Record<AdminNavBadge, number>> {
+  const [[pendingShops], [openReports], [activeFraud]] = await Promise.all([
+    db.select({ count: count() }).from(shops).where(eq(shops.status, "pending")),
+    db.select({ count: count() }).from(reports).where(eq(reports.status, "open")),
+    db.select({ count: count() }).from(fraudSignals).where(eq(fraudSignals.status, "active")),
+  ]);
+  return {
+    pendingShops: pendingShops?.count ?? 0,
+    openReports: openReports?.count ?? 0,
+    activeFraud: activeFraud?.count ?? 0,
+  };
+}
+
 export async function getAdminOverviewStats() {
   const [
     [pendingShops],
