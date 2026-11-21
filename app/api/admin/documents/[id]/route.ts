@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, hasAdminSecondFactor } from "@/lib/auth";
 import { assertCan } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { media } from "@/lib/db/schema";
@@ -13,6 +13,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   if (!user || (user.platformRole !== "admin" && user.platformRole !== "super_admin")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // API routes skip middleware, so check the admin's second factor here.
+  if (!(await hasAdminSecondFactor())) {
+    return NextResponse.json({ error: "Two-factor sign-in required" }, { status: 403 });
   }
 
   const [doc] = await db

@@ -32,12 +32,17 @@ export async function middleware(request: NextRequest) {
   // Coarse guards only. Shop membership and admin role are checked in the
   // route layouts, and every action calls assertCan.
   if (matchesRoute(pathname, SIGNED_IN_ROUTES)) {
-    const needsSecondFactor = matchesRoute(pathname, ["/admin"]) && session.aal !== "aal2" && !dev;
-    if (!session.authId || needsSecondFactor) {
+    if (!session.authId) {
       const login = new URL("/login", request.url);
       login.searchParams.set("next", `${pathname}${search}`);
-      if (session.authId) login.searchParams.set("mfa", "required");
       return session.applyTo(NextResponse.redirect(login));
+    }
+    // The admin console needs a second factor (TOTP). Server actions post to
+    // /admin/* too, so this covers them; /api/admin routes check it themselves.
+    if (matchesRoute(pathname, ["/admin"]) && session.aal !== "aal2" && !dev) {
+      const twoFactor = new URL("/two-factor", request.url);
+      twoFactor.searchParams.set("next", `${pathname}${search}`);
+      return session.applyTo(NextResponse.redirect(twoFactor));
     }
   }
 

@@ -3,6 +3,25 @@ import { z } from "zod";
 import { DEFAULT_AUTH_REDIRECT } from "@/features/auth/constants";
 import { isValidPhilippinePhone, normalizePhone } from "@/lib/phone";
 
+/** Where to go after two-factor: a same-site path only. */
+const safeNextPath = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\")
+      ? value
+      : "/admin",
+  );
+
+export const twoFactorVerifySchema = z.strictObject({
+  factorId: z.string().uuid("Start two-factor setup again."),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code from your authenticator app."),
+  next: safeNextPath,
+});
+
 export const phoneOtpRequestSchema = z.strictObject({
   phone: z
     .string()

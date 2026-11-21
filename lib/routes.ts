@@ -13,6 +13,7 @@ export const DYNAMIC_ROUTES = [
   "/book",
   "/login",
   "/verify",
+  "/two-factor",
   "/search",
   "/auth",
 ];

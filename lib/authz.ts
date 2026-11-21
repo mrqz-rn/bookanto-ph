@@ -124,6 +124,8 @@ const RULES = {
   "admin:settings.manage": isSuperAdmin,
   "admin:audit.read": isSuperAdmin,
   "admin:analytics.read": isAdmin,
+  // Set up and use the admin console's second factor (TOTP).
+  "admin:two_factor.manage": isAdmin,
   "analytics:read_shop": (user, resource) =>
     isAdmin(user) || inShop("owner", "manager")(user, resource),
 } satisfies Record<string, Rule>;

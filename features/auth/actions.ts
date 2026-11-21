@@ -2,17 +2,24 @@
 
 import { redirect } from "next/navigation";
 
+import { writeAudit } from "@/lib/audit";
 import {
   getOAuthSignInUrl,
+  getTwoFactorStatus,
+  requireUser,
   sendEmailOtp,
   sendOtp,
   signInDemoAccount,
   signInWithPassword,
   signOut,
+  startTotpEnrollment,
   verifyEmailOtp,
   verifyOtp,
+  verifyTotpCode,
 } from "@/lib/auth";
+import { assertCan } from "@/lib/authz";
 import { AppError, parseInput, runAction, type ActionResult } from "@/lib/errors";
+import { hitRateLimit } from "@/lib/rate-limit";
 
 import {
   DEFAULT_AUTH_REDIRECT,
@@ -27,6 +34,7 @@ import {
   oauthSignInSchema,
   phoneOtpRequestSchema,
   phoneOtpVerifySchema,
+  twoFactorVerifySchema,
 } from "./schema";
 
 /** Requests a one-time SMS verification code to a Philippine mobile number. */
@@ -112,4 +120,53 @@ export async function signInDemoAccountAction(
 export async function signOutAction(): Promise<void> {
   await signOut("local");
   redirect("/login");
+}
+
+/** Starts adding an authenticator app (TOTP) for the admin console. */
+export async function startTwoFactorSetupAction(): Promise<
+  ActionResult<{ factorId: string; qrCode: string; secret: string }>
+> {
+  return runAction(async () => {
+    const user = await requireUser();
+    assertCan(user, "admin:two_factor.manage");
+    if ((await getTwoFactorStatus()).factorId) {
+      throw new AppError(
+        "CONFLICT",
+        "Two-factor is already set up. Enter the code from your authenticator app.",
+      );
+    }
+    return startTotpEnrollment();
+  });
+}
+
+/**
+ * Checks a code from the authenticator app. The first success finishes setup;
+ * every success upgrades the session so the admin console opens.
+ */
+export async function verifyTwoFactorAction(
+  input: unknown,
+): Promise<ActionResult<{ next: string }>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    const { factorId, code, next } = parseInput(twoFactorVerifySchema, input);
+    assertCan(user, "admin:two_factor.manage");
+
+    // Plan: 5 tries, then wait 15 minutes.
+    if (!(await hitRateLimit(`two-factor:${user.id}`, 5, 15 * 60))) {
+      throw new AppError("RATE_LIMITED", "Too many tries. Wait 15 minutes, then try again.");
+    }
+
+    const wasSetUp = Boolean((await getTwoFactorStatus()).factorId);
+    await verifyTotpCode(factorId, code);
+
+    await writeAudit({
+      actorId: user.id,
+      action: wasSetUp ? "admin.signed_in" : "admin.two_factor_enabled",
+      targetType: "user",
+      targetId: user.id,
+      data: { platformRole: user.platformRole },
+    });
+
+    return { next };
+  });
 }

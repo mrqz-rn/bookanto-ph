@@ -595,11 +595,12 @@ export async function signInWithPassword(
  */
 export async function ensureSampleAccountsProvisioned(): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const account of [
-      SAMPLE_ACCOUNTS.store,
-      SAMPLE_ACCOUNTS.customer,
-      SAMPLE_ACCOUNTS.admin,
-    ]) {
+    // Never create the sample super admin (public password) in production.
+    const accounts =
+      env.NODE_ENV === "production"
+        ? [SAMPLE_ACCOUNTS.store, SAMPLE_ACCOUNTS.customer]
+        : [SAMPLE_ACCOUNTS.store, SAMPLE_ACCOUNTS.customer, SAMPLE_ACCOUNTS.admin];
+    for (const account of accounts) {
       await tx.execute(sql`
         INSERT INTO auth.users (
           instance_id,
@@ -949,7 +950,9 @@ export async function ensureSampleAccountsProvisioned(): Promise<void> {
       });
     }
 
-    // 3. Upsert Sample Super Admin in public.users
+    if (env.NODE_ENV === "production") return;
+
+    // 3. Upsert Sample Super Admin in public.users (development and tests only)
     const adminAcc = SAMPLE_ACCOUNTS.admin;
     const [existingAdmin] = await tx
       .select()
@@ -993,6 +996,10 @@ export async function ensureSampleAccountsProvisioned(): Promise<void> {
 export async function signInDemoAccount(
   role: SampleAccountRole,
 ): Promise<{ authId: string; defaultNext: string }> {
+  // The sample admin is a super admin with a password in the source code.
+  if (role === "admin" && env.NODE_ENV === "production") {
+    throw new AppError("FORBIDDEN");
+  }
   const account = SAMPLE_ACCOUNTS[role];
   await ensureSampleAccountsProvisioned();
   const { authId } = await signInWithPassword(account.email, account.password);
@@ -1054,4 +1061,83 @@ function rateLimitError(error: Pick<AuthError, "code" | "message">): AppError {
     );
   }
   return new AppError("RATE_LIMITED");
+}
+
+// ---------------------------------------------------------------------------
+// Two-factor login (TOTP) for the admin console. The plan requires it for
+// /admin; middleware sends admins without it to /auth/two-factor.
+
+export type TwoFactorStatus = {
+  /** "aal2" once this session has passed a second factor ("aal1" before). */
+  level: string | null;
+  /** The verified authenticator, if the account has one. */
+  factorId: string | null;
+};
+
+/** Whether this session passed a second factor, and the account's authenticator. */
+export async function getTwoFactorStatus(): Promise<TwoFactorStatus> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: aal }, { data: factors }] = await Promise.all([
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    supabase.auth.mfa.listFactors(),
+  ]);
+  return {
+    level: aal?.currentLevel ?? null,
+    factorId: factors?.totp[0]?.id ?? null,
+  };
+}
+
+/**
+ * Whether the current session may use admin tools: it passed a second factor,
+ * or this is local development (where middleware skips the check too).
+ */
+export async function hasAdminSecondFactor(): Promise<boolean> {
+  if (env.NODE_ENV === "development") return true;
+  return (await getTwoFactorStatus()).level === "aal2";
+}
+
+/**
+ * Starts adding an authenticator app: returns a QR code (SVG data URL) and the
+ * secret to type in by hand. Unfinished earlier attempts are removed first.
+ */
+export async function startTotpEnrollment(): Promise<{
+  factorId: string;
+  qrCode: string;
+  secret: string;
+}> {
+  const supabase = await createSupabaseServerClient();
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  for (const factor of factors?.all ?? []) {
+    if (factor.factor_type === "totp" && factor.status === "unverified") {
+      await supabase.auth.mfa.unenroll({ factorId: factor.id });
+    }
+  }
+  const { data, error } = await supabase.auth.mfa.enroll({
+    factorType: "totp",
+    issuer: "BooKanto",
+    friendlyName: `BooKanto admin ${new Date().toISOString().slice(0, 10)}`,
+  });
+  if (error || !data) {
+    console.error("TOTP enrollment failed:", error?.message);
+    throw new AppError("INTERNAL", "We couldn't start two-factor setup. Please try again.");
+  }
+  return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+}
+
+/**
+ * Checks a 6-digit authenticator code. On success the session is upgraded to
+ * aal2 (and a new authenticator becomes verified).
+ */
+export async function verifyTotpCode(factorId: string, code: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+  if (!error) return;
+  if (error.status === 429) throw new AppError("RATE_LIMITED");
+  throw new AppError(
+    "VALIDATION",
+    "That code didn't work. Check your authenticator app and try again.",
+    {
+      code: ["That code didn't work."],
+    },
+  );
 }
