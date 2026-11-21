@@ -11,6 +11,7 @@ import { priceLabel } from "@/components/shared/price-tag";
 import { buttonVariants } from "@/components/ui/button";
 import { WEEKDAYS, formatClock } from "@/features/availability/constants";
 import { CUSTOMER_BOOKING_MODES } from "@/features/bookings/booking-modes";
+import { ServiceCoverPhoto } from "@/features/services/components/service-cover-photo";
 import { ShopViewTracker } from "@/features/analytics/components/shop-view-tracker";
 import { ReviewList } from "@/features/reviews/components/review-list";
 import { getShopReviews, getShopReviewStats } from "@/features/reviews/queries";
@@ -214,15 +215,7 @@ export default async function PublicShopPage({ params }: ShopPageProps) {
                 return (
                   <li key={svc.id} className="relative flex items-center gap-4 py-4">
                     {svc.coverPhotoUrl && (
-                      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-slate-100 sm:size-20">
-                        <Image
-                          src={svc.coverPhotoUrl}
-                          alt={svc.name}
-                          fill
-                          sizes="(min-width: 640px) 80px, 64px"
-                          className="object-cover"
-                        />
-                      </div>
+                      <ServiceCoverPhoto src={svc.coverPhotoUrl} alt={svc.name} />
                     )}
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold text-navy-900">{svc.name}</h3>
