@@ -999,8 +999,9 @@ export async function signInDemoAccount(
   return { authId, defaultNext: account.defaultNext };
 }
 
-function toAppError(error: AuthError): AppError {
-  if (error.status === 429) return new AppError("RATE_LIMITED");
+/** Turns a Supabase Auth error into the message the person sees. Exported for tests. */
+export function toAppError(error: Pick<AuthError, "status" | "code" | "message">): AppError {
+  if (error.status === 429) return rateLimitError(error);
   const msg = error.message.toLowerCase();
   if (error.code === "invalid_credentials" || msg.includes("invalid login credentials")) {
     return new AppError(
@@ -1026,4 +1027,31 @@ function toAppError(error: AuthError): AppError {
   }
   console.error(error);
   return new AppError("INTERNAL");
+}
+
+/**
+ * Supabase answers 429 for three different limits. Each gets its own message,
+ * because "too many tries" reads as the person's fault when it usually isn't.
+ */
+function rateLimitError(error: Pick<AuthError, "code" | "message">): AppError {
+  // One address asked again within the cooldown (60 seconds by default).
+  const wait = /after (\d+) seconds?/i.exec(error.message)?.[1];
+  if (wait) {
+    return new AppError(
+      "RATE_LIMITED",
+      `We just sent you a code. Wait ${wait} seconds before asking for a new one.`,
+    );
+  }
+  // The project's hourly cap on auth emails, shared by everyone signing in.
+  if (error.code === "over_email_send_rate_limit") {
+    console.warn(
+      "Supabase Auth hit its hourly email cap (over_email_send_rate_limit). Raise it under " +
+        "Authentication > Rate Limits; the built-in mailer allows only 2 an hour, so set custom SMTP.",
+    );
+    return new AppError(
+      "RATE_LIMITED",
+      "We've sent too many sign-in emails this hour. Try again later, or sign in with your password or Google.",
+    );
+  }
+  return new AppError("RATE_LIMITED");
 }

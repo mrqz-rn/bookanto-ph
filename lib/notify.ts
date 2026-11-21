@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
+import nodemailer, { type Transporter } from "nodemailer";
 
 import { db } from "@/lib/db";
 import {
@@ -185,7 +186,7 @@ export class ResendEmailProvider implements EmailProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: env.RESEND_FROM_EMAIL ?? "BooKanto <notifications@bookanto.ph>",
+          from: emailSender(),
           to: [to],
           subject,
           html,
@@ -203,6 +204,108 @@ export class ResendEmailProvider implements EmailProvider {
     } catch (err) {
       return { success: false, messageId: err instanceof Error ? err.message : "Email error" };
     }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// SMTP Email Provider
+// ----------------------------------------------------------------------------
+
+const DEFAULT_EMAIL_FROM = "BooKanto <notifications@bookanto.ph>";
+
+/** The From line: EMAIL_FROM, or the older RESEND_FROM_EMAIL. */
+export function emailSender(): string {
+  return env.EMAIL_FROM || env.RESEND_FROM_EMAIL || DEFAULT_EMAIL_FROM;
+}
+
+/** Nodemailer's transport options for the SMTP_* settings. */
+export function smtpTransportOptions() {
+  const port = env.SMTP_PORT;
+  return {
+    host: env.SMTP_HOST,
+    port,
+    // Port 465 speaks TLS from the first byte; 587 and 25 upgrade with STARTTLS.
+    secure: env.SMTP_SECURE ?? port === 465,
+    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } : undefined,
+    // A slow mail server must not hold up a booking or a cron run for minutes.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+  };
+}
+
+export class SmtpEmailProvider implements EmailProvider {
+  private transporter: Transporter | null = null;
+
+  private transport(): Transporter {
+    // One pooled connection per server instance, reused across emails.
+    this.transporter ??= nodemailer.createTransport({
+      ...smtpTransportOptions(),
+      pool: true,
+      maxConnections: 2,
+    });
+    return this.transporter;
+  }
+
+  async sendEmail({
+    to,
+    subject,
+    html,
+    text,
+  }: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    if (!env.SMTP_HOST) {
+      return { success: false, messageId: "SMTP_HOST is not set" };
+    }
+    try {
+      const info = await this.transport().sendMail({
+        from: emailSender(),
+        to,
+        subject,
+        html,
+        text,
+      });
+      if ((info.rejected?.length ?? 0) > 0) {
+        return { success: false, messageId: `Rejected by the mail server: ${to}` };
+      }
+      return { success: true, messageId: info.messageId };
+    } catch (err) {
+      return { success: false, messageId: err instanceof Error ? err.message : "SMTP error" };
+    }
+  }
+}
+
+/** Sends nothing; for tests and working offline. */
+export class LogEmailProvider implements EmailProvider {
+  async sendEmail(): Promise<{ success: boolean; messageId?: string }> {
+    return { success: true, messageId: `sim_email_${crypto.randomUUID().slice(0, 8)}` };
+  }
+}
+
+export type EmailProviderName = "smtp" | "resend" | "log";
+
+/** Which service sends email: EMAIL_PROVIDER, else whichever one is configured. */
+export function configuredEmailProvider(): EmailProviderName {
+  if (env.EMAIL_PROVIDER) return env.EMAIL_PROVIDER;
+  if (env.SMTP_HOST) return "smtp";
+  if (env.RESEND_API_KEY) return "resend";
+  return "log";
+}
+
+const emailProviders: Record<EmailProviderName, EmailProvider> = {
+  smtp: new SmtpEmailProvider(),
+  resend: new ResendEmailProvider(),
+  log: new LogEmailProvider(),
+};
+
+/** Hands each email to the configured service, chosen at send time. */
+class ConfiguredEmailProvider implements EmailProvider {
+  sendEmail(params: Parameters<EmailProvider["sendEmail"]>[0]) {
+    return emailProviders[configuredEmailProvider()].sendEmail(params);
   }
 }
 
@@ -504,7 +607,7 @@ function encryptWebPushPayload({
 
 // Default provider instances
 export const smsProvider: SmsProvider = new SemaphoreSmsProvider();
-export const emailProvider: EmailProvider = new ResendEmailProvider();
+export const emailProvider: EmailProvider = new ConfiguredEmailProvider();
 export const whatsAppProvider: WhatsAppProvider = new CloudWhatsAppProvider();
 export const viberProvider: ViberProvider = new ViberBotProvider();
 export const pushProvider: PushProvider = new WebPushProvider();

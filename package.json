@@ -59,6 +59,7 @@
     "drizzle-orm": "^0.45.4",
     "lucide-react": "^1.72.0",
     "next": "15.5.29",
+    "nodemailer": "^10.6.1",
     "postgres": "^4.1.1",
     "radix-ui": "^1.8.1",
     "react": "19.1.10",
