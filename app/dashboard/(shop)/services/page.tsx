@@ -12,8 +12,8 @@ import { getUserShops } from "@/features/shops/queries";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Services & Pricing | BooKanto Shop Dashboard",
-  description: "Manage your services, pricing, add-ons, packages, and passes.",
+  title: "Services & prices | BooKanto Shop Dashboard",
+  description: "Your menu of services, with prices, photos, add-ons, packages and memberships.",
 };
 
 export default async function ServicesPage() {
@@ -37,14 +37,12 @@ export default async function ServicesPage() {
   ]);
 
   return (
-    <div className="py-2">
-      <ServicesManager
-        shopId={shop.id}
-        initialServices={services}
-        initialPackages={packages}
-        initialMemberships={memberships}
-        shopCategories={shopCategories}
-      />
-    </div>
+    <ServicesManager
+      shopId={shop.id}
+      initialServices={services}
+      initialPackages={packages}
+      initialMemberships={memberships}
+      shopCategories={shopCategories}
+    />
   );
 }

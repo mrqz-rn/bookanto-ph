@@ -1,263 +1,258 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, FileUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatPeso } from "@/lib/money";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { bulkImportServices } from "../actions";
-import { generateSampleCsvTemplate, parseServiceCsv, type CsvParseResult } from "../bulk-import";
+import { generateSampleCsvTemplate, parseServiceCsv } from "../bulk-import";
+import { BOOKING_TYPE_LABELS } from "../constants";
+import { durationLabel, plural, servicePrice } from "../menu";
+import { ActionError, Busy, FOCUS_RING, PRESS, Sheet } from "./services-ui";
 
 type BulkImportModalProps = {
   isOpen: boolean;
   onClose: () => void;
   shopId: string;
-  onImported: () => void;
+  /** Called after the import, with the line to show on the page. */
+  onImported: (message: string) => void;
 };
 
-export function BulkImportModal({ isOpen, onClose, shopId, onImported }: BulkImportModalProps) {
-  const [csvText, setCsvText] = React.useState<string>("");
-  const [parseResult, setParseResult] = React.useState<CsvParseResult | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+const PREVIEW_ROWS = 10;
+const ERROR_ROWS = 5;
+/** The most bulkImportServices takes in one go (features/services/schema.ts). */
+const MAX_ROWS = 100;
 
+export function BulkImportModal({ isOpen, onClose, shopId, onImported }: BulkImportModalProps) {
+  const id = React.useId();
+  const [csvText, setCsvText] = React.useState("");
+  const [fileName, setFileName] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (csvText.trim()) {
-      const result = parseServiceCsv(csvText);
-      setParseResult(result);
-    } else {
-      setParseResult(null);
-    }
-  }, [csvText]);
+    if (!isOpen) return;
+    setCsvText("");
+    setFileName(null);
+    setError(null);
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  const parsed = React.useMemo(() => (csvText.trim() ? parseServiceCsv(csvText) : null), [csvText]);
+  const validCount = parsed?.valid.length ?? 0;
+  const tooMany = validCount > MAX_ROWS;
 
-  const handleDownloadTemplate = () => {
-    const template = generateSampleCsvTemplate();
-    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+  function downloadTemplate() {
+    const blob = new Blob([generateSampleCsvTemplate()], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "bookanto_services_template.csv");
+    link.download = "bookanto-services-template.csv";
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-  };
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  function onFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        setCsvText(content);
-      }
+    reader.onload = () => {
+      setCsvText(String(reader.result ?? ""));
+      setFileName(file.name);
     };
+    reader.onerror = () => setError("Couldn't read that file. Save it as CSV and try again.");
     reader.readAsText(file);
-  };
+    event.target.value = "";
+  }
 
-  const handleImport = async () => {
-    if (!parseResult || parseResult.valid.length === 0) {
-      setError("No valid services available to import.");
-      return;
-    }
-
+  async function onImport() {
+    if (!parsed || validCount === 0) return;
     setError(null);
-    setLoading(true);
-
+    setSaving(true);
     try {
-      const result = await bulkImportServices({
-        shopId,
-        services: parseResult.valid,
-      });
-
+      const result = await bulkImportServices({ shopId, services: parsed.valid });
       if (result.ok) {
-        onImported();
+        onImported(`Imported ${plural(validCount, "service")}.`);
         onClose();
       } else {
         setError(result.message);
       }
     } catch {
-      setError("Failed to import services. Please check formatting.");
+      setError("Couldn't import the services. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="flex h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-100 p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-              <FileSpreadsheet className="size-5" />
-            </div>
-            <div>
-              <h3 className="font-display text-xl text-neutral-900">Bulk Import Services</h3>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Quickly import multiple service offerings via CSV.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-
-        {/* Action bar with template download */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-neutral-50 px-6 py-3">
-          <span className="text-xs text-neutral-600">
-            Need the right format? Use our standard spreadsheet template:
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadTemplate}
-            className="text-xs text-navy-900"
-          >
-            <Download className="mr-1.5 size-3.5" />
-            Download CSV Template
-          </Button>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
-          {error && <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-
-          {/* Upload or paste area */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 p-6 text-center hover:border-orange-500 hover:bg-orange-50/20"
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Upload className="size-6 text-neutral-400" />
-              <span className="mt-2 text-xs font-semibold text-neutral-900">Upload CSV File</span>
-              <span className="mt-0.5 text-[11px] text-neutral-500">
-                Click to browse or drop .csv file here
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-neutral-900">
-                Or Paste CSV text directly
-              </label>
-              <textarea
-                rows={5}
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-                placeholder="Name,Price Type,Price (₱),Duration (mins),Booking Type..."
-                className="mt-1 w-full rounded-xl border border-neutral-300 p-2.5 font-mono text-xs text-neutral-900 outline-none focus-visible:border-neutral-950"
-              />
-            </div>
-          </div>
-
-          {/* Validation & Preview Section */}
-          {parseResult && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200 pt-4">
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1 font-semibold text-emerald-700">
-                    <CheckCircle2 className="size-4" /> {parseResult.valid.length} Valid Services
-                  </span>
-                  {parseResult.invalid.length > 0 && (
-                    <span className="flex items-center gap-1 font-semibold text-red-600">
-                      <AlertCircle className="size-4" /> {parseResult.invalid.length} Errors Found
-                    </span>
-                  )}
-                </div>
-
-                <span className="text-xs text-neutral-500">
-                  Total rows detected: {parseResult.totalRows}
-                </span>
-              </div>
-
-              {/* Error messages if any */}
-              {parseResult.invalid.length > 0 && (
-                <div className="space-y-1 rounded-xl border border-red-200 bg-red-50/70 p-3 text-xs text-red-800">
-                  <p className="font-semibold">Issues found in some rows (they will be skipped):</p>
-                  <ul className="list-disc space-y-0.5 pl-5 text-[11px]">
-                    {parseResult.invalid.slice(0, 5).map((inv, idx) => (
-                      <li key={idx}>
-                        Row {inv.row}: {inv.errors.join(", ")}
-                      </li>
-                    ))}
-                    {parseResult.invalid.length > 5 && (
-                      <li>...and {parseResult.invalid.length - 5} more errors</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-
-              {/* Preview Table */}
-              <div className="overflow-x-auto rounded-xl border border-neutral-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-neutral-100 font-semibold text-neutral-700">
-                    <tr>
-                      <th className="px-3 py-2">Service Name</th>
-                      <th className="px-3 py-2">Price Type</th>
-                      <th className="px-3 py-2">Price</th>
-                      <th className="px-3 py-2">Duration</th>
-                      <th className="px-3 py-2">Booking Type</th>
-                      <th className="px-3 py-2">Capacity</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-200 bg-white">
-                    {parseResult.valid.slice(0, 10).map((row, i) => (
-                      <tr key={i} className="hover:bg-neutral-50">
-                        <td className="px-3 py-2 font-medium text-neutral-900">{row.name}</td>
-                        <td className="px-3 py-2 capitalize">{row.priceType}</td>
-                        <td className="px-3 py-2">
-                          {row.priceType === "quote"
-                            ? "Quote"
-                            : row.priceCentavos !== null
-                              ? formatPeso(row.priceCentavos)
-                              : "-"}
-                        </td>
-                        <td className="px-3 py-2">{row.durationMin} mins</td>
-                        <td className="px-3 py-2 capitalize">{row.bookingType}</td>
-                        <td className="px-3 py-2">{row.capacity}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-neutral-100 p-4 sm:p-5">
-          <Button type="button" variant="outline" onClick={onClose}>
+    <Sheet
+      open={isOpen}
+      onClose={onClose}
+      busy={saving}
+      wide
+      title="Import a spreadsheet"
+      description="Add many services at once from a CSV file. Rows with mistakes are skipped and listed."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-
           <Button
             type="button"
-            disabled={loading || !parseResult || parseResult.valid.length === 0}
-            onClick={handleImport}
-            className="text-navy-950 bg-orange-600 font-bold hover:bg-orange-500"
+            onClick={onImport}
+            disabled={saving || validCount === 0 || tooMany}
+            className={PRESS}
           >
-            {loading ? "Importing..." : `Import ${parseResult?.valid.length ?? 0} Services`}
+            <Busy busy={saving}>
+              {validCount > 0 ? `Import ${plural(validCount, "service")}` : "Import services"}
+            </Busy>
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {error && <ActionError message={error} onDismiss={() => setError(null)} />}
+
+        <ol className="space-y-5">
+          <li className="space-y-2">
+            <p className="text-sm font-semibold text-navy-900">
+              1. Fill in our template in Excel or Google Sheets
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={downloadTemplate}
+              className={cn("w-full sm:w-auto", PRESS)}
+            >
+              <Download aria-hidden />
+              Download the template
+            </Button>
+          </li>
+
+          <li className="space-y-2">
+            <p className="text-sm font-semibold text-navy-900">2. Upload it as a CSV file</p>
+            <input
+              ref={fileInputRef}
+              id={`${id}-file`}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={onFile}
+              className="sr-only"
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "flex w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center transition-colors hover:border-green-600 hover:bg-accent",
+                FOCUS_RING,
+              )}
+            >
+              <FileUp aria-hidden className="size-6 text-green-700" />
+              <span className="text-base font-semibold text-navy-900">
+                {fileName ? `Replace ${fileName}` : "Choose a CSV file"}
+              </span>
+              <span className="text-sm text-slate-600">Up to {MAX_ROWS} services at a time</span>
+            </button>
+          </li>
+        </ol>
+
+        <details className="group rounded-2xl border border-border">
+          <summary
+            className={cn(
+              "flex min-h-11 cursor-pointer list-none items-center px-4 text-sm font-semibold text-navy-900",
+              FOCUS_RING,
+            )}
+          >
+            Or paste the rows instead
+          </summary>
+          <div className="px-4 pb-4">
+            <label htmlFor={`${id}-paste`} className="sr-only">
+              CSV rows
+            </label>
+            <Textarea
+              id={`${id}-paste`}
+              rows={6}
+              value={csvText}
+              onChange={(e) => {
+                setCsvText(e.target.value);
+                setFileName(null);
+              }}
+              placeholder="Name,Price Type,Price,Duration,Booking Type"
+              className="font-mono text-sm"
+              spellCheck={false}
+            />
+          </div>
+        </details>
+
+        {parsed && (
+          <section aria-label="Check the rows" className="space-y-4">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-green-700">
+                <CircleCheck aria-hidden className="size-5" />
+                {plural(validCount, "service")} ready
+              </span>
+              {parsed.invalid.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 font-semibold text-danger">
+                  <CircleAlert aria-hidden className="size-5" />
+                  {plural(parsed.invalid.length, "row")} skipped
+                </span>
+              )}
+              <span className="text-slate-600">{plural(parsed.totalRows, "row")} in the file</span>
+            </div>
+
+            {tooMany && (
+              <ActionError
+                message={`That's ${validCount} services. Import up to ${MAX_ROWS} at a time: split the file and upload each part.`}
+              />
+            )}
+
+            {parsed.invalid.length > 0 && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
+                <p className="font-semibold">Fix these rows and upload again to include them:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {parsed.invalid.slice(0, ERROR_ROWS).map((row) => (
+                    <li key={row.row}>
+                      Row {row.row}: {row.errors.join(", ")}
+                    </li>
+                  ))}
+                  {parsed.invalid.length > ERROR_ROWS && (
+                    <li>{plural(parsed.invalid.length - ERROR_ROWS, "more row")}</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            {validCount > 0 && (
+              <ul className="divide-y divide-border rounded-2xl border border-border">
+                {parsed.valid.slice(0, PREVIEW_ROWS).map((row, index) => (
+                  <li key={index} className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-navy-900">{row.name}</p>
+                      <p className="text-sm text-slate-600">
+                        {durationLabel(row.durationMin)} · {BOOKING_TYPE_LABELS[row.bookingType]}
+                        {row.capacity > 1 && ` · ${row.capacity} at once`}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-bold text-navy-900 tabular-nums">
+                      {servicePrice(row.priceType, row.priceCentavos)}
+                    </p>
+                  </li>
+                ))}
+                {validCount > PREVIEW_ROWS && (
+                  <li className="px-4 py-3 text-sm text-slate-600">
+                    And {plural(validCount - PREVIEW_ROWS, "more service")}
+                  </li>
+                )}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }

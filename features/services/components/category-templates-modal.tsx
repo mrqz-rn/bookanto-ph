@@ -1,20 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { Check, CheckSquare, Sparkles, Square, X } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatPeso } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { applyCategoryTemplates } from "../actions";
+import { BOOKING_TYPE_LABELS } from "../constants";
+import { durationLabel, plural, servicePrice } from "../menu";
 import { CATEGORY_SERVICE_TEMPLATES, type ServiceTemplateItem } from "../templates";
+import { ActionError, Busy, FOCUS_RING, PRESS, Sheet } from "./services-ui";
 
 type CategoryTemplatesModalProps = {
   isOpen: boolean;
   onClose: () => void;
   shopId: string;
   shopCategorySlugs?: string[];
-  onApplied: () => void;
+  /** Called after the services are added, with the line to show on the page. */
+  onApplied: (message: string) => void;
 };
+
+const GROUPS = Object.values(CATEGORY_SERVICE_TEMPLATES);
 
 export function CategoryTemplatesModal({
   isOpen,
@@ -23,234 +29,210 @@ export function CategoryTemplatesModal({
   shopCategorySlugs = [],
   onApplied,
 }: CategoryTemplatesModalProps) {
-  const allGroups = Object.values(CATEGORY_SERVICE_TEMPLATES);
+  const id = React.useId();
+  // The shop's own categories first, so the first chip is usually the right one.
+  const groups = React.useMemo(
+    () =>
+      [...GROUPS].sort(
+        (a, b) =>
+          Number(shopCategorySlugs.includes(b.categorySlug)) -
+          Number(shopCategorySlugs.includes(a.categorySlug)),
+      ),
+    [shopCategorySlugs],
+  );
 
-  // Default active tab to shop's first category if available
-  const defaultCategory =
-    allGroups.find((g) => shopCategorySlugs.includes(g.categorySlug))?.categorySlug ||
-    allGroups[0]?.categorySlug ||
-    "barbershop";
-
-  const [activeCategory, setActiveCategory] = React.useState<string>(defaultCategory);
-  const [selectedTemplates, setSelectedTemplates] = React.useState<ServiceTemplateItem[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [category, setCategory] = React.useState<string>(groups[0]?.categorySlug ?? "");
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const currentGroup = allGroups.find((g) => g.categorySlug === activeCategory) || allGroups[0];
+  const group = groups.find((g) => g.categorySlug === category) ?? groups[0];
+
+  // Opening the sheet or changing the category ticks every service in it.
+  React.useEffect(() => {
+    if (isOpen && group) {
+      setSelected(new Set(group.services.map((s) => s.name)));
+      setError(null);
+    }
+  }, [isOpen, group]);
 
   React.useEffect(() => {
-    // Select all templates of current category by default when opened
-    if (isOpen && currentGroup) {
-      setSelectedTemplates([...currentGroup.services]);
+    if (isOpen && groups[0] && !groups.some((g) => g.categorySlug === category)) {
+      setCategory(groups[0].categorySlug);
     }
-  }, [isOpen, activeCategory, currentGroup]);
+  }, [isOpen, groups, category]);
 
-  if (!isOpen || !currentGroup) return null;
+  if (!group) return null;
 
-  const toggleSelectTemplate = (item: ServiceTemplateItem) => {
-    setSelectedTemplates((prev) =>
-      prev.some((t) => t.name === item.name)
-        ? prev.filter((t) => t.name !== item.name)
-        : [...prev, item],
-    );
-  };
+  const picked: ServiceTemplateItem[] = group.services.filter((s) => selected.has(s.name));
+  const allPicked = picked.length === group.services.length;
 
-  const handleSelectAll = () => {
-    if (!currentGroup) return;
-    if (selectedTemplates.length === currentGroup.services.length) {
-      setSelectedTemplates([]);
-    } else {
-      setSelectedTemplates([...currentGroup.services]);
-    }
-  };
+  function toggle(name: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
-  const handleApply = async () => {
-    if (selectedTemplates.length === 0) {
-      setError("Please select at least one template service to apply.");
+  async function onApply() {
+    if (picked.length === 0) {
+      setError("Tick at least one service to add.");
       return;
     }
-
     setError(null);
-    setLoading(true);
-
+    setSaving(true);
     try {
-      const result = await applyCategoryTemplates({
-        shopId,
-        templates: selectedTemplates,
-      });
-
+      const result = await applyCategoryTemplates({ shopId, templates: picked });
       if (result.ok) {
-        onApplied();
+        onApplied(
+          `Added ${plural(picked.length, "service")} from the ${group!.categoryName} template. Edit the prices to match yours.`,
+        );
         onClose();
       } else {
         setError(result.message);
       }
     } catch {
-      setError("Failed to apply templates. Please try again.");
+      setError("Couldn't add the services. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="flex h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-100 p-5 sm:p-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-                <Sparkles className="size-4" />
-              </span>
-              <h3 className="font-display text-xl text-neutral-900">Category Service Templates</h3>
-            </div>
-            <p className="mt-1 text-xs text-neutral-500">
-              One-click setup with standard Philippine market prices, durations, and add-ons.
-            </p>
-          </div>
-          <button
+    <Sheet
+      open={isOpen}
+      onClose={onClose}
+      busy={saving}
+      wide
+      title="Start from a template"
+      description="Common services for your category with typical Philippine prices. You can edit each one after."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
             type="button"
-            onClick={onClose}
-            className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100"
+            onClick={onApply}
+            disabled={saving || picked.length === 0}
+            className={PRESS}
           >
-            <X className="size-5" />
-          </button>
+            <Busy busy={saving}>Add {plural(picked.length, "service")}</Busy>
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div
+          role="radiogroup"
+          aria-label="Category"
+          className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 sm:-mx-6 sm:px-6"
+        >
+          {groups.map((g) => {
+            const active = g.categorySlug === group.categorySlug;
+            return (
+              <button
+                key={g.categorySlug}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setCategory(g.categorySlug)}
+                className={cn(
+                  "h-11 shrink-0 rounded-full border px-4 text-sm font-semibold whitespace-nowrap transition-colors",
+                  FOCUS_RING,
+                  active
+                    ? "border-navy-900 bg-navy-900 text-white"
+                    : "border-border bg-white text-navy-900 hover:bg-neutral-100",
+                )}
+              >
+                {g.categoryName}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Category Tabs */}
-        <div className="border-b border-neutral-200 bg-neutral-50/70 px-4 py-2">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {allGroups.map((g) => {
-              const isActive = g.categorySlug === activeCategory;
-              return (
-                <button
-                  key={g.categorySlug}
-                  type="button"
-                  onClick={() => setActiveCategory(g.categorySlug)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all ${
-                    isActive
-                      ? "bg-navy-900 text-white shadow-xs"
-                      : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100"
-                  }`}
-                >
-                  {g.categoryName}
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-600">
+            {picked.length} of {plural(group.services.length, "service")} ticked
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() =>
+              setSelected(allPicked ? new Set() : new Set(group.services.map((s) => s.name)))
+            }
+            className="text-green-700 hover:bg-accent hover:text-green-800"
+          >
+            {allPicked ? "Untick all" : "Tick all"}
+          </Button>
         </div>
 
-        {/* Templates List */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">
-              {currentGroup.services.length} services available for {currentGroup.categoryName}
-            </span>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-700 hover:underline"
-            >
-              {selectedTemplates.length === currentGroup.services.length ? (
-                <>
-                  <CheckSquare className="size-4" /> Deselect All
-                </>
-              ) : (
-                <>
-                  <Square className="size-4" /> Select All ({currentGroup.services.length})
-                </>
-              )}
-            </button>
-          </div>
+        {error && <ActionError message={error} onDismiss={() => setError(null)} />}
 
-          {error && <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {currentGroup.services.map((item) => {
-              const isSelected = selectedTemplates.some((t) => t.name === item.name);
-
-              return (
-                <div
-                  key={item.name}
-                  onClick={() => toggleSelectTemplate(item)}
-                  className={`cursor-pointer rounded-xl border p-4 transition-all ${
-                    isSelected
-                      ? "border-orange-500 bg-orange-50/20 ring-1 ring-orange-400"
-                      : "border-neutral-200 bg-white hover:border-neutral-300"
-                  }`}
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {group.services.map((item, index) => {
+            const checked = selected.has(item.name);
+            const inputId = `${id}-${index}`;
+            return (
+              <li key={item.name}>
+                <label
+                  htmlFor={inputId}
+                  className={cn(
+                    "flex h-full cursor-pointer gap-3 rounded-2xl border p-4 transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+                    checked
+                      ? "border-green-600 bg-accent/50 ring-1 ring-green-600"
+                      : "border-border bg-white hover:border-neutral-400",
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`flex size-5 items-center justify-center rounded border ${
-                          isSelected
-                            ? "border-orange-600 bg-orange-600 text-white"
-                            : "border-neutral-300 bg-white"
-                        }`}
-                      >
-                        {isSelected && <Check className="size-3.5" />}
-                      </div>
-                      <h4 className="text-sm font-semibold text-neutral-900">{item.name}</h4>
-                    </div>
-
-                    <span className="text-xs font-bold text-navy-900">
-                      {item.priceType === "quote"
-                        ? "Quote"
-                        : item.priceCentavos !== null
-                          ? formatPeso(item.priceCentavos)
-                          : "Custom"}
+                  <input
+                    id={inputId}
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(item.name)}
+                    className="sr-only"
+                  />
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border",
+                      checked
+                        ? "border-green-600 bg-green-600 text-white"
+                        : "border-neutral-400 bg-white",
+                    )}
+                  >
+                    {checked && <Check className="size-3.5" strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-navy-900">{item.name}</span>
+                      <span className="shrink-0 font-bold text-navy-900 tabular-nums">
+                        {servicePrice(item.priceType, item.priceCentavos)}
+                      </span>
                     </span>
-                  </div>
-
-                  <p className="mt-2 line-clamp-2 text-xs text-neutral-600">{item.description}</p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium">
-                      ⏱ {item.durationMin} mins
+                    <span className="mt-1 block text-sm text-slate-600">
+                      {durationLabel(item.durationMin)} · {BOOKING_TYPE_LABELS[item.bookingType]}
+                      {item.capacity > 1 && ` · ${item.capacity} at once`}
                     </span>
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 capitalize">
-                      {item.bookingType} flow
-                    </span>
-                    {item.capacity > 1 && (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5">
-                        👥 Capacity: {item.capacity}
+                    {item.description && (
+                      <span className="mt-1.5 line-clamp-2 block text-sm text-slate-600">
+                        {item.description}
                       </span>
                     )}
-                  </div>
-
-                  {item.suggestedAddons && item.suggestedAddons.length > 0 && (
-                    <div className="mt-2.5 border-t border-neutral-100 pt-2 text-[10px] text-neutral-500">
-                      <span className="font-medium text-neutral-700">Includes Add-ons:</span>{" "}
-                      {item.suggestedAddons.map((a) => a.name).join(", ")}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-neutral-100 p-4 sm:p-5">
-          <span className="text-xs text-neutral-600">
-            <strong>{selectedTemplates.length}</strong> template(s) selected
-          </span>
-
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={loading || selectedTemplates.length === 0}
-              onClick={handleApply}
-              className="text-navy-950 bg-orange-600 font-bold hover:bg-orange-500"
-            >
-              {loading ? "Adding..." : `Apply Selected (${selectedTemplates.length})`}
-            </Button>
-          </div>
-        </div>
+                    {item.suggestedAddons && item.suggestedAddons.length > 0 && (
+                      <span className="mt-2 block text-sm text-navy-900">
+                        <span className="font-semibold">Add-ons:</span>{" "}
+                        {item.suggestedAddons.map((a) => a.name).join(", ")}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
       </div>
-    </div>
+    </Sheet>
   );
 }

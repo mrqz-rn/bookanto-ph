@@ -134,7 +134,7 @@ export default async function AvailabilityPage({
     }));
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="max-w-8xl space-y-6">
       <div>
         <h1 className="font-display text-3xl font-bold text-navy-900 sm:text-4xl">Availability</h1>
         <p className="mt-1 text-base text-slate-600">

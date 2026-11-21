@@ -2,88 +2,55 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Clock, FileSpreadsheet, Plus, Scissors, Sparkles, Trash2, Users } from "lucide-react";
+import { FileSpreadsheet, LayoutTemplate, Plus, Scissors } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatPeso } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { archiveService, deleteService } from "../actions";
-import { BOOKING_TYPE_LABELS } from "../constants";
+import {
+  groupByCategory,
+  menuSummary,
+  plural,
+  type MenuCategory,
+  type MenuMembership,
+  type MenuPackage,
+  type MenuService,
+} from "../menu";
 import { BulkImportModal } from "./bulk-import-modal";
 import { CategoryTemplatesModal } from "./category-templates-modal";
 import { MembershipsManager } from "./memberships-manager";
 import { PackagesManager } from "./packages-manager";
+import { ServiceList, type ServiceRowActions } from "./service-list";
 import { ServiceModal } from "./service-modal";
-import { ServicePhotosAddons } from "./service-photos-addons";
+import { ServicePhotosAddons, type ServiceOption } from "./service-photos-addons";
+import {
+  ActionError,
+  EmptyPanel,
+  FOCUS_RING,
+  PRESS,
+  Sheet,
+  SuccessNotice,
+  useNotice,
+} from "./services-ui";
 
-type ServiceItem = {
-  id: string;
-  shopId: string;
-  categoryId: string | null;
-  categoryName: string | null;
-  name: string;
-  description: string | null;
-  priceType: "fixed" | "starts_at" | "quote";
-  priceCentavos: number | null;
-  durationMin: number;
-  bookingType: "slot" | "home" | "quote" | "queue";
-  capacity: number;
-  bufferMin: number;
-  active: boolean;
-  sortOrder: number;
-  photos: Array<{ id: string; path: string; sortOrder: number }>;
-  addons: Array<{
-    id: string;
-    serviceId: string;
-    name: string;
-    description: string | null;
-    priceCentavos: number;
-    durationMin: number;
-    active: boolean;
-  }>;
-};
+// Services & prices: the shop's menu of services, its packages and its
+// memberships. This file holds the state and the server calls; the lists and
+// forms only draw.
 
-type PackageItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  priceCentavos: number;
-  originalPriceCentavos: number | null;
-  active: boolean;
-  items: Array<{
-    id: string;
-    packageId: string;
-    serviceId: string;
-    serviceName: string;
-    servicePriceCentavos: number | null;
-    durationMin: number;
-    quantity: number;
-  }>;
-};
+type Tab = "services" | "packages" | "memberships";
 
-type MembershipItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  priceCentavos: number;
-  cadence: "weekly" | "monthly" | "quarterly" | "yearly" | "sessions_pack";
-  sessionCredits: number | null;
-  validityDays: number | null;
-  perks: string | null;
-  active: boolean;
-};
-
-type CategoryOption = {
-  id: string;
-  name: string;
-  slug: string;
-};
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "services", label: "Services" },
+  { id: "packages", label: "Packages" },
+  { id: "memberships", label: "Memberships" },
+];
 
 type ServicesManagerProps = {
   shopId: string;
-  initialServices: ServiceItem[];
-  initialPackages: PackageItem[];
-  initialMemberships: MembershipItem[];
-  shopCategories: CategoryOption[];
+  initialServices: MenuService[];
+  initialPackages: MenuPackage[];
+  initialMemberships: MenuMembership[];
+  shopCategories: Array<Omit<MenuCategory, "icon"> & { icon?: string | null }>;
 };
 
 export function ServicesManager({
@@ -95,399 +62,356 @@ export function ServicesManager({
 }: ServicesManagerProps) {
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = React.useState<
-    "services" | "photos_addons" | "packages" | "memberships"
-  >("services");
+  const [tab, setTab] = React.useState<Tab>("services");
+  const [services, setServices] = React.useState<MenuService[]>(initialServices);
+  React.useEffect(() => setServices(initialServices), [initialServices]);
 
-  const [services, setServices] = React.useState<ServiceItem[]>(initialServices);
-  const [packagesList, setPackagesList] = React.useState<PackageItem[]>(initialPackages);
-  const [membershipsList, setMembershipsList] =
-    React.useState<MembershipItem[]>(initialMemberships);
+  const [editing, setEditing] = React.useState<MenuService | null>(null);
+  const [formOpen, setFormOpen] = React.useState(false);
+  const [extrasId, setExtrasId] = React.useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    setServices(initialServices);
-  }, [initialServices]);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [notice, setNotice] = useNotice();
 
-  React.useEffect(() => {
-    setPackagesList(initialPackages);
-  }, [initialPackages]);
+  const categories: MenuCategory[] = shopCategories.map((c) => ({ ...c, icon: c.icon ?? null }));
+  const groups = groupByCategory(services, categories);
+  const extrasService = services.find((s) => s.id === extrasId) ?? null;
 
-  React.useEffect(() => {
-    setMembershipsList(initialMemberships);
-  }, [initialMemberships]);
-
-  const [isServiceModalOpen, setIsServiceModalOpen] = React.useState(false);
-  const [editingService, setEditingService] = React.useState<ServiceItem | null>(null);
-
-  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = React.useState(false);
-  const [isBulkImportOpen, setIsBulkImportOpen] = React.useState(false);
-
-  const refreshPage = () => {
+  function done(message: string) {
+    setError(null);
+    setNotice(message);
     router.refresh();
-  };
+  }
 
-  const handleUpdateService = React.useCallback(
-    (
-      serviceId: string,
-      updater: (prev: {
-        id: string;
-        name: string;
-        photos: Array<{ id: string; path: string; sortOrder: number }>;
-        addons: Array<{
-          id: string;
-          serviceId: string;
-          name: string;
-          description: string | null;
-          priceCentavos: number;
-          durationMin: number;
-          active: boolean;
-        }>;
-      }) => {
-        id: string;
-        name: string;
-        photos: Array<{ id: string; path: string; sortOrder: number }>;
-        addons: Array<{
-          id: string;
-          serviceId: string;
-          name: string;
-          description: string | null;
-          priceCentavos: number;
-          durationMin: number;
-          active: boolean;
-        }>;
-      },
-    ) => {
+  function openForm(service: MenuService | null) {
+    setEditing(service);
+    setFormOpen(true);
+  }
+
+  async function toggleService(service: MenuService) {
+    const active = !service.active;
+    setBusyId(service.id);
+    setError(null);
+    setNotice(null);
+    // Flip it now; put it back if the server says no.
+    setServices((prev) => prev.map((s) => (s.id === service.id ? { ...s, active } : s)));
+    try {
+      const result = await archiveService({ serviceId: service.id, shopId, active });
+      if (!result.ok) throw new Error(result.message);
+      setNotice(
+        active ? `${service.name} is back on your menu.` : `Hid ${service.name} from customers.`,
+      );
+    } catch (cause) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === service.id ? { ...s, active: service.active } : s)),
+      );
+      setError(
+        cause instanceof Error && cause.message
+          ? cause.message
+          : `Couldn't update ${service.name}. Try again.`,
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeService(service: MenuService) {
+    setBusyId(service.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await deleteService({ serviceId: service.id, shopId });
+      if (result.ok) {
+        setConfirmingId(null);
+        setServices((prev) => prev.filter((s) => s.id !== service.id));
+        done(`Deleted ${service.name}.`);
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError(`Couldn't delete ${service.name}. Try again.`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const updateExtras = React.useCallback(
+    (serviceId: string, updater: (prev: ServiceOption) => ServiceOption) => {
       setServices((prev) =>
         prev.map((s) => {
           if (s.id !== serviceId) return s;
-          const updated = updater(s);
-          return {
-            ...s,
-            photos: updated.photos,
-            addons: updated.addons,
-          };
+          const next = updater(s);
+          return { ...s, photos: next.photos, addons: next.addons };
         }),
       );
     },
     [],
   );
 
-  const handleCreateService = () => {
-    setEditingService(null);
-    setIsServiceModalOpen(true);
+  const rowActions: ServiceRowActions = {
+    busyId,
+    confirmingId,
+    onEdit: openForm,
+    onExtras: (s) => setExtrasId(s.id),
+    onToggle: (s) => void toggleService(s),
+    onAskDelete: (s) => setConfirmingId(s.id),
+    onCancelDelete: () => setConfirmingId(null),
+    onDelete: (s) => void removeService(s),
   };
 
-  const handleEditService = (svc: ServiceItem) => {
-    setEditingService(svc);
-    setIsServiceModalOpen(true);
+  const counts: Record<Tab, number> = {
+    services: services.length,
+    packages: initialPackages.length,
+    memberships: initialMemberships.length,
   };
-
-  const handleToggleArchive = async (svc: ServiceItem) => {
-    try {
-      const res = await archiveService({
-        serviceId: svc.id,
-        shopId,
-        active: !svc.active,
-      });
-
-      if (res.ok) {
-        setServices((prev) => prev.map((s) => (s.id === svc.id ? { ...s, active: !s.active } : s)));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDeleteService = async (serviceId: string) => {
-    if (!confirm("Are you sure you want to delete this service?")) return;
-    try {
-      const res = await deleteService({ serviceId, shopId });
-      if (res.ok) {
-        setServices((prev) => prev.filter((s) => s.id !== serviceId));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const hasServices = services.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Actions */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="font-display text-2xl text-neutral-900 sm:text-3xl">Services & Pricing</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Manage your service menu, pricing tiers, photos, packages, and passes.
-          </p>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl font-bold text-navy-900 sm:text-4xl">
+            Services & prices
+          </h1>
+          <p className="mt-1 text-base text-slate-600">{menuSummary(services)}</p>
         </div>
+        {hasServices && (
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
+            <Button
+              type="button"
+              onClick={() => openForm(null)}
+              className={cn("col-span-2 sm:order-last", PRESS)}
+            >
+              <Plus aria-hidden />
+              Add a service
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTemplatesOpen(true)}
+              className={PRESS}
+            >
+              <LayoutTemplate aria-hidden className="text-green-700" />
+              Templates
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className={PRESS}
+            >
+              <FileSpreadsheet aria-hidden className="text-green-700" />
+              Import
+            </Button>
+          </div>
+        )}
+      </header>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsTemplatesModalOpen(true)}
-            className="text-xs font-semibold text-navy-900"
-          >
-            <Sparkles className="mr-1.5 size-3.5 text-orange-500" />
-            Category Templates
-          </Button>
+      {error && <ActionError message={error} onDismiss={() => setError(null)} />}
+      {notice && <SuccessNotice message={notice} onDismiss={() => setNotice(null)} />}
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsBulkImportOpen(true)}
-            className="text-xs font-semibold text-navy-900"
-          >
-            <FileSpreadsheet className="mr-1.5 size-3.5 text-emerald-600" />
-            Bulk Import
-          </Button>
+      <ServicesTabs tab={tab} counts={counts} onChange={setTab} />
 
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleCreateService}
-            className="text-navy-950 bg-orange-600 text-xs font-bold hover:bg-orange-500"
-          >
-            <Plus className="mr-1.5 size-4" />
-            Add Service
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs Bar */}
-      <div className="border-b border-neutral-200">
-        <nav className="flex space-x-6 overflow-x-auto pb-px" aria-label="Services Navigation Tabs">
-          <button
-            type="button"
-            onClick={() => setActiveTab("services")}
-            className={`border-b-2 py-3 text-sm font-semibold whitespace-nowrap transition-colors ${
-              activeTab === "services"
-                ? "border-navy-900 text-navy-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            All Services ({services.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("photos_addons")}
-            className={`border-b-2 py-3 text-sm font-semibold whitespace-nowrap transition-colors ${
-              activeTab === "photos_addons"
-                ? "border-navy-900 text-navy-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            Service Photos & Add-ons
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("packages")}
-            className={`border-b-2 py-3 text-sm font-semibold whitespace-nowrap transition-colors ${
-              activeTab === "packages"
-                ? "border-navy-900 text-navy-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            Packages ({packagesList.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("memberships")}
-            className={`border-b-2 py-3 text-sm font-semibold whitespace-nowrap transition-colors ${
-              activeTab === "memberships"
-                ? "border-navy-900 text-navy-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            Memberships & Passes ({membershipsList.length})
-          </button>
-        </nav>
-      </div>
-
-      {/* Tab 1: Services List */}
-      {activeTab === "services" && (
-        <div className="space-y-4">
-          {services.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-white p-12 text-center">
-              <Scissors className="size-12 text-neutral-300" />
-              <h3 className="mt-4 text-base font-semibold text-neutral-800">
-                No Services Added Yet
-              </h3>
-              <p className="mt-1 max-w-sm text-xs leading-relaxed text-neutral-500">
-                Add your shop&apos;s offerings so customers can browse and book appointments online.
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <Button
-                  type="button"
-                  onClick={() => setIsTemplatesModalOpen(true)}
-                  className="text-navy-950 bg-orange-600 text-xs font-bold hover:bg-orange-500"
-                >
-                  <Sparkles className="mr-1.5 size-4" />
-                  Apply Category Templates
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCreateService}
-                  className="text-xs text-navy-900"
-                >
-                  <Plus className="mr-1.5 size-4" />
-                  Add Custom Service
-                </Button>
-              </div>
-            </div>
+      <div
+        role="tabpanel"
+        id="services-panel"
+        aria-labelledby={`services-tab-${tab}`}
+        className="pt-2 outline-none"
+      >
+        {tab === "services" &&
+          (hasServices ? (
+            <ServiceList groups={groups} actions={rowActions} />
           ) : (
-            <div className="divide-y divide-neutral-200 rounded-2xl border border-neutral-200 bg-white">
-              {services.map((svc) => (
-                <div
-                  key={svc.id}
-                  className={`flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center ${
-                    !svc.active ? "bg-neutral-50/60 opacity-60" : ""
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-base font-semibold text-neutral-900">{svc.name}</h4>
+            <EmptyPanel
+              icon={<Scissors aria-hidden className="size-7" />}
+              title="Add your first service"
+              actions={
+                <>
+                  <Button type="button" onClick={() => setTemplatesOpen(true)} className={PRESS}>
+                    <LayoutTemplate aria-hidden />
+                    Start from a template
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => openForm(null)}
+                    className={PRESS}
+                  >
+                    <Plus aria-hidden />
+                    Add a service
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setImportOpen(true)}
+                    className={PRESS}
+                  >
+                    <FileSpreadsheet aria-hidden />
+                    Import a spreadsheet
+                  </Button>
+                </>
+              }
+            >
+              Customers can book you once your menu has a service. Templates fill in common services
+              for your category with typical prices you can edit.
+            </EmptyPanel>
+          ))}
 
-                      {/* Price badge */}
-                      <span className="bg-navy-100 rounded-full px-2.5 py-0.5 text-xs font-bold text-navy-900">
-                        {svc.priceType === "quote"
-                          ? "Quote Required"
-                          : svc.priceCentavos !== null
-                            ? `${svc.priceType === "starts_at" ? "Starts at " : ""}${formatPeso(svc.priceCentavos)}`
-                            : "Quote"}
-                      </span>
+        {tab === "packages" && (
+          <PackagesManager
+            shopId={shopId}
+            packages={initialPackages}
+            availableServices={services.map((s) => ({
+              id: s.id,
+              name: s.name,
+              priceCentavos: s.priceCentavos,
+            }))}
+            onRefresh={() => router.refresh()}
+            onNotice={setNotice}
+            onShowServices={() => setTab("services")}
+          />
+        )}
 
-                      {/* Booking type badge */}
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600 capitalize">
-                        {BOOKING_TYPE_LABELS[svc.bookingType]}
-                      </span>
+        {tab === "memberships" && (
+          <MembershipsManager
+            shopId={shopId}
+            memberships={initialMemberships}
+            onRefresh={() => router.refresh()}
+            onNotice={setNotice}
+          />
+        )}
+      </div>
 
-                      {!svc.active && (
-                        <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-bold text-neutral-600 uppercase">
-                          Archived
-                        </span>
-                      )}
-                    </div>
-
-                    {svc.description && (
-                      <p className="line-clamp-1 text-xs text-neutral-500">{svc.description}</p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-500">
-                      <span className="flex items-center gap-1">
-                        <Clock className="size-3.5" /> {svc.durationMin} mins
-                        {svc.bufferMin > 0 && ` (+${svc.bufferMin}m buffer)`}
-                      </span>
-
-                      {svc.capacity > 1 && (
-                        <span className="flex items-center gap-1">
-                          <Users className="size-3.5" /> Capacity: {svc.capacity}
-                        </span>
-                      )}
-
-                      {svc.photos.length > 0 && <span>📷 {svc.photos.length} photo(s)</span>}
-
-                      {svc.addons.length > 0 && <span>✨ {svc.addons.length} add-on(s)</span>}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleToggleArchive(svc)}
-                      className="text-xs text-neutral-700"
-                    >
-                      {svc.active ? "Archive" : "Activate"}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditService(svc)}
-                      className="text-xs text-navy-900"
-                    >
-                      Edit
-                    </Button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteService(svc.id)}
-                      className="rounded p-2 text-neutral-400 hover:text-red-600"
-                      title="Delete service"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Photos & Add-ons */}
-      {activeTab === "photos_addons" && (
-        <ServicePhotosAddons
-          shopId={shopId}
-          services={services}
-          onRefresh={refreshPage}
-          onUpdateService={handleUpdateService}
-        />
-      )}
-
-      {/* Tab 3: Packages */}
-      {activeTab === "packages" && (
-        <PackagesManager
-          shopId={shopId}
-          packages={packagesList}
-          availableServices={services.map((s) => ({
-            id: s.id,
-            name: s.name,
-            priceCentavos: s.priceCentavos,
-          }))}
-          onRefresh={refreshPage}
-        />
-      )}
-
-      {/* Tab 4: Memberships */}
-      {activeTab === "memberships" && (
-        <MembershipsManager shopId={shopId} memberships={membershipsList} onRefresh={refreshPage} />
-      )}
-
-      {/* Modals */}
       <ServiceModal
-        isOpen={isServiceModalOpen}
-        onClose={() => setIsServiceModalOpen(false)}
+        isOpen={formOpen}
+        onClose={() => setFormOpen(false)}
         shopId={shopId}
-        categories={shopCategories}
-        initialService={editingService}
-        onSaved={refreshPage}
+        categories={categories}
+        initialService={editing}
+        onSaved={done}
       />
 
+      <Sheet
+        open={extrasService !== null}
+        onClose={() => setExtrasId(null)}
+        title="Photos & add-ons"
+        description={
+          extrasService
+            ? `${extrasService.name}: ${plural(extrasService.photos.length, "photo")}, ${plural(extrasService.addons.length, "add-on")}`
+            : undefined
+        }
+        footer={
+          <Button type="button" onClick={() => setExtrasId(null)} className={PRESS}>
+            Done
+          </Button>
+        }
+      >
+        {extrasService && (
+          <ServicePhotosAddons
+            shopId={shopId}
+            service={extrasService}
+            onUpdateService={updateExtras}
+          />
+        )}
+      </Sheet>
+
       <CategoryTemplatesModal
-        isOpen={isTemplatesModalOpen}
-        onClose={() => setIsTemplatesModalOpen(false)}
+        isOpen={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
         shopId={shopId}
-        shopCategorySlugs={shopCategories.map((c) => c.slug)}
-        onApplied={refreshPage}
+        shopCategorySlugs={categories.map((c) => c.slug)}
+        onApplied={done}
       />
 
       <BulkImportModal
-        isOpen={isBulkImportOpen}
-        onClose={() => setIsBulkImportOpen(false)}
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
         shopId={shopId}
-        onImported={refreshPage}
+        onImported={done}
       />
+    </div>
+  );
+}
+
+function ServicesTabs({
+  tab,
+  counts,
+  onChange,
+}: {
+  tab: Tab;
+  counts: Record<Tab, number>;
+  onChange: (tab: Tab) => void;
+}) {
+  const refs = React.useRef<Array<HTMLButtonElement | null>>([]);
+
+  function onKeyDown(event: React.KeyboardEvent, index: number) {
+    const last = TABS.length - 1;
+    const next =
+      event.key === "ArrowRight"
+        ? index === last
+          ? 0
+          : index + 1
+        : event.key === "ArrowLeft"
+          ? index === 0
+            ? last
+            : index - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    onChange(TABS[next]!.id);
+    refs.current[next]?.focus();
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Services & prices"
+      className="flex [scrollbar-width:none] overflow-x-auto border-b border-border"
+    >
+      {TABS.map(({ id, label }, index) => {
+        const active = tab === id;
+        return (
+          <button
+            key={id}
+            ref={(node) => {
+              refs.current[index] = node;
+            }}
+            type="button"
+            role="tab"
+            id={`services-tab-${id}`}
+            aria-selected={active}
+            aria-controls="services-panel"
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            className={cn(
+              "relative -mb-px flex h-12 flex-auto items-center justify-center gap-1 rounded-t-lg px-1 text-sm font-semibold whitespace-nowrap transition-colors min-[400px]:gap-1.5 min-[400px]:text-[0.9375rem] sm:flex-none sm:gap-2 sm:px-5 sm:text-base",
+              FOCUS_RING,
+              active ? "text-navy-900" : "text-slate-600 hover:bg-neutral-100 hover:text-navy-900",
+            )}
+          >
+            {label}
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-muted px-1.5 text-xs font-bold text-slate-600 tabular-nums sm:h-6 sm:min-w-6 sm:text-sm">
+              {counts[id]}
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                "absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-green-600 transition-transform duration-200 sm:inset-x-3",
+                active ? "scale-x-100" : "scale-x-0",
+              )}
+            />
+          </button>
+        );
+      })}
     </div>
   );
 }

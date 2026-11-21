@@ -1,44 +1,41 @@
 "use client";
 
 import * as React from "react";
-import { Package as PackageIcon, Plus, Trash2, X } from "lucide-react";
+import { Check, Package as PackageIcon, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatPeso, pesosToCentavos } from "@/lib/money";
+import { Textarea } from "@/components/ui/textarea";
+import { formatPeso } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { createPackage, deletePackage, updatePackage } from "../actions";
+import { packageSaving, parsePesos, type MenuPackage } from "../menu";
+import {
+  ActionError,
+  Busy,
+  CARD,
+  Chip,
+  ConfirmDelete,
+  EmptyPanel,
+  Field,
+  PesoInput,
+  PRESS,
+  SELECT,
+  Sheet,
+  Toggle,
+} from "./services-ui";
 
-type ServiceItemOption = {
-  id: string;
-  name: string;
-  priceCentavos: number | null;
-};
+// Packages: several services sold together at one price.
 
-type PackageItem = {
-  id: string;
-  packageId: string;
-  serviceId: string;
-  serviceName: string;
-  servicePriceCentavos: number | null;
-  durationMin: number;
-  quantity: number;
-};
-
-type PackageData = {
-  id: string;
-  name: string;
-  description: string | null;
-  priceCentavos: number;
-  originalPriceCentavos: number | null;
-  active: boolean;
-  items: PackageItem[];
-};
+type ServiceItemOption = { id: string; name: string; priceCentavos: number | null };
 
 type PackagesManagerProps = {
   shopId: string;
-  packages: PackageData[];
+  packages: MenuPackage[];
   availableServices: ServiceItemOption[];
   onRefresh: () => void;
+  onNotice?: (message: string) => void;
+  onShowServices?: () => void;
 };
 
 export function PackagesManager({
@@ -46,446 +43,436 @@ export function PackagesManager({
   packages,
   availableServices,
   onRefresh,
+  onNotice,
+  onShowServices,
 }: PackagesManagerProps) {
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [editingPackageId, setEditingPackageId] = React.useState<string | null>(null);
-
-  const [name, setName] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [pricePesos, setPricePesos] = React.useState("");
-  const [originalPricePesos, setOriginalPricePesos] = React.useState("");
-  const [selectedItems, setSelectedItems] = React.useState<
-    Array<{ serviceId: string; quantity: number }>
-  >([]);
-  const [active, setActive] = React.useState(true);
-
-  const [loading, setLoading] = React.useState(false);
+  const [editing, setEditing] = React.useState<MenuPackage | null>(null);
+  const [formOpen, setFormOpen] = React.useState(false);
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const openCreateModal = () => {
-    setEditingPackageId(null);
-    setName("");
-    setDescription("");
-    setPricePesos("350");
-    setOriginalPricePesos("");
-    const firstSvc = availableServices[0];
-    setSelectedItems(firstSvc ? [{ serviceId: firstSvc.id, quantity: 1 }] : []);
-    setActive(true);
-    setIsModalOpen(true);
-  };
+  const canCreate = availableServices.length > 0;
 
-  const openEditModal = (pkg: PackageData) => {
-    setEditingPackageId(pkg.id);
-    setName(pkg.name);
-    setDescription(pkg.description || "");
-    setPricePesos((pkg.priceCentavos / 100).toString());
-    setOriginalPricePesos(
-      pkg.originalPriceCentavos !== null ? (pkg.originalPriceCentavos / 100).toString() : "",
-    );
-    setSelectedItems(pkg.items.map((it) => ({ serviceId: it.serviceId, quantity: it.quantity })));
-    setActive(pkg.active);
-    setIsModalOpen(true);
-  };
+  function openForm(pkg: MenuPackage | null) {
+    setEditing(pkg);
+    setFormOpen(true);
+  }
 
-  const handleAddItem = () => {
-    const firstService = availableServices[0];
-    if (!firstService) return;
-    setSelectedItems((prev) => [...prev, { serviceId: firstService.id, quantity: 1 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setSelectedItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleUpdateItem = (
-    index: number,
-    updates: Partial<{ serviceId: string; quantity: number }>,
-  ) => {
-    setSelectedItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...updates } : item)),
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function onDelete(pkg: MenuPackage) {
+    setDeletingId(pkg.id);
     setError(null);
-
-    if (selectedItems.length === 0) {
-      setError("Please include at least one service in the package bundle.");
-      return;
-    }
-
-    setLoading(true);
-
     try {
-      const priceCentavos = pesosToCentavos(pricePesos);
-      const originalPriceCentavos = originalPricePesos ? pesosToCentavos(originalPricePesos) : null;
-
-      if (editingPackageId) {
-        const res = await updatePackage({
-          packageId: editingPackageId,
-          shopId,
-          name: name.trim(),
-          description: description.trim() || null,
-          priceCentavos,
-          originalPriceCentavos,
-          serviceItems: selectedItems,
-          active,
-        });
-
-        if (res.ok) {
-          setIsModalOpen(false);
-          onRefresh();
-        } else {
-          setError(res.message);
-        }
+      const result = await deletePackage({ packageId: pkg.id, shopId });
+      if (result.ok) {
+        setConfirmingId(null);
+        onNotice?.(`Deleted ${pkg.name}.`);
+        onRefresh();
       } else {
-        const res = await createPackage({
-          shopId,
-          name: name.trim(),
-          description: description.trim() || null,
-          priceCentavos,
-          originalPriceCentavos,
-          serviceItems: selectedItems,
-          active,
-        });
-
-        if (res.ok) {
-          setIsModalOpen(false);
-          onRefresh();
-        } else {
-          setError(res.message);
-        }
+        setError(result.message);
       }
     } catch {
-      setError("Could not save package. Please check inputs.");
+      setError(`Couldn't delete ${pkg.name}. Try again.`);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
-  };
-
-  const handleDelete = async (packageId: string) => {
-    if (!confirm("Are you sure you want to delete this package?")) return;
-    try {
-      const res = await deletePackage({ packageId, shopId });
-      if (res.ok) onRefresh();
-    } catch {
-      setError("Failed to delete package.");
-    }
-  };
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-neutral-900">Service Packages & Bundles</h3>
-          <p className="text-xs text-neutral-500">
-            Combine multiple services into bundled deals with discounted package pricing.
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-navy-900">Packages</h2>
+          <p className="text-base text-slate-600">
+            Services sold together at one price, like a haircut with a beard trim.
           </p>
         </div>
-
-        <Button
-          type="button"
-          onClick={openCreateModal}
-          disabled={availableServices.length === 0}
-          className="text-navy-950 bg-orange-600 font-bold hover:bg-orange-500"
-        >
-          <Plus className="mr-1.5 size-4" />
-          Create Package Bundle
-        </Button>
+        {packages.length > 0 && (
+          <Button type="button" onClick={() => openForm(null)} className={PRESS}>
+            <Plus aria-hidden />
+            Add a package
+          </Button>
+        )}
       </div>
 
-      {availableServices.length === 0 && (
-        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-          Tip: You need to create at least one service before setting up bundled packages.
-        </p>
-      )}
+      {error && <ActionError message={error} onDismiss={() => setError(null)} />}
 
       {packages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-white p-10 text-center">
-          <PackageIcon className="size-12 text-neutral-300" />
-          <h4 className="mt-3 text-sm font-semibold text-neutral-800">No Packages Created</h4>
-          <p className="mt-1 max-w-sm text-xs text-neutral-500">
-            Encourage higher customer spend by bundling popular services (e.g. &quot;Haircut + Beard
-            Trim + Shampoo&quot; combo).
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={openCreateModal}
-            disabled={availableServices.length === 0}
-            className="mt-4 text-xs text-navy-900"
-          >
-            Create First Package
-          </Button>
-        </div>
+        <EmptyPanel
+          icon={<PackageIcon aria-hidden className="size-7" />}
+          title={canCreate ? "No packages yet" : "Add a service first"}
+          actions={
+            canCreate ? (
+              <Button type="button" onClick={() => openForm(null)} className={PRESS}>
+                <Plus aria-hidden />
+                Add a package
+              </Button>
+            ) : (
+              onShowServices && (
+                <Button type="button" variant="outline" onClick={onShowServices} className={PRESS}>
+                  See your services
+                </Button>
+              )
+            )
+          }
+        >
+          {canCreate
+            ? "Bundle services customers often book together and set one price for the set."
+            : "A package is made of services on your menu, so it needs at least one."}
+        </EmptyPanel>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {packages.map((pkg) => {
-            const hasDiscount =
-              pkg.originalPriceCentavos && pkg.originalPriceCentavos > pkg.priceCentavos;
-            const discountPct = hasDiscount
-              ? Math.round(
-                  ((pkg.originalPriceCentavos! - pkg.priceCentavos) / pkg.originalPriceCentavos!) *
-                    100,
-                )
-              : null;
-
+            const saving = packageSaving(pkg.priceCentavos, pkg.originalPriceCentavos);
             return (
-              <div
+              <li
                 key={pkg.id}
-                className="flex flex-col justify-between rounded-xl border border-neutral-200 bg-white p-5 shadow-xs"
+                className={cn(CARD, "flex flex-col p-5", !pkg.active && "bg-neutral-50")}
               >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-base font-semibold text-neutral-900">{pkg.name}</h4>
-                    <span
-                      className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                        pkg.active
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-neutral-100 text-neutral-500"
-                      }`}
-                    >
-                      {pkg.active ? "Active" : "Archived"}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 line-clamp-2 text-xs text-neutral-600">
-                    {pkg.description || "Bundled package"}
-                  </p>
-
-                  {/* Bundled Services */}
-                  <div className="mt-3 border-t border-neutral-100 pt-3">
-                    <span className="text-[11px] font-semibold tracking-wider text-neutral-700 uppercase">
-                      Included Services:
-                    </span>
-                    <ul className="mt-1 space-y-1 text-xs text-neutral-600">
-                      {pkg.items.map((it) => (
-                        <li key={it.id} className="flex items-center gap-1.5">
-                          <span className="size-1.5 rounded-full bg-orange-500" />
-                          <span>
-                            {it.quantity > 1 ? `${it.quantity}x ` : ""}
-                            {it.serviceName}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-base font-semibold text-navy-900">{pkg.name}</h3>
+                  {!pkg.active && <Chip>Hidden</Chip>}
                 </div>
+                {pkg.description && (
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-600">{pkg.description}</p>
+                )}
 
-                <div className="mt-4 border-t border-neutral-100 pt-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-lg font-bold text-navy-900">
+                <ul className="mt-4 space-y-1.5 text-sm text-navy-900">
+                  {pkg.items.map((item) => (
+                    <li key={item.id} className="flex items-start gap-2">
+                      <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-green-700" />
+                      <span>
+                        {item.quantity > 1 && (
+                          <span className="font-semibold tabular-nums">{item.quantity} × </span>
+                        )}
+                        {item.serviceName}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-auto pt-5">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-2xl font-bold text-navy-900 tabular-nums">
                       {formatPeso(pkg.priceCentavos)}
                     </span>
-                    {hasDiscount && (
+                    {saving !== null && pkg.originalPriceCentavos !== null && (
                       <>
-                        <span className="text-xs text-neutral-400 line-through">
-                          {formatPeso(pkg.originalPriceCentavos!)}
+                        <span className="text-sm text-slate-600 tabular-nums line-through">
+                          {formatPeso(pkg.originalPriceCentavos)}
                         </span>
-                        <span className="py-0.2 rounded bg-red-100 px-1.5 text-[10px] font-bold text-red-700">
-                          Save {discountPct}%
-                        </span>
+                        <Chip tone="highlight">Save {saving}%</Chip>
                       </>
                     )}
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditModal(pkg)}
-                      className="text-xs text-navy-900"
-                    >
-                      Edit Package
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(pkg.id)}
-                      className="p-1 text-red-600 hover:text-red-800"
-                      title="Delete package"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                  <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
+                    {confirmingId === pkg.id ? (
+                      <ConfirmDelete
+                        what={pkg.name}
+                        busy={deletingId === pkg.id}
+                        onCancel={() => setConfirmingId(null)}
+                        onConfirm={() => onDelete(pkg)}
+                      />
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => openForm(pkg)}
+                          aria-label={`Edit ${pkg.name}`}
+                          className={cn("flex-1", PRESS)}
+                        >
+                          <Pencil aria-hidden className="size-4" />
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setConfirmingId(pkg.id)}
+                          aria-label={`Delete ${pkg.name}`}
+                          className="text-slate-600 hover:bg-red-50 hover:text-danger"
+                        >
+                          <Trash2 aria-hidden />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
-      {/* Package Create / Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-              <h3 className="font-display text-xl text-neutral-900">
-                {editingPackageId ? "Edit Package" : "Create Package Bundle"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-
-            {error && (
-              <div className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">{error}</div>
-            )}
-
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-900">Package Name</label>
-                <Input
-                  required
-                  placeholder="e.g. VIP Grooming Package"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 h-10 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-900">Description</label>
-                <textarea
-                  rows={2}
-                  placeholder="Haircut, beard trim, and relaxing scalp massage combo."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-neutral-300 p-2.5 text-xs text-neutral-900 outline-none focus-visible:border-neutral-950"
-                />
-              </div>
-
-              {/* Bundled Services Selection */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-neutral-900">
-                    Included Services ({selectedItems.length})
-                  </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddItem}
-                    className="text-xs text-orange-700 hover:bg-orange-50"
-                  >
-                    <Plus className="mr-1 size-3.5" /> Add Another Service
-                  </Button>
-                </div>
-
-                <div className="mt-2 space-y-2">
-                  {selectedItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <select
-                        value={item.serviceId}
-                        onChange={(e) => handleUpdateItem(idx, { serviceId: e.target.value })}
-                        className="h-10 flex-1 rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-900 outline-none"
-                      >
-                        {availableServices.map((svc) => (
-                          <option key={svc.id} value={svc.id}>
-                            {svc.name}{" "}
-                            {svc.priceCentavos ? `(${formatPeso(svc.priceCentavos)})` : ""}
-                          </option>
-                        ))}
-                      </select>
-
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleUpdateItem(idx, {
-                            quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                          })
-                        }
-                        className="h-10 w-16 text-center text-xs"
-                        title="Quantity"
-                      />
-
-                      {selectedItems.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(idx)}
-                          className="rounded p-2 text-neutral-400 hover:text-red-600"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pricing */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-900">
-                    Package Price (₱) <span className="text-red-600">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={pricePesos}
-                    onChange={(e) => setPricePesos(e.target.value)}
-                    placeholder="350.00"
-                    className="mt-1 h-10 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-900">
-                    Original Value (₱){" "}
-                    <span className="font-normal text-neutral-400">(Optional)</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={originalPricePesos}
-                    onChange={(e) => setOriginalPricePesos(e.target.value)}
-                    placeholder="e.g. 450.00"
-                    className="mt-1 h-10 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="pkg-active"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                  className="size-4 rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                />
-                <label htmlFor="pkg-active" className="text-xs font-medium text-neutral-700">
-                  Active for online purchase
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="text-navy-950 bg-orange-600 font-bold hover:bg-orange-500"
-                >
-                  {loading ? "Saving..." : editingPackageId ? "Save Changes" : "Create Package"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <PackageForm
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        shopId={shopId}
+        initial={editing}
+        services={availableServices}
+        onSaved={(message) => {
+          onNotice?.(message);
+          onRefresh();
+        }}
+      />
     </div>
+  );
+}
+
+const FORM_ID = "package-form";
+
+function PackageForm({
+  open,
+  onClose,
+  shopId,
+  initial,
+  services,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shopId: string;
+  initial: MenuPackage | null;
+  services: ServiceItemOption[];
+  onSaved: (message: string) => void;
+}) {
+  const id = React.useId();
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [price, setPrice] = React.useState("");
+  const [original, setOriginal] = React.useState("");
+  const [items, setItems] = React.useState<Array<{ serviceId: string; quantity: number }>>([]);
+  const [active, setActive] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [priceError, setPriceError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setName(initial?.name ?? "");
+    setDescription(initial?.description ?? "");
+    setPrice(initial ? String(initial.priceCentavos / 100) : "");
+    setOriginal(
+      initial?.originalPriceCentavos != null ? String(initial.originalPriceCentavos / 100) : "",
+    );
+    setItems(
+      initial
+        ? initial.items.map((it) => ({ serviceId: it.serviceId, quantity: it.quantity }))
+        : services[0]
+          ? [{ serviceId: services[0].id, quantity: 1 }]
+          : [],
+    );
+    setActive(initial?.active ?? true);
+    setError(null);
+    setPriceError(null);
+  }, [open, initial, services]);
+
+  // What the services would cost one by one, to suggest the "was" price.
+  const separately = items.reduce((sum, item) => {
+    const service = services.find((s) => s.id === item.serviceId);
+    return sum + (service?.priceCentavos ?? 0) * item.quantity;
+  }, 0);
+
+  function setItem(index: number, patch: Partial<{ serviceId: string; quantity: number }>) {
+    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  }
+
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (items.length === 0) {
+      setError("Add at least one service to the package.");
+      return;
+    }
+    const priceCentavos = parsePesos(price);
+    if (priceCentavos === null) {
+      setPriceError("Enter a price in pesos, like 450.");
+      return;
+    }
+    const originalPriceCentavos = original.trim() ? parsePesos(original) : null;
+    if (original.trim() && originalPriceCentavos === null) {
+      setPriceError("Enter the usual price in pesos, or leave it empty.");
+      return;
+    }
+    setPriceError(null);
+    setError(null);
+    setSaving(true);
+
+    const input = {
+      shopId,
+      name: name.trim(),
+      description: description.trim() || null,
+      priceCentavos,
+      originalPriceCentavos,
+      serviceItems: items,
+      active,
+    };
+    try {
+      const result = initial
+        ? await updatePackage({ ...input, packageId: initial.id })
+        : await createPackage(input);
+      if (result.ok) {
+        onSaved(initial ? `Saved ${input.name}.` : `Added the ${input.name} package.`);
+        onClose();
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError("Couldn't save the package. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      busy={saving}
+      title={initial ? `Edit ${initial.name}` : "Add a package"}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="submit" form={FORM_ID} disabled={saving} className={PRESS}>
+            <Busy busy={saving}>{initial ? "Save changes" : "Add package"}</Busy>
+          </Button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={onSubmit} className="space-y-6">
+        {error && <ActionError message={error} onDismiss={() => setError(null)} />}
+
+        <Field label="Package name" htmlFor={`${id}-name`}>
+          <Input
+            id={`${id}-name`}
+            required
+            minLength={2}
+            maxLength={100}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Cut and shave"
+            autoComplete="off"
+          />
+        </Field>
+
+        <fieldset className="space-y-2">
+          <legend className="mb-2 text-sm font-semibold text-navy-900">
+            Services in the package
+          </legend>
+          <ul className="space-y-2">
+            {items.map((item, index) => (
+              <li key={index} className="flex items-center gap-2">
+                <label htmlFor={`${id}-item-${index}`} className="sr-only">
+                  Service {index + 1}
+                </label>
+                <select
+                  id={`${id}-item-${index}`}
+                  value={item.serviceId}
+                  onChange={(e) => setItem(index, { serviceId: e.target.value })}
+                  className={cn(SELECT, "min-w-0 flex-1")}
+                >
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.priceCentavos !== null ? ` (${formatPeso(s.priceCentavos)})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor={`${id}-qty-${index}`} className="sr-only">
+                  How many of service {index + 1}
+                </label>
+                <Input
+                  id={`${id}-qty-${index}`}
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="10"
+                  value={item.quantity}
+                  onChange={(e) =>
+                    setItem(index, { quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })
+                  }
+                  className="w-16 text-center tabular-nums"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={items.length === 1}
+                  onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
+                  aria-label={`Remove service ${index + 1}`}
+                  className="text-slate-600 hover:bg-red-50 hover:text-danger"
+                >
+                  <X aria-hidden />
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              services[0] &&
+              setItems((prev) => [...prev, { serviceId: services[0]!.id, quantity: 1 }])
+            }
+            className={cn("w-full sm:w-auto", PRESS)}
+          >
+            <Plus aria-hidden />
+            Add another service
+          </Button>
+        </fieldset>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Package price" htmlFor={`${id}-price`}>
+            <PesoInput
+              id={`${id}-price`}
+              required
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="450"
+              aria-invalid={priceError ? true : undefined}
+              aria-describedby={priceError ? `${id}-price-error` : undefined}
+            />
+          </Field>
+          <Field
+            label="Usual price"
+            htmlFor={`${id}-original`}
+            optional
+            hint={separately > 0 ? `One by one: ${formatPeso(separately)}` : undefined}
+          >
+            <PesoInput
+              id={`${id}-original`}
+              value={original}
+              onChange={(e) => setOriginal(e.target.value)}
+              placeholder={separately > 0 ? String(separately / 100) : ""}
+            />
+          </Field>
+        </div>
+        {priceError && (
+          <p id={`${id}-price-error`} className="-mt-3 text-sm text-danger">
+            {priceError}
+          </p>
+        )}
+
+        <Field label="Description" htmlFor={`${id}-description`} optional>
+          <Textarea
+            id={`${id}-description`}
+            rows={2}
+            maxLength={1000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
+
+        <Toggle
+          checked={active}
+          onChange={setActive}
+          label="Show on your menu"
+          description="Hidden packages stay saved but customers can't buy them."
+        />
+      </form>
+    </Sheet>
   );
 }
