@@ -358,7 +358,7 @@ export function DashboardSidebar({ shop = null }: { shop?: DashboardShop }) {
 /** Below 1024px: the slim top bar with the logo, the shop and the account. */
 export function DashboardTopBar({ shop = null }: { shop?: DashboardShop }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white pt-[30px] lg:hidden">
+    <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white pt-[40px] lg:hidden">
       <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
         <Link
           href="/dashboard"
