@@ -27,7 +27,7 @@ export type LngLat = { lng: number; lat: number };
 /**
  * A PostGIS geography point (WGS 84). Distances on it are in meters.
  * drizzle-kit wraps this type in quotes in generated SQL; remove them by hand
- * (tests/unit/migrations.test.ts fails until you do).
+ * (tests/unit/db/migrations.test.ts fails until you do).
  */
 export const geographyPoint = customType<{ data: LngLat; driverData: string }>({
   dataType() {

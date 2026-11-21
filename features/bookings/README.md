@@ -14,7 +14,7 @@ The four booking flows (Slot, Home, Quote, Queue), cancel and reschedule, the sh
 
 ## Lifecycle
 
-Only `change_booking_status()` (migration 0011) changes `bookings.status`. It checks the booking is still in the expected status (`BK001`) and that the move is in the lifecycle (`BK002`), then writes `booking_events`. A trigger rejects status changes made any other way. Call it through `changeBookingStatus()`, which turns both errors into `CONFLICT`. `tests/unit/bookings-rules.test.ts` checks that the SQL list matches `TRANSITIONS`.
+Only `change_booking_status()` (migration 0011) changes `bookings.status`. It checks the booking is still in the expected status (`BK001`) and that the move is in the lifecycle (`BK002`), then writes `booking_events`. A trigger rejects status changes made any other way. Call it through `changeBookingStatus()`, which turns both errors into `CONFLICT`. `tests/unit/features/bookings/bookings-rules.test.ts` checks that the SQL list matches `TRANSITIONS`.
 
 ## Booking rules
 

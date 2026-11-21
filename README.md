@@ -46,7 +46,8 @@ lib/           adapters and helpers; the only code that touches Supabase or outs
   db/          Drizzle client and schema
 db/migrations/ SQL from drizzle-kit plus hand-written extensions and triggers
 supabase/      local Supabase stack config
-tests/         unit/, authz/ (permissions matrix), e2e/ (Playwright)
+tests/         unit/ (mirrors the source tree: features/<name>/, lib/, app/, components/, db/),
+               integration/ (PGlite), authz/ (permissions matrix), e2e/ (Playwright)
 middleware.ts  session refresh, route guards, Content-Security-Policy
 ```
 
